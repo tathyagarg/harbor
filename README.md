@@ -1,2 +1,2 @@
 # Harbor Browser
-Cutsie browser
+![Banner](.github/assets/banner.png)
