@@ -8,6 +8,8 @@ use winit::window::{Window, WindowId};
 
 use wgpu;
 
+/// Converts RGBA values (0-255 for RGB, 0-100 for A) to wgpu::Color
+/// A being 0-100 is because I was feeling quirky
 pub fn rgba_to_color(r: u8, g: u8, b: u8, a: u8) -> wgpu::Color {
     wgpu::Color {
         r: (r as f64) / 255.0,
@@ -17,8 +19,11 @@ pub fn rgba_to_color(r: u8, g: u8, b: u8, a: u8) -> wgpu::Color {
     }
 }
 
+/// State
+/// Holds all data about the WGPU state, along with the window
 #[allow(dead_code)]
 struct State {
+    /// Basic WGPU state variables
     surface: wgpu::Surface<'static>,
     adapter: wgpu::Adapter,
     device: wgpu::Device,
@@ -40,6 +45,7 @@ impl State {
 
         let output = match self.surface.get_current_texture() {
             Ok(out) => out,
+            // Resizing also guarantees that the surface is configured correctly.
             Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
                 let size = self.window.inner_size();
                 self.resize(size.width, size.height);
@@ -64,6 +70,7 @@ impl State {
                     view: &view,
                     resolve_target: None,
                     depth_slice: None,
+                    // Clear to a blue
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(rgba_to_color(20, 20, 255, 100)),
                         store: wgpu::StoreOp::Store,
@@ -127,7 +134,7 @@ impl State {
             present_mode: surface_capabilities.present_modes[0],
             alpha_mode: surface_capabilities.alpha_modes[0],
             view_formats: vec![],
-            desired_maximum_frame_latency: 2,
+            desired_maximum_frame_latency: 1,
         };
 
         Self {
@@ -141,14 +148,19 @@ impl State {
         }
     }
 
-    pub fn update(&mut self) {}
+    pub fn update(&mut self) {
+        if !self.is_surface_configured {
+            self.surface.configure(&self.device, &self.config);
+            self.is_surface_configured = true;
+        }
+    }
 
     pub fn resize(&mut self, width: u32, height: u32) {
         if width > 0 && height > 0 {
             self.config.width = width;
             self.config.height = height;
-            self.surface.configure(&self.device, &self.config);
-            self.is_surface_configured = true;
+            // self.surface.configure(&self.device, &self.config);
+            self.is_surface_configured = false;
         }
     }
 }
@@ -167,7 +179,10 @@ struct App {
 impl ApplicationHandler<State> for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         #[allow(unused_mut)]
-        let mut window_attributes = Window::default_attributes().with_title("Harbor Browser");
+        let mut window_attributes = Window::default_attributes()
+            .with_title("Harbor Browser")
+            // TODO: Change this to not have any decorations
+            .with_decorations(true);
 
         if self.window_options.use_transparent {
             window_attributes = window_attributes.with_transparent(true);
@@ -217,7 +232,7 @@ fn main() {
     env_logger::init();
 
     let event_loop = EventLoop::with_user_event().build().unwrap();
-    event_loop.set_control_flow(winit::event_loop::ControlFlow::Wait);
+    event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
 
     let mut app = App {
         window_options: WindowOptions {
