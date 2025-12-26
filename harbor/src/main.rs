@@ -8,6 +8,8 @@ use winit::window::{Window, WindowId};
 
 use wgpu;
 
+mod client;
+
 /// Converts RGBA values (0-255 for RGB, 0-100 for A) to wgpu::Color
 /// A being 0-100 is because I was feeling quirky
 pub fn rgba_to_color(r: u8, g: u8, b: u8, a: u8) -> wgpu::Color {
@@ -231,14 +233,25 @@ impl ApplicationHandler<State> for App {
 fn main() {
     env_logger::init();
 
-    let event_loop = EventLoop::with_user_event().build().unwrap();
-    event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
+    client::send_request(client::Request {
+        method: String::from("GET"),
+        request_target: String::from("/"),
+        protocol: client::Protocol::HTTP1_1,
+        headers: vec![client::Header {
+            name: String::from("User-Agent"),
+            value: String::from("Harbor Engine"),
+        }],
+        body: None,
+    });
 
-    let mut app = App {
-        window_options: WindowOptions {
-            use_transparent: true,
-        },
-        ..Default::default()
-    };
-    _ = event_loop.run_app(&mut app);
+    // let event_loop = EventLoop::with_user_event().build().unwrap();
+    // event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
+
+    // let mut app = App {
+    //     window_options: WindowOptions {
+    //         use_transparent: true,
+    //     },
+    //     ..Default::default()
+    // };
+    // _ = event_loop.run_app(&mut app);
 }
