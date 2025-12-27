@@ -8,6 +8,7 @@ use winit::window::{Window, WindowId};
 
 use wgpu;
 
+mod html5;
 mod http;
 
 /// Converts RGBA values (0-255 for RGB, 0-100 for A) to wgpu::Color
@@ -233,25 +234,27 @@ impl ApplicationHandler<State> for App {
 fn main() {
     env_logger::init();
 
-    let mut client = http::Client::new(http::Protocol::HTTP1_1, true);
-    let url = client.connect_to_url("http://arson.dev/".to_string());
+    type a = html5::Location;
 
-    println!("Sending request to: {}", url.reconstruct());
+    // let mut client = http::Client::new(http::Protocol::HTTP1_1, true);
+    // let url = client.connect_to_url("http://arson.dev/".to_string());
 
-    let resp = client.send_request(http::Request {
-        method: String::from("GET"),
-        request_target: String::from("/"),
-        protocol: http::Protocol::HTTP1_1,
-        headers: vec![
-            http::Header::new(String::from("User-Agent"), String::from("Harbor Browser")),
-            http::Header::new(String::from("Host"), url.host),
-        ],
-        body: None,
-    });
+    // println!("Sending request to: {}", url.reconstruct());
 
-    if let Some(response) = resp {
-        println!("{}", response);
-    }
+    // let resp = client.send_request(http::Request {
+    //     method: String::from("GET"),
+    //     request_target: String::from("/"),
+    //     protocol: http::Protocol::HTTP1_1,
+    //     headers: vec![
+    //         http::Header::new(String::from("User-Agent"), String::from("Harbor Browser")),
+    //         http::Header::new(String::from("Host"), url.host),
+    //     ],
+    //     body: None,
+    // });
+
+    // if let Some(response) = resp {
+    //     println!("{}", response);
+    // }
 
     // let event_loop = EventLoop::with_user_event().build().unwrap();
     // event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
