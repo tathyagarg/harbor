@@ -234,7 +234,7 @@ fn main() {
     env_logger::init();
 
     let mut client = http::Client::new(http::Protocol::HTTP1_1, true);
-    let url = client.connect_to_url("http://arson.dev/".to_string());
+    let url = client.connect_to_url("https://arson.dev/".to_string());
 
     let resp = client.send_request(http::Request {
         method: String::from("GET"),
@@ -246,8 +246,9 @@ fn main() {
         ],
         body: None,
     });
-    if resp.is_some() {
-        println!("{}", resp.unwrap());
+
+    if let Some(response) = resp {
+        println!("{}", response);
     }
 
     // let event_loop = EventLoop::with_user_event().build().unwrap();

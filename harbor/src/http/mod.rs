@@ -1,6 +1,8 @@
 pub mod client;
 pub mod dns;
 
+pub use client::*;
+
 #[derive(Default, Debug, Clone)]
 pub enum Scheme {
     #[default]
@@ -65,5 +67,3 @@ pub fn preferred_default_port(scheme: Scheme) -> u16 {
         Scheme::HTTPS => 443,
     }
 }
-
-pub use client::*;

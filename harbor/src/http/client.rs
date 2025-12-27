@@ -1,6 +1,7 @@
 use std::fmt;
 use std::io::{Read, Write};
 use std::net::TcpStream;
+use std::sync::Arc;
 
 use crate::http::{self, dns};
 
@@ -25,6 +26,7 @@ pub enum RequestIntegrityErrorKind {
     InvalidMethod,
     InvalidHeaders,
     InvalidBody,
+    NoConnection,
 }
 
 #[derive(Debug)]
@@ -153,9 +155,7 @@ impl ReqEncodable for Request {
                     request.push_str(header.encode().as_str());
                 }
 
-                if self.body.is_some() {
-                    let body = self.body.as_ref().unwrap();
-
+                if let Some(body) = self.body.as_ref() {
                     request.push_str("\r\n");
                     request.push_str(body.as_str());
                 }
@@ -198,13 +198,10 @@ impl Request {
 
                 // Strict condition that body must not be present
                 // Independent of permissibility setting of client
-                if self.body.is_some() {
+                if let Some(body) = self.body.as_ref() {
                     return Err(RequestIntegrityError {
                         kind: RequestIntegrityErrorKind::InvalidBody,
-                        message: format!(
-                            "No request body allowed in HTTP/0.9, found '{}'",
-                            self.body.as_ref().unwrap()
-                        ),
+                        message: format!("No request body allowed in HTTP/0.9, found '{}'", body),
                     });
                 }
             }
@@ -214,7 +211,7 @@ impl Request {
         Ok(())
     }
 
-    fn send(&self, client: &Client) -> Result<Response, RequestIntegrityError> {
+    fn send(&self, client: &mut Client) -> Result<Response, RequestIntegrityError> {
         let integrity = self.ensure_integrity(client);
         if integrity.is_err() {
             return Err(integrity.unwrap_err());
@@ -222,55 +219,92 @@ impl Request {
 
         match self.protocol {
             Protocol::HTTP0_9 => {
-                let mut stream = client.connection.as_ref().unwrap();
-                _ = stream.write(self.encode().as_bytes());
+                if let Some(stream) = client.connection.as_mut() {
+                    // let mut stream = client.connection;
 
-                let mut response = Response::new();
-
-                loop {
-                    let mut chunk = [0; CHUNK_LENGTH];
-                    let bytes_read = stream.read(&mut chunk).unwrap();
-
-                    if bytes_read == 0 {
-                        break;
+                    if let Err(e) = stream.cs_write(self.encode().as_bytes()) {
+                        eprintln!("Error in sending request: {}", e);
                     }
 
-                    response.decode_body_chunk(&chunk);
+                    let mut response = Response::new();
+
+                    loop {
+                        let mut chunk = [0; CHUNK_LENGTH];
+                        let bytes_read = stream.cs_read(&mut chunk);
+
+                        if bytes_read == 0 {
+                            break;
+                        }
+
+                        response.decode_body_chunk(&chunk);
+                    }
+
+                    response.strip_zeros();
+
+                    Ok(response)
+                } else {
+                    Err(RequestIntegrityError {
+                        kind: RequestIntegrityErrorKind::NoConnection,
+                        message: String::from("No connection established in client"),
+                    })
                 }
-
-                response.strip_zeros();
-
-                Ok(response)
             }
             Protocol::HTTP1_0 | Protocol::HTTP1_1 => {
-                let mut stream = client.connection.as_ref().unwrap();
-                _ = stream.write(self.encode().as_bytes());
-
-                let mut response_decoder = ResponseDecoder::new();
-
-                loop {
-                    let mut resp: [u8; 512] = [0; 512];
-                    let bytes_read = stream.read(&mut resp).unwrap();
-
-                    if bytes_read == 0 {
-                        break;
+                if let Some(stream) = client.connection.as_mut() {
+                    if let Err(e) = stream.cs_write(self.encode().as_bytes()) {
+                        eprintln!("Error in writing: {}", e);
                     }
 
-                    response_decoder.decode(&resp);
+                    let mut response_decoder = ResponseDecoder::new();
+
+                    let mut content_length: Option<usize> = None;
+
+                    loop {
+                        let mut resp: [u8; 512] = [0; 512];
+                        let bytes_read = stream.cs_read(&mut resp);
+
+                        if bytes_read == 0 {
+                            break;
+                        }
+
+                        response_decoder.decode(&resp[..bytes_read]);
+
+                        if let Some(len) = content_length {
+                            if response_decoder.response.body.as_ref().unwrap().len() >= len {
+                                break;
+                            }
+                        } else if let Some(len) = response_decoder
+                            .response
+                            .get_header_value("Content-Length".to_string())
+                        {
+                            content_length = Some(len.parse::<usize>().unwrap());
+
+                            if response_decoder.response.body.as_ref().unwrap().len()
+                                >= content_length.unwrap()
+                            {
+                                break;
+                            }
+                        }
+                    }
+
+                    Ok(response_decoder.response)
+                } else {
+                    Err(RequestIntegrityError {
+                        kind: RequestIntegrityErrorKind::NoConnection,
+                        message: String::from("No connection established in client"),
+                    })
                 }
-
-                // println!("{}")
-
-                Ok(response_decoder.response)
             }
             _ => todo!(),
         }
     }
 }
 
+#[derive(Default)]
 pub enum ResponseDecoderState {
     /// Atomic type - response data reads must be in chunks that are big enough to read the entire
     /// protocol in a single line (i.e. 8 characters minimum)
+    #[default]
     Protocol,
 
     /// Atomic type
@@ -289,6 +323,7 @@ pub enum ResponseDecoderState {
     Body,
 }
 
+#[derive(Default)]
 pub struct ResponseDecoder {
     state: ResponseDecoderState,
     response: Response,
@@ -296,10 +331,7 @@ pub struct ResponseDecoder {
 
 impl ResponseDecoder {
     pub fn new() -> Self {
-        Self {
-            state: ResponseDecoderState::Protocol,
-            response: Response::default(),
-        }
+        Self::default()
     }
 
     pub fn decode(&mut self, data: &[u8]) {
@@ -323,7 +355,8 @@ impl ResponseDecoder {
 
                 self.state = ResponseDecoderState::Status;
 
-                self.decode(remaining.as_bytes());
+                // Subtract an extra 1 to account for the ' ' character
+                self.decode(remaining.as_bytes())
             }
             // All following states may be false alerts, brought about by a recursion when the
             // string data is insufficient to properly construct the required field
@@ -338,7 +371,7 @@ impl ResponseDecoder {
 
                 self.state = ResponseDecoderState::Reason;
 
-                self.decode(remaining.as_bytes());
+                self.decode(remaining.as_bytes())
             }
 
             ResponseDecoderState::Reason => {
@@ -553,6 +586,16 @@ impl Response {
             None => return,
         }
     }
+
+    fn get_header_value(&self, name: String) -> Option<String> {
+        for header in &self.headers {
+            if header.is_complete && header.name == name {
+                return Some(header.value.clone());
+            }
+        }
+
+        None
+    }
 }
 
 impl fmt::Display for Response {
@@ -582,8 +625,8 @@ impl fmt::Display for Response {
             write!(f, "{}{}{}: {}\n", BOLD, header.name, RESET, header.value)?;
         }
 
-        if self.body.is_some() {
-            write!(f, "\n{}", self.body.as_ref().unwrap())?;
+        if let Some(body) = self.body.as_ref() {
+            write!(f, "\n{}", body)?;
         }
 
         Ok(())
@@ -594,7 +637,7 @@ impl fmt::Display for Response {
 pub struct Client {
     addr: Option<String>,
 
-    connection: Option<TcpStream>,
+    connection: Option<Box<dyn ConnectionStream>>,
     preferred_protocol: Option<Protocol>,
 
     permissive: bool,
@@ -609,17 +652,54 @@ impl Client {
         }
     }
 
+    pub fn connect_to_tls(&mut self, addr: String) {
+        self.addr = Some(addr.clone());
+
+        let root_store = rustls::RootCertStore {
+            roots: webpki_roots::TLS_SERVER_ROOTS.into(),
+        };
+
+        let mut config = rustls::ClientConfig::builder()
+            .with_root_certificates(root_store)
+            .with_no_client_auth();
+        config.key_log = Arc::new(rustls::KeyLogFile::new());
+
+        let server_name = "arson.dev".try_into().unwrap();
+
+        let conn = rustls::ClientConnection::new(Arc::new(config), server_name).unwrap();
+
+        let tcp_stream = TcpStream::connect(addr.clone()).unwrap();
+
+        let tls_stream = TlsStream {
+            conn,
+            sock: tcp_stream,
+        };
+
+        self.connection = Some(Box::new(tls_stream));
+    }
+
     pub fn connect_to(&mut self, addr: String) {
         self.addr = Some(addr.clone());
         match &self.preferred_protocol {
             Some(proto) => {
-                self.connection = proto.connect(addr);
+                self.connection = Some(Box::new(proto.connect(addr).unwrap()));
             }
             None => {
                 self.preferred_protocol = Some(Protocol::HTTP1_1);
-                self.connection = self.preferred_protocol.as_ref().unwrap().connect(addr);
+                self.connection = Some(Box::new(
+                    self.preferred_protocol
+                        .as_ref()
+                        .unwrap()
+                        .connect(addr)
+                        .unwrap(),
+                ));
             }
         }
+    }
+
+    pub fn connect_to_host_tls(&mut self, host: String, port: u16) {
+        let target = dns::resolve(host, port);
+        self.connect_to_tls(target.to_string())
     }
 
     pub fn connect_to_host(&mut self, host: String, port: u16) {
@@ -629,17 +709,26 @@ impl Client {
 
     pub fn connect_to_url(&mut self, url: String) -> http::URL {
         let url_obj = http::construct_url(url).unwrap();
-        self.connect_to_host(
-            url_obj.host.clone(),
-            url_obj
-                .port
-                .unwrap_or(http::preferred_default_port(url_obj.scheme.clone())),
-        );
+
+        match url_obj.scheme {
+            http::Scheme::HTTP => self.connect_to_host(
+                url_obj.host.clone(),
+                url_obj
+                    .port
+                    .unwrap_or(http::preferred_default_port(url_obj.scheme.clone())),
+            ),
+            http::Scheme::HTTPS => self.connect_to_host_tls(
+                url_obj.host.clone(),
+                url_obj
+                    .port
+                    .unwrap_or(http::preferred_default_port(url_obj.scheme.clone())),
+            ),
+        }
 
         url_obj
     }
 
-    pub fn send_request(&self, request: Request) -> Option<Response> {
+    pub fn send_request(&mut self, request: Request) -> Option<Response> {
         match request.send(self) {
             Ok(resp) => Some(resp),
             Err(e) => {
@@ -647,5 +736,39 @@ impl Client {
                 None
             }
         }
+    }
+}
+
+/// A trait to abstract over different connection stream types
+/// This allows us to use both plain TCP streams and TLS streams interchangeably
+trait ConnectionStream {
+    fn cs_read(&mut self, buffer: &mut [u8]) -> usize;
+    fn cs_write(&mut self, data: &[u8]) -> Result<usize, std::io::Error>;
+}
+
+struct TlsStream {
+    conn: rustls::ClientConnection,
+    sock: TcpStream,
+}
+
+impl ConnectionStream for TcpStream {
+    fn cs_read(&mut self, buffer: &mut [u8]) -> usize {
+        self.read(buffer).unwrap()
+    }
+
+    fn cs_write(&mut self, data: &[u8]) -> Result<usize, std::io::Error> {
+        self.write(data)
+    }
+}
+
+impl<'a> ConnectionStream for TlsStream {
+    fn cs_read(&mut self, buffer: &mut [u8]) -> usize {
+        let mut stream = rustls::Stream::new(&mut self.conn, &mut self.sock);
+        stream.read(buffer).unwrap()
+    }
+
+    fn cs_write(&mut self, data: &[u8]) -> Result<usize, std::io::Error> {
+        let mut stream = rustls::Stream::new(&mut self.conn, &mut self.sock);
+        stream.write(data)
     }
 }

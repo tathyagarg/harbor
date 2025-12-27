@@ -13,6 +13,8 @@ pollster = "0.4.0"
 wgpu = "27.0.1"
 winit = "0.30.12"
 tracy-client = { version = "0.17", features = ["enable"] }
+rustls = "0.23.35"
+webpki-roots = "1.0.4"
 
 [features]
 transparent = []
