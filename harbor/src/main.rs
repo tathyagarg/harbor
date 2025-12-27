@@ -8,9 +8,7 @@ use winit::window::{Window, WindowId};
 
 use wgpu;
 
-use crate::http_client::Protocol;
-
-mod http_client;
+mod http;
 
 /// Converts RGBA values (0-255 for RGB, 0-100 for A) to wgpu::Color
 /// A being 0-100 is because I was feeling quirky
@@ -235,17 +233,17 @@ impl ApplicationHandler<State> for App {
 fn main() {
     env_logger::init();
 
-    let mut client = http_client::Client::new(Protocol::HTTP1_1, true);
-    client.connect_to("127.0.0.1:8000".to_string());
+    let mut client = http::Client::new(http::Protocol::HTTP1_1, true);
+    let url = client.connect_to_url("http://arson.dev:80/".to_string());
 
-    let resp = client.send_request(http_client::Request {
+    let resp = client.send_request(http::Request {
         method: String::from("GET"),
         request_target: String::from("/"),
-        protocol: http_client::Protocol::HTTP1_1,
-        headers: vec![http_client::Header::new(
-            String::from("User-Agent"),
-            String::from("Harbor Browser"),
-        )],
+        protocol: http::Protocol::HTTP1_1,
+        headers: vec![
+            http::Header::new(String::from("User-Agent"), String::from("Harbor Browser")),
+            http::Header::new(String::from("Host"), url.host),
+        ],
         body: None,
     });
     if resp.is_some() {

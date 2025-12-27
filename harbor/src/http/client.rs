@@ -2,8 +2,10 @@ use std::fmt;
 use std::io::{Read, Write};
 use std::net::TcpStream;
 
+use crate::http::{self, dns};
+
 pub const MINIMUM_CHUNK_LENGTH: usize = 8;
-pub const CHUNK_LENGTH: usize = 8;
+pub const CHUNK_LENGTH: usize = 512;
 
 pub const BLUE: &str = "\x1b[1;34m";
 pub const GREEN: &str = "\x1b[1;32m";
@@ -19,14 +21,14 @@ trait ReqEncodable {
 }
 
 #[derive(Debug)]
-enum RequestIntegrityErrorKind {
+pub enum RequestIntegrityErrorKind {
     InvalidMethod,
     InvalidHeaders,
     InvalidBody,
 }
 
 #[derive(Debug)]
-struct RequestIntegrityError {
+pub struct RequestIntegrityError {
     pub kind: RequestIntegrityErrorKind,
     pub message: String,
 }
@@ -618,6 +620,18 @@ impl Client {
                 self.connection = self.preferred_protocol.as_ref().unwrap().connect(addr);
             }
         }
+    }
+
+    pub fn connect_to_host(&mut self, host: String, port: u16) {
+        let target = dns::resolve(host, port);
+        self.connect_to(target.to_string())
+    }
+
+    pub fn connect_to_url(&mut self, url: String) -> http::URL {
+        let url_obj = http::construct_url(url).unwrap();
+        self.connect_to_host(url_obj.host.clone(), url_obj.port);
+
+        url_obj
     }
 
     pub fn send_request(&self, request: Request) -> Option<Response> {
