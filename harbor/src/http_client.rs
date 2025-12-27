@@ -3,7 +3,16 @@ use std::io::{Read, Write};
 use std::net::TcpStream;
 
 pub const MINIMUM_CHUNK_LENGTH: usize = 8;
-pub const CHUNK_LENGTH: usize = 512;
+pub const CHUNK_LENGTH: usize = 8;
+
+pub const BLUE: &str = "\x1b[1;34m";
+pub const GREEN: &str = "\x1b[1;32m";
+pub const YELLOW: &str = "\x1b[1;33m";
+pub const RED: &str = "\x1b[1;31m";
+
+pub const BOLD: &str = "\x1b[1m";
+
+pub const RESET: &str = "\x1b[0m";
 
 trait ReqEncodable {
     fn encode(&self) -> String;
@@ -246,8 +255,6 @@ impl Request {
                     }
 
                     response_decoder.decode(&resp);
-
-                    println!("{}", str::from_utf8(&resp).unwrap());
                 }
 
                 // println!("{}")
@@ -543,6 +550,41 @@ impl Response {
             }
             None => return,
         }
+    }
+}
+
+impl fmt::Display for Response {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} ", self.protocol.as_ref().unwrap().encode())?;
+
+        let status_code = *self.status_code.as_ref().unwrap();
+        if status_code >= 100 && status_code <= 199 {
+            write!(f, "{}", BLUE)?;
+        } else if status_code >= 200 && status_code <= 299 {
+            write!(f, "{}", GREEN)?;
+        } else if status_code >= 300 && status_code <= 399 {
+            write!(f, "{}", YELLOW)?;
+        } else if status_code >= 400 && status_code <= 599 {
+            write!(f, "{}", RED)?;
+        }
+
+        write!(
+            f,
+            "{} {}{}\n",
+            status_code,
+            self.reason.as_ref().unwrap(),
+            RESET
+        )?;
+
+        for header in &self.headers {
+            write!(f, "{}{}{}: {}\n", BOLD, header.name, RESET, header.value)?;
+        }
+
+        if self.body.is_some() {
+            write!(f, "\n{}", self.body.as_ref().unwrap())?;
+        }
+
+        Ok(())
     }
 }
 

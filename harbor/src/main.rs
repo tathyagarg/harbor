@@ -249,7 +249,7 @@ fn main() {
         body: None,
     });
     if resp.is_some() {
-        println!("{:?}", resp.unwrap());
+        println!("{}", resp.unwrap());
     }
 
     // let event_loop = EventLoop::with_user_event().build().unwrap();
