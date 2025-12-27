@@ -5,7 +5,12 @@ use crate::http;
 pub fn resolve_url(url: String) -> SocketAddr {
     let url_obj = http::construct_url(url).unwrap();
 
-    resolve(url_obj.host, url_obj.port)
+    resolve(
+        url_obj.host,
+        url_obj
+            .port
+            .unwrap_or(http::preferred_default_port(url_obj.scheme)),
+    )
 }
 
 pub fn resolve(host: String, port: u16) -> SocketAddr {

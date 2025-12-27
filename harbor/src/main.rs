@@ -234,7 +234,7 @@ fn main() {
     env_logger::init();
 
     let mut client = http::Client::new(http::Protocol::HTTP1_1, true);
-    let url = client.connect_to_url("http://arson.dev:80/".to_string());
+    let url = client.connect_to_url("http://arson.dev/".to_string());
 
     let resp = client.send_request(http::Request {
         method: String::from("GET"),

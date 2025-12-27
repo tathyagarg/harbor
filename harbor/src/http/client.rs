@@ -629,7 +629,12 @@ impl Client {
 
     pub fn connect_to_url(&mut self, url: String) -> http::URL {
         let url_obj = http::construct_url(url).unwrap();
-        self.connect_to_host(url_obj.host.clone(), url_obj.port);
+        self.connect_to_host(
+            url_obj.host.clone(),
+            url_obj
+                .port
+                .unwrap_or(http::preferred_default_port(url_obj.scheme.clone())),
+        );
 
         url_obj
     }
