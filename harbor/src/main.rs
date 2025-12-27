@@ -236,6 +236,8 @@ fn main() {
     let mut client = http::Client::new(http::Protocol::HTTP1_1, true);
     let url = client.connect_to_url("https://arson.dev/".to_string());
 
+    println!("Sending request to: {}", url.reconstruct());
+
     let resp = client.send_request(http::Request {
         method: String::from("GET"),
         request_target: String::from("/"),

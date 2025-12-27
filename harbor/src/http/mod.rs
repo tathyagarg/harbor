@@ -18,6 +18,38 @@ pub struct URL {
     path: String,
 }
 
+impl URL {
+    pub fn reconstruct(&self) -> String {
+        let mut url = String::new();
+
+        match self.scheme {
+            Scheme::HTTP => url.push_str("http"),
+            Scheme::HTTPS => url.push_str("https"),
+        }
+
+        url.push_str("://");
+
+        url.push_str(&self.host);
+
+        match self.scheme {
+            Scheme::HTTP => {
+                if self.port.is_some() && self.port.unwrap() != 80 {
+                    url.push_str(&format!(":{}", self.port.unwrap()));
+                }
+            }
+            Scheme::HTTPS => {
+                if self.port.is_some() && self.port.unwrap() != 443 {
+                    url.push_str(&format!(":{}", self.port.unwrap()));
+                }
+            }
+        }
+
+        url.push_str(&self.path);
+
+        url
+    }
+}
+
 pub fn construct_url(url: String) -> Option<URL> {
     let mut url_obj = URL::default();
 

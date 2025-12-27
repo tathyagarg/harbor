@@ -1,20 +1,52 @@
-use std::net::{SocketAddr, ToSocketAddrs};
+use std::{
+    collections::HashMap,
+    net::{SocketAddr, ToSocketAddrs},
+    time::Instant,
+};
 
 use crate::http;
 
-pub fn resolve_url(url: String) -> SocketAddr {
-    let url_obj = http::construct_url(url).unwrap();
-
-    resolve(
-        url_obj.host,
-        url_obj
-            .port
-            .unwrap_or(http::preferred_default_port(url_obj.scheme)),
-    )
+pub struct DnsResolver {
+    resolved_urls: HashMap<(String, u16), (SocketAddr, Instant)>,
 }
 
-pub fn resolve(host: String, port: u16) -> SocketAddr {
-    let mut addrs = (host.as_str(), port).to_socket_addrs().unwrap();
+pub const DEFAULT_TTL_SECS: u64 = 300;
 
-    addrs.next().unwrap()
+impl DnsResolver {
+    pub fn new() -> Self {
+        Self {
+            resolved_urls: HashMap::new(),
+        }
+    }
+
+    pub fn resolve_url(&mut self, url: String) -> SocketAddr {
+        let url_obj = http::construct_url(url).unwrap();
+
+        self.resolve(
+            url_obj.host,
+            url_obj
+                .port
+                .unwrap_or(http::preferred_default_port(url_obj.scheme)),
+        )
+    }
+
+    pub fn resolve(&mut self, host: String, port: u16) -> SocketAddr {
+        let pair = (host.clone(), port);
+
+        if let Some((addr, created_at)) = self.resolved_urls.get(&pair) {
+            if created_at.elapsed().as_secs() >= DEFAULT_TTL_SECS {
+                self.resolved_urls.remove(&pair);
+            } else {
+                return *addr;
+            }
+        }
+
+        let mut addrs = (host.as_str(), port).to_socket_addrs().unwrap();
+        let sock_addr = addrs.next().unwrap();
+
+        self.resolved_urls
+            .insert((host, port), (sock_addr, Instant::now()));
+
+        sock_addr
+    }
 }

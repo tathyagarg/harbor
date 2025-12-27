@@ -1,6 +1,6 @@
 use std::fmt;
 use std::io::{Read, Write};
-use std::net::TcpStream;
+use std::net::{SocketAddr, TcpStream};
 use std::sync::Arc;
 
 use crate::http::{self, dns};
@@ -637,6 +637,8 @@ impl fmt::Display for Response {
 pub struct Client {
     addr: Option<String>,
 
+    dns_resolver: Option<http::dns::DnsResolver>,
+
     connection: Option<Box<dyn ConnectionStream>>,
     preferred_protocol: Option<Protocol>,
 
@@ -650,6 +652,11 @@ impl Client {
             permissive,
             ..Default::default()
         }
+    }
+
+    pub fn with_empty_resolver(&mut self) -> &mut Self {
+        self.dns_resolver = Some(http::dns::DnsResolver::new());
+        self
     }
 
     pub fn connect_to_tls(&mut self, addr: String) {
@@ -697,32 +704,46 @@ impl Client {
         }
     }
 
+    pub fn get_addr_url(&mut self, url: String) -> SocketAddr {
+        match &mut self.dns_resolver {
+            Some(resolver) => resolver.resolve_url(url),
+            None => {
+                self.with_empty_resolver();
+                let resolver = self.dns_resolver.as_mut().unwrap();
+                resolver.resolve_url(url)
+            }
+        }
+    }
+
+    pub fn get_addr_host(&mut self, host: String, port: u16) -> SocketAddr {
+        match &mut self.dns_resolver {
+            Some(resolver) => resolver.resolve(host, port),
+            None => {
+                self.with_empty_resolver();
+                let resolver = self.dns_resolver.as_mut().unwrap();
+                resolver.resolve(host, port)
+            }
+        }
+    }
+
     pub fn connect_to_host_tls(&mut self, host: String, port: u16) {
-        let target = dns::resolve(host, port);
+        let target = self.get_addr_host(host, port);
         self.connect_to_tls(target.to_string())
     }
 
     pub fn connect_to_host(&mut self, host: String, port: u16) {
-        let target = dns::resolve(host, port);
+        let target = self.get_addr_host(host, port);
         self.connect_to(target.to_string())
     }
 
     pub fn connect_to_url(&mut self, url: String) -> http::URL {
-        let url_obj = http::construct_url(url).unwrap();
+        let url_obj = http::construct_url(url.clone()).unwrap();
+
+        let addr = self.get_addr_url(url).to_string();
 
         match url_obj.scheme {
-            http::Scheme::HTTP => self.connect_to_host(
-                url_obj.host.clone(),
-                url_obj
-                    .port
-                    .unwrap_or(http::preferred_default_port(url_obj.scheme.clone())),
-            ),
-            http::Scheme::HTTPS => self.connect_to_host_tls(
-                url_obj.host.clone(),
-                url_obj
-                    .port
-                    .unwrap_or(http::preferred_default_port(url_obj.scheme.clone())),
-            ),
+            http::Scheme::HTTP => self.connect_to(addr),
+            http::Scheme::HTTPS => self.connect_to_tls(addr),
         }
 
         url_obj
