@@ -8,6 +8,8 @@ use winit::window::{Window, WindowId};
 
 use wgpu;
 
+use crate::http_client::Protocol;
+
 mod http_client;
 
 /// Converts RGBA values (0-255 for RGB, 0-100 for A) to wgpu::Color
@@ -233,18 +235,22 @@ impl ApplicationHandler<State> for App {
 fn main() {
     env_logger::init();
 
-    let client = http_client::Client::new().connect_to("127.0.0.1:8000".to_string());
+    let mut client = http_client::Client::new(Protocol::HTTP1_1, true);
+    client.connect_to("127.0.0.1:8000".to_string());
 
-    client.send_request(http_client::Request {
+    let resp = client.send_request(http_client::Request {
         method: String::from("GET"),
         request_target: String::from("/"),
-        protocol: http_client::Protocol::HTTP1_0,
-        headers: vec![http_client::Header {
-            name: String::from("User-Agent"),
-            value: String::from("Harbor Browser"),
-        }],
+        protocol: http_client::Protocol::HTTP1_1,
+        headers: vec![http_client::Header::new(
+            String::from("User-Agent"),
+            String::from("Harbor Browser"),
+        )],
         body: None,
     });
+    if resp.is_some() {
+        println!("{:?}", resp.unwrap());
+    }
 
     // let event_loop = EventLoop::with_user_event().build().unwrap();
     // event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
