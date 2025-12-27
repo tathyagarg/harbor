@@ -3,7 +3,7 @@ use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream};
 use std::sync::Arc;
 
-use crate::http::{self, dns};
+use crate::http;
 
 pub const MINIMUM_CHUNK_LENGTH: usize = 8;
 pub const CHUNK_LENGTH: usize = 512;
@@ -54,7 +54,7 @@ impl fmt::Display for RequestIntegrityError {
 /// to allow customization - not to mention the impact that the HTTP protocol
 /// has on the overall structure of the request itself as well as how it's sent
 #[allow(dead_code)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Protocol {
     HTTP0_9,
     HTTP1_0,
@@ -86,7 +86,7 @@ impl ReqEncodable for Protocol {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Header {
     pub name: String,
     pub value: String,
@@ -279,10 +279,10 @@ impl Request {
                         {
                             content_length = Some(len.parse::<usize>().unwrap());
 
-                            if response_decoder.response.body.as_ref().unwrap().len()
-                                >= content_length.unwrap()
-                            {
-                                break;
+                            if let Some(body) = response_decoder.response.body.as_ref() {
+                                if body.len() >= content_length.unwrap() {
+                                    break;
+                                }
                             }
                         }
                     }
@@ -550,7 +550,7 @@ impl ResponseDecoder {
 /// You will notice that most fields are Option'd even though it may seem like they shouldn't be
 /// This is because in HTTP/0.9 the response consists only of the body, so other fields must be set
 /// to None
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct Response {
     pub protocol: Option<Protocol>,
     pub status_code: Option<u32>,
@@ -645,6 +645,10 @@ pub struct Client {
     permissive: bool,
 }
 
+/// We're allowing dead code because code that may not be used directly right now might still have
+/// a purpose in the future, and the warning gets annoying to look at and distracts from actual
+/// issues
+#[allow(dead_code)]
 impl Client {
     pub fn new(prefers: Protocol, permissive: bool) -> Self {
         Self {
@@ -659,7 +663,7 @@ impl Client {
         self
     }
 
-    pub fn connect_to_tls(&mut self, addr: String) {
+    pub fn connect_to_tls(&mut self, addr: String, host: String) {
         self.addr = Some(addr.clone());
 
         let root_store = rustls::RootCertStore {
@@ -671,7 +675,7 @@ impl Client {
             .with_no_client_auth();
         config.key_log = Arc::new(rustls::KeyLogFile::new());
 
-        let server_name = "arson.dev".try_into().unwrap();
+        let server_name = host.try_into().unwrap();
 
         let conn = rustls::ClientConnection::new(Arc::new(config), server_name).unwrap();
 
@@ -727,8 +731,8 @@ impl Client {
     }
 
     pub fn connect_to_host_tls(&mut self, host: String, port: u16) {
-        let target = self.get_addr_host(host, port);
-        self.connect_to_tls(target.to_string())
+        let target = self.get_addr_host(host.clone(), port);
+        self.connect_to_tls(target.to_string(), host)
     }
 
     pub fn connect_to_host(&mut self, host: String, port: u16) {
@@ -743,20 +747,48 @@ impl Client {
 
         match url_obj.scheme {
             http::Scheme::HTTP => self.connect_to(addr),
-            http::Scheme::HTTPS => self.connect_to_tls(addr),
+            http::Scheme::HTTPS => self.connect_to_tls(addr, url_obj.host.clone()),
         }
 
         url_obj
     }
 
     pub fn send_request(&mut self, request: Request) -> Option<Response> {
-        match request.send(self) {
+        let maybe_resp = match request.send(self) {
             Ok(resp) => Some(resp),
             Err(e) => {
                 eprintln!("{}", e);
                 None
             }
+        };
+
+        if let Some(resp) = maybe_resp.as_ref() {
+            let status_code = resp.status_code.unwrap();
+            if status_code >= 300 && status_code <= 399 {
+                return self.handle_redirect(request, resp.clone());
+            }
         }
+
+        maybe_resp
+    }
+
+    pub fn handle_redirect(&mut self, initial: Request, response: Response) -> Option<Response> {
+        if let Some(redirect_url) = response.get_header_value("Location".to_string()) {
+            let url = http::construct_url(redirect_url.clone()).unwrap();
+
+            self.connect_to_url(redirect_url);
+            return self.send_request(Request {
+                method: initial.method,
+                request_target: url.path,
+                protocol: initial.protocol,
+                headers: initial.headers,
+                body: initial.body,
+            });
+        };
+
+        // Couldn't find a location to redirect to, so just take the original response
+        // Do what u want w ts lol
+        Some(response)
     }
 }
 
