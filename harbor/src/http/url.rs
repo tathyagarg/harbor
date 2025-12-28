@@ -1,3 +1,32 @@
+#![allow(dead_code)]
+
+use encoding_rs;
+use idna;
+
+pub const ForbiddenHostCodePoints: [char; 17] = [
+    '\u{0000}', '\u{0009}', '\u{000a}', '\u{000d}', '\u{0020}', '\u{0023}', '\u{002f}', '\u{003a}',
+    '\u{003c}', '\u{003e}', '\u{003f}', '\u{0040}', '\u{005b}', '\u{005c}', '\u{005d}', '\u{005e}',
+    '\u{007c}',
+];
+
+pub fn is_url_codepoint(c: char) -> bool {
+    matches!(c,
+        'a'..='z' |
+        'A'..='Z' |
+        '0'..='9' |
+        '!' | '$' | '&' | '\'' | '(' | ')' | '*' | '+' | ',' | '-' |
+        '.' | '/' | ':' | ';' | '=' | '?' | '@' | '_' | '~' |
+        '\u{A0}'..='\u{D7FF}' | '\u{E000}'..='\u{FDCF}' | '\u{FDF0}'..='\u{FFFD}' |
+        '\u{10000}'..='\u{1FFFD}' | '\u{20000}'..='\u{2FFFD}' |
+        '\u{30000}'..='\u{3FFFD}' | '\u{40000}'..='\u{4FFFD}' |
+        '\u{50000}'..='\u{5FFFD}' | '\u{60000}'..='\u{6FFFD}' |
+        '\u{70000}'..='\u{7FFFD}' | '\u{80000}'..='\u{8FFFD}' |
+        '\u{90000}'..='\u{9FFFD}' | '\u{A0000}'..='\u{AFFFD}' |
+        '\u{B0000}'..='\u{BFFFD}' | '\u{C0000}'..='\u{CFFFD}' |
+        '\u{D0000}'..='\u{DFFFD}' | '\u{E1000}'..='\u{EFFFD}' |
+        '\u{F0000}'..='\u{FFFFD}' | '\u{100000}'..='\u{10FFFD}')
+}
+
 struct StringPointer {
     chars: Vec<char>,
     pointer: isize,
@@ -378,15 +407,217 @@ mod tests {
     }
 }
 
+#[derive(Debug)]
+pub enum IPv4ParseError {
+    NumberParsingError,
+    IPv4TooManyParts,
+    IPv4NonNumericPart,
+    IPv4OutOfRange,
+}
+
+impl IPv4 {
+    fn parse_number(num: &str) -> Result<(u32, bool), IPv4ParseError> {
+        if num.trim().is_empty() {
+            return Err(IPv4ParseError::NumberParsingError);
+        }
+
+        let mut input = String::from(num);
+
+        let mut validation_error = false;
+        let mut r = 10;
+
+        if num.chars().count() >= 2 && (&num[0..2] == "0x" || &num[0..2] == "0X") {
+            validation_error = true;
+            input = num.chars().into_iter().skip(2).collect();
+            r = 16;
+        }
+
+        if num.chars().count() >= 2 && &num[0..1] == "0" {
+            validation_error = true;
+            input = num.chars().into_iter().skip(1).collect();
+            r = 8;
+        }
+
+        if input.is_empty() {
+            return Ok((0, true));
+        }
+
+        match u32::from_str_radix(&input, r) {
+            Err(_) => Err(IPv4ParseError::NumberParsingError),
+            Ok(output) => Ok((output, validation_error)),
+        }
+    }
+
+    pub fn parse(input: String) -> Result<IPv4, IPv4ParseError> {
+        let mut parts = input.split('.').collect::<Vec<&str>>();
+        if parts.clone().last().unwrap().trim().is_empty() {
+            if parts.len() > 1 {
+                _ = parts.pop();
+            }
+        }
+
+        if parts.len() > 4 {
+            return Err(IPv4ParseError::IPv4TooManyParts);
+        }
+
+        let mut numbers = Vec::<u32>::new();
+
+        for part in parts {
+            let result = IPv4::parse_number(part);
+            if result.is_err() {
+                return Err(IPv4ParseError::IPv4NonNumericPart);
+            }
+
+            let (num, _) = result.unwrap();
+            numbers.push(num);
+        }
+
+        for (i, num) in numbers.iter().enumerate() {
+            if *num > 255 && i != numbers.len() - 1 {
+                return Err(IPv4ParseError::IPv4OutOfRange);
+            }
+
+            if i == numbers.len() - 1 && *num > 256u32.pow((5 - numbers.len()) as u32) {
+                return Err(IPv4ParseError::IPv4OutOfRange);
+            }
+        }
+
+        let mut ipv4 = numbers.last().unwrap().to_owned();
+        _ = numbers.pop();
+
+        for (i, n) in numbers.iter().enumerate() {
+            ipv4 += *n * 256u32.pow((3 - i) as u32);
+        }
+
+        Ok(IPv4(ipv4))
+    }
+}
+
+fn utf8_percent_encode_set(b: u8) -> bool {
+    !matches!(
+        b,
+        b'A'..=b'Z'
+        | b'a'..=b'z'
+        | b'0'..=b'9'
+        | b'-' | b'.' | b'_' | b'~'
+    )
+}
+
+pub fn percent_encoding_after_encoding(
+    encoding: &'static encoding_rs::Encoding,
+    input: String,
+    percent_encode_set: &dyn Fn(u8) -> bool,
+    space_as_plus: Option<bool>,
+) -> String {
+    let mut output = String::new();
+    let (bytes, _, _) = encoding.encode(&input);
+
+    for b in bytes.into_iter() {
+        if space_as_plus.unwrap_or(false) && *b == b' ' {
+            output.push('+');
+        } else {
+            let isomporh = *b as char;
+
+            if !percent_encode_set(*b) {
+                output.push(isomporh);
+            } else {
+                output.push_str(&format!("%{:02X}", b));
+            }
+        }
+    }
+
+    output
+}
+
+pub fn percent_decode(bytes: &[u8]) -> Vec<u8> {
+    let mut output = vec![];
+    let mut skip = 0;
+
+    for (i, byte) in bytes.iter().enumerate() {
+        if skip != 0 {
+            skip -= 1;
+            continue;
+        }
+
+        if *byte != b'%' {
+            output.push(*byte);
+        } else if !bytes[i + 1].is_ascii_hexdigit() || !bytes[i + 2].is_ascii_hexdigit() {
+            output.push(*byte);
+        } else {
+            let hi = bytes[i + 1];
+            let lo = bytes[i + 1];
+
+            let hex = |b| match b {
+                b'0'..=b'9' => b - b'0',
+                b'a'..=b'f' => b - b'a' + 10,
+                b'A'..=b'F' => b - b'A' + 10,
+                _ => unreachable!(),
+            };
+
+            let byte_point = (hex(hi) << 4) | hex(lo);
+            output.push(byte_point);
+            skip = 2;
+        }
+    }
+
+    output
+}
+
+pub fn utf8_decode_no_bom(bytes: Vec<u8>) -> String {
+    String::from_utf8(bytes).unwrap()
+}
+
+pub struct Opaque(String);
+
+pub enum OpaqueParseError {
+    HostInvalidCodePoint,
+    InvalidURLUnit,
+}
+
+impl Opaque {
+    pub fn parse(input: String) -> Result<Opaque, OpaqueParseError> {
+        for forbidden in ForbiddenHostCodePoints {
+            if input.contains(forbidden) {
+                return Err(OpaqueParseError::HostInvalidCodePoint);
+            }
+        }
+
+        let chars = input.chars().into_iter().collect::<Vec<char>>();
+
+        for (i, c) in input.chars().enumerate() {
+            if !is_url_codepoint(c) && c != '%' {
+                return Err(OpaqueParseError::InvalidURLUnit);
+            }
+
+            if c == '%' && !(chars[i - 1].is_ascii_hexdigit() && chars[i + 1].is_ascii_hexdigit()) {
+                return Err(OpaqueParseError::InvalidURLUnit);
+            }
+        }
+
+        let result = percent_encoding_after_encoding(
+            encoding_rs::Encoding::for_label(b"utf-8").unwrap(),
+            input,
+            &utf8_percent_encode_set,
+            None,
+        );
+
+        Ok(Opaque(result))
+    }
+}
+
 pub enum Host {
     Domain(String),
     IPAddress(IPAddress),
-    Opaque(String),
+    Opaque(Opaque),
     Empty,
 }
 
 pub enum HostParseError {
     IPv6UnclosedValidation,
+    IPv6ParsingError(IPv6ParseError),
+    IPv4ParsingError(IPv4ParseError),
+    OpaqueParseError(OpaqueParseError),
+    DomainToAsciiError(idna::Errors),
 }
 
 impl Host {
@@ -395,9 +626,37 @@ impl Host {
             if !input.ends_with(']') {
                 return Err(HostParseError::IPv6UnclosedValidation);
             }
+
+            return match IPv6::parse(input[1..input.len() - 2].to_string()) {
+                Ok(ip) => Ok(Host::IPAddress(IPAddress::IPv6(ip))),
+                Err(e) => Err(HostParseError::IPv6ParsingError(e)),
+            };
         }
 
-        todo!()
+        if is_opaque.unwrap_or(false) {
+            return match Opaque::parse(input) {
+                Ok(opaque) => Ok(Host::Opaque(opaque)),
+                Err(e) => Err(HostParseError::OpaqueParseError(e)),
+            };
+        }
+
+        let domain = utf8_decode_no_bom(percent_decode(input.as_bytes()));
+
+        let domain_ascii = idna::domain_to_ascii(&domain);
+
+        return match domain_ascii {
+            Err(e) => Err(HostParseError::DomainToAsciiError(e)),
+            Ok(dom_ascii) => {
+                if dom_ascii.chars().last().unwrap().is_ascii_digit() {
+                    return match IPv4::parse(dom_ascii) {
+                        Ok(ipv4) => Ok(Host::IPAddress(IPAddress::IPv4(ipv4))),
+                        Err(e) => Err(HostParseError::IPv4ParsingError(e)),
+                    };
+                }
+
+                Ok(Host::Domain(dom_ascii))
+            }
+        };
     }
 }
 
