@@ -765,6 +765,11 @@ impl Client {
         if let Some(resp) = maybe_resp.as_ref() {
             let status_code = resp.status_code.unwrap();
             if status_code >= 300 && status_code <= 399 {
+                println!(
+                    "DEBUG: Redirect response received:\n============\n{}\n============",
+                    resp
+                );
+
                 return self.handle_redirect(request, resp.clone());
             }
         }

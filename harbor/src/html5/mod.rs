@@ -11,13 +11,18 @@ type DOMString = String;
 /// Placeholder
 type ValueOfType = i32;
 
+#[derive(Clone)]
 enum DocumentReadyState {
     Loading,
     Interactive,
     Complete,
 }
 
+#[derive(Clone)]
 pub struct Document {
+    // : Node
+    node: Box<Node>,
+
     /// [PutForwards=href, LegacyUnforgeable] readonly attribute Location? location
     location: Option<Location>,
 
@@ -38,8 +43,10 @@ pub struct Document {
     // TODO: Rest of the goddamn attributes
 }
 
+trait IDocument {}
+
 /// [Exposed=Window]
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Location {
     /// [LegacyUnforgeable] stringifier attribute USVString href;
     href: USVString,
@@ -94,7 +101,7 @@ impl Location {
 }
 
 /// [Exposed=(Window,Worker)]
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct DOMStringList {
     list: Vec<DOMString>,
 }
@@ -211,3 +218,156 @@ pub trait IEventListener {
 pub struct Event {}
 
 pub trait IEvent {}
+
+#[derive(Clone)]
+pub enum NodeType {
+    ElementNode = 1,
+    AttributeNode = 2,
+    TextNode = 3,
+    CDataSectionNode = 4,
+    EntityReferenceNode = 5, // legacy
+    EntityNode = 6,          // legacy
+    ProcessingInstructionNode = 7,
+    CommentNode = 8,
+    DocumentNode = 9,
+    DocumentTypeNode = 10,
+    DocumentFragmentNode = 11,
+    NotationNode = 12, // legacy
+}
+
+pub enum DocumentPosition {
+    Disconnected = 0x01,
+    Preceding = 0x02,
+    Following = 0x04,
+    Contains = 0x08,
+    ContainedBy = 0x10,
+    ImplementationSpecific = 0x20,
+}
+
+#[derive(Clone)]
+pub struct Node {
+    /// readonly attribute unsigned short nodeType;
+    node_type_ro: NodeType,
+
+    /// readonly attribute DOMString nodeName;
+    node_name_ro: DOMString,
+
+    /// readonly attribute boolean isConnected;
+    is_connected_ro: bool,
+
+    /// readonly attribute Document? ownerDocument;
+    owner_document_ro: Option<Document>,
+
+    /// readonly attribute Node? parentNode;
+    parent_node_ro: Box<Option<Node>>,
+
+    /// readonly attribute Element? parentElement;
+    /// TODO
+
+    /// [SameObject] readonly attribute NodeList childNodes;
+    child_nodes_ro: NodeList,
+
+    /// readonly attribute Node? firstChild;
+    first_child_ro: Box<Option<Node>>,
+
+    /// readonly attribute Node? lastChild;
+    last_child_ro: Box<Option<Node>>,
+
+    /// readonly attribute Node? previousSibling;
+    previous_sibling_ro: Box<Option<Node>>,
+
+    /// readonly attribute Node? nextSibling;
+    next_sibling_ro: Box<Option<Node>>,
+
+    /// [CEReactions] attribute DOMString? nodeValue;
+    node_value: Option<DOMString>,
+
+    /// [CEReactions] attribute DOMString? textContent;
+    text_content: Option<DOMString>,
+}
+
+struct GetRootNodeOptions {
+    composed: bool,
+}
+
+trait INode {
+    /// Node getRootNode(optional GetRootNodeOptions options = {});
+    fn get_root_node(&self, options: Option<GetRootNodeOptions>) -> Node;
+
+    /// boolean hasChildNodes();
+    fn has_child_nodes(&self) -> bool;
+
+    /// [CEReactions] undefined normalize();
+    fn normalize(&mut self) -> ();
+
+    /// [CEReactions, NewObject] Node cloneNode(optional boolean subtree = false);
+    fn clone_node(&self, subtree: Option<bool>) -> Node;
+
+    /// boolean isEqualNode(Node? otherNode);
+    fn is_equal_node(&self, other_node: Option<&Node>) -> bool;
+
+    /// boolean isSameNode(Node? otherNode);
+    fn is_same_node(&self, other_node: Option<&Node>) -> bool;
+
+    /// unsigned short compareDocumentPosition(Node other);
+    fn compare_document_position(&self, other: &Node) -> DocumentPosition;
+
+    /// boolean contains(Node? other);
+    fn contains(&self, other: Option<&Node>) -> bool;
+
+    /// DOMString? lookupPrefix(DOMString? namespace);
+    fn lookup_prefix(&self, namespace: Option<DOMString>) -> Option<DOMString>;
+
+    /// DOMString? lookupNamespaceURI(DOMString? prefix);
+    fn lookup_namespace_uri(&self, prefix: Option<DOMString>) -> Option<DOMString>;
+
+    /// boolean isDefaultNamespace(DOMString? namespace);
+    fn is_default_namespace(&self, namespace: Option<DOMString>) -> bool;
+
+    /// [CEReactions] Node insertBefore(Node node, Node? child);
+    fn insert_before(&mut self, node: &Node, child: Option<&Node>) -> Node;
+
+    /// [CEReactions] Node appendChild(Node node);
+    fn append_child(&mut self, node: &Node) -> Node;
+
+    /// [CEReactions] Node replaceChild(Node node, Node child);
+    fn replace_child(&mut self, node: &Node, child: &Node) -> Node;
+
+    /// [CEReactions] Node removeChild(Node child);
+    fn remove_child(&mut self, child: &Node) -> Node;
+
+    /// readonly attribute USVString baseURI;
+    fn base_uri(&self) -> USVString;
+}
+
+// impl INode for Node {
+//     fn base_uri(&self) -> USVString {
+//         self.owner_document_ro.unwrap()
+//     }
+// }
+
+/// [Exposed=Window]
+#[derive(Clone)]
+struct NodeList {
+    iterable: Vec<Node>,
+}
+
+trait INodeList {
+    fn item(&self, index: u32) -> Option<Node>;
+    fn length(&self) -> u32;
+}
+
+impl INodeList for NodeList {
+    fn item(&self, index: u32) -> Option<Node> {
+        if index + 1 > self.length() {
+            return None;
+        }
+
+        let elem = self.iterable.iter().nth(index as usize).unwrap().to_owned();
+        Some(elem)
+    }
+
+    fn length(&self) -> u32 {
+        self.iterable.len() as u32
+    }
+}
