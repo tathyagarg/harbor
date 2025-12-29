@@ -8,7 +8,7 @@ use winit::window::{Window, WindowId};
 
 use wgpu;
 
-use crate::http::url;
+use crate::http::url::{self, Serializable};
 
 mod html5;
 mod http;
@@ -239,30 +239,31 @@ fn main() {
     let url_target = String::from("https://arson.dev/awesome/");
     println!("Parsing target: {}", url_target);
 
-    let url = http::url::URL::parse(url_target, None, None);
-    println!("Parsed: {:?}", url.unwrap());
+    let url = http::url::URL::pure_parse(url_target.clone()).unwrap();
+    println!("Parsed: {:?}", url);
+    println!("Path serialized: {}", url.path.serialize());
 
     // type _T = html5::Location;
 
-    // let mut client = http::Client::new(http::Protocol::HTTP1_1, true);
-    // let url = client.connect_to_url("http://arson.dev/".to_string());
+    let mut client = http::Client::new(http::Protocol::HTTP1_1, true);
+    let url = client.connect_to_url(url_target);
 
-    // println!("Sending request to: {}", url.reconstruct());
+    println!("Sending request to: {}", url.serialize());
 
-    // let resp = client.send_request(http::Request {
-    //     method: String::from("GET"),
-    //     request_target: String::from("/"),
-    //     protocol: http::Protocol::HTTP1_1,
-    //     headers: vec![
-    //         http::Header::new(String::from("User-Agent"), String::from("Harbor Browser")),
-    //         http::Header::new(String::from("Host"), url.host),
-    //     ],
-    //     body: None,
-    // });
+    let resp = client.send_request(http::Request {
+        method: String::from("GET"),
+        request_target: url.path.serialize(),
+        protocol: http::Protocol::HTTP1_1,
+        headers: vec![
+            http::Header::new(String::from("User-Agent"), String::from("Harbor Browser")),
+            http::Header::new(String::from("Host"), url.host.unwrap().serialize()),
+        ],
+        body: None,
+    });
 
-    // if let Some(response) = resp {
-    //     println!("{}", response);
-    // }
+    if let Some(response) = resp {
+        println!("{}", response);
+    }
 
     // let event_loop = EventLoop::with_user_event().build().unwrap();
     // event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);

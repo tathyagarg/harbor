@@ -4,6 +4,7 @@ use std::net::{SocketAddr, TcpStream};
 use std::sync::Arc;
 
 use crate::http;
+use crate::http::url::Serializable;
 
 pub const MINIMUM_CHUNK_LENGTH: usize = 8;
 pub const CHUNK_LENGTH: usize = 512;
@@ -262,12 +263,15 @@ impl Request {
                     loop {
                         let mut resp: [u8; 512] = [0; 512];
                         let bytes_read = stream.cs_read(&mut resp);
-
                         if bytes_read == 0 {
                             break;
                         }
 
                         response_decoder.decode(&resp[..bytes_read]);
+
+                        if response_decoder.is_complete {
+                            break;
+                        }
 
                         if let Some(len) = content_length {
                             if response_decoder.response.body.as_ref().unwrap().len() >= len {
@@ -327,6 +331,8 @@ pub enum ResponseDecoderState {
 pub struct ResponseDecoder {
     state: ResponseDecoderState,
     response: Response,
+
+    is_complete: bool,
 }
 
 impl ResponseDecoder {
@@ -515,7 +521,7 @@ impl ResponseDecoder {
                 }
 
                 if string_data.contains("\r\n") {
-                    // Last part of name in string data
+                    // Last part of value in string data
                     let (value_data, remaining) = string_data.split_once("\r\n").unwrap();
 
                     let previous = self.response.headers.last_mut().unwrap();
@@ -523,6 +529,22 @@ impl ResponseDecoder {
                     previous.mark_complete();
 
                     self.state = ResponseDecoderState::HeaderName;
+
+                    if let Some(len) = self.response.get_header_value("Content-Length".to_string())
+                    {
+                        let content_length = len.parse::<usize>().unwrap();
+
+                        if content_length == 0 {
+                            self.is_complete = true;
+                            return;
+                        }
+
+                        // if let Some(body) = response_decoder.response.body.as_ref() {
+                        //     if body.len() >= content_length.unwrap() {
+                        //         break;
+                        //     }
+                        // }
+                    }
 
                     return self.decode(remaining.as_bytes());
                 } else {
@@ -719,7 +741,7 @@ impl Client {
         }
     }
 
-    pub fn get_addr_host(&mut self, host: String, port: u16) -> SocketAddr {
+    pub fn get_addr_host(&mut self, host: http::url::Host, port: u16) -> SocketAddr {
         match &mut self.dns_resolver {
             Some(resolver) => resolver.resolve(host, port),
             None => {
@@ -730,24 +752,25 @@ impl Client {
         }
     }
 
-    pub fn connect_to_host_tls(&mut self, host: String, port: u16) {
+    pub fn connect_to_host_tls(&mut self, host: http::url::Host, port: u16) {
         let target = self.get_addr_host(host.clone(), port);
-        self.connect_to_tls(target.to_string(), host)
+        self.connect_to_tls(target.to_string(), host.serialize())
     }
 
-    pub fn connect_to_host(&mut self, host: String, port: u16) {
+    pub fn connect_to_host(&mut self, host: http::url::Host, port: u16) {
         let target = self.get_addr_host(host, port);
         self.connect_to(target.to_string())
     }
 
-    pub fn connect_to_url(&mut self, url: String) -> http::URL {
-        let url_obj = http::construct_url(url.clone()).unwrap();
+    pub fn connect_to_url(&mut self, url: String) -> http::url::URL {
+        let url_obj = http::url::URL::pure_parse(url.clone()).unwrap();
 
         let addr = self.get_addr_url(url).to_string();
 
-        match url_obj.scheme {
-            http::Scheme::HTTP => self.connect_to(addr),
-            http::Scheme::HTTPS => self.connect_to_tls(addr, url_obj.host.clone()),
+        match url_obj.scheme.as_str() {
+            "http" => self.connect_to(addr),
+            "https" => self.connect_to_tls(addr, url_obj.host.as_ref().unwrap().serialize()),
+            _ => unimplemented!(),
         }
 
         url_obj
@@ -765,11 +788,6 @@ impl Client {
         if let Some(resp) = maybe_resp.as_ref() {
             let status_code = resp.status_code.unwrap();
             if status_code >= 300 && status_code <= 399 {
-                println!(
-                    "DEBUG: Redirect response received:\n============\n{}\n============",
-                    resp
-                );
-
                 return self.handle_redirect(request, resp.clone());
             }
         }
@@ -779,12 +797,12 @@ impl Client {
 
     pub fn handle_redirect(&mut self, initial: Request, response: Response) -> Option<Response> {
         if let Some(redirect_url) = response.get_header_value("Location".to_string()) {
-            let url = http::construct_url(redirect_url.clone()).unwrap();
+            let url = http::url::URL::pure_parse(redirect_url.clone()).unwrap();
 
             self.connect_to_url(redirect_url);
             return self.send_request(Request {
                 method: initial.method,
-                request_target: url.path,
+                request_target: url.path.serialize(),
                 protocol: initial.protocol,
                 headers: initial.headers,
                 body: initial.body,

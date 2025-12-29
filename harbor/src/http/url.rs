@@ -5,6 +5,10 @@ use std::num::{IntErrorKind, ParseIntError};
 use encoding_rs;
 use idna;
 
+pub trait Serializable {
+    fn serialize(&self) -> String;
+}
+
 pub const FORBIDDEN_HOST_CODE_POINTS: [char; 17] = [
     '\u{0000}', '\u{0009}', '\u{000a}', '\u{000d}', '\u{0020}', '\u{0023}', '\u{002f}', '\u{003a}',
     '\u{003c}', '\u{003e}', '\u{003f}', '\u{0040}', '\u{005b}', '\u{005c}', '\u{005d}', '\u{005e}',
@@ -35,7 +39,7 @@ fn is_special_scheme(scheme: &String) -> bool {
     SPECIAL_SCHEMES.contains(&scheme.as_str())
 }
 
-fn special_scheme_default_port(scheme: &String) -> Option<u16> {
+pub fn special_scheme_default_port(scheme: &String) -> Option<u16> {
     if !is_special_scheme(scheme) {
         return None;
     };
@@ -141,13 +145,13 @@ fn char_as_hex(c: char) -> u8 {
     return 0;
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct IPv4(u32);
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct IPv6([u16; 8]);
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub enum IPAddress {
     IPv4(IPv4),
     IPv6(IPv6),
@@ -238,12 +242,6 @@ impl IPv6 {
 
                     while pointer.c.is_ascii_digit() {
                         let number = pointer.c as u8 - b'0';
-                        println!("number: {}", number);
-                        println!(
-                            "chars: {}",
-                            pointer.chars.clone().into_iter().collect::<String>()
-                        );
-                        println!("position: {}", pointer.pointer);
                         if ipv4_piece.is_none() {
                             ipv4_piece = Some(number);
                         } else {
@@ -264,8 +262,6 @@ impl IPv6 {
                         }
                         pointer.advance_by(1);
                     }
-
-                    println!("piece: {}", ipv4_piece.unwrap());
 
                     address.0[piece_index] =
                         address.0[piece_index] * 0x100 + ipv4_piece.unwrap() as u16;
@@ -310,6 +306,67 @@ impl IPv6 {
         }
 
         Ok(address)
+    }
+
+    fn compressed_piece_index(&self) -> usize {
+        let mut longest_index = None;
+        let mut longest_size = 1;
+        let mut found_index: Option<usize> = None;
+        let mut found_size = 0;
+
+        for piece_index in 0..8 {
+            if self.0[piece_index] != 0 {
+                if found_size > longest_size {
+                    longest_index = found_index;
+                    longest_size = found_size;
+                }
+
+                found_index = None;
+                found_size = 0;
+            } else {
+                if found_index.is_none() {
+                    found_index = Some(piece_index);
+                    found_size += 1;
+                }
+            }
+        }
+
+        if found_size > longest_size {
+            return found_index.unwrap();
+        }
+
+        longest_index.unwrap()
+    }
+}
+
+impl Serializable for IPv6 {
+    fn serialize(&self) -> String {
+        let mut output = String::new();
+        let compress = self.compressed_piece_index();
+        let mut ignore0 = false;
+
+        for piece_index in 0..8 {
+            if ignore0 && self.0[piece_index] == 0 {
+                continue;
+            } else if ignore0 {
+                ignore0 = false;
+            }
+
+            if compress == piece_index {
+                let separator = if piece_index == 0 { "::" } else { ":" };
+                output.push_str(separator);
+
+                ignore0 = true;
+                continue;
+            }
+
+            output.push_str(format!("{:x}", self.0[piece_index]).as_str());
+            if piece_index != 7 {
+                output.push(':');
+            }
+        }
+
+        output
     }
 }
 
@@ -554,6 +611,24 @@ impl IPv4 {
     }
 }
 
+impl Serializable for IPv4 {
+    fn serialize(&self) -> String {
+        let mut output = String::new();
+        let mut n = self.0;
+
+        for i in 1..=4 {
+            output.insert_str(0, (n % 256).to_string().as_str());
+            if i != 4 {
+                output.insert(0, '.');
+            }
+
+            n = n / 256
+        }
+
+        output
+    }
+}
+
 type PercentEncodeSet = dyn Fn(u8) -> bool;
 
 fn c0_percent_encode_set(b: u8) -> bool {
@@ -640,7 +715,7 @@ pub fn utf8_decode_no_bom(bytes: Vec<u8>) -> String {
     String::from_utf8(bytes).unwrap()
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Opaque(String);
 
 #[derive(Debug)]
@@ -680,7 +755,72 @@ impl Opaque {
     }
 }
 
-#[derive(Clone, Debug)]
+type URLPathSegment = String;
+
+#[derive(Debug, Clone)]
+pub enum URLPath {
+    Segment(URLPathSegment),
+    List(Vec<URLPathSegment>),
+}
+
+impl URLPath {
+    fn is_opaque(&self) -> bool {
+        matches!(self, URLPath::Segment(_))
+    }
+
+    fn _ensure_list(&self) -> &Vec<URLPathSegment> {
+        assert!(!self.is_opaque());
+
+        match self {
+            URLPath::Segment(_) => unreachable!(),
+            URLPath::List(l) => l,
+        }
+    }
+
+    fn _ensure_list_mut(&mut self) -> &mut Vec<URLPathSegment> {
+        assert!(!self.is_opaque());
+
+        match self {
+            URLPath::Segment(_) => unreachable!(),
+            URLPath::List(l) => l,
+        }
+    }
+
+    fn push(&mut self, elem: URLPathSegment) {
+        self._ensure_list_mut().push(elem);
+    }
+
+    fn is_empty_list(&self) -> bool {
+        self._ensure_list().is_empty()
+    }
+
+    fn len_list(&self) -> usize {
+        self._ensure_list().len()
+    }
+}
+
+impl Default for URLPath {
+    fn default() -> Self {
+        Self::List(Vec::<URLPathSegment>::new())
+    }
+}
+
+impl Serializable for URLPath {
+    fn serialize(&self) -> String {
+        if let URLPath::Segment(segment) = self {
+            return segment.clone();
+        }
+
+        let mut output = String::new();
+        for segment in self._ensure_list() {
+            output.push_str(format!("/{}", segment).as_str());
+        }
+
+        output
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub enum Host {
     Domain(String),
     IPAddress(IPAddress),
@@ -737,8 +877,20 @@ impl Host {
     }
 }
 
-type URLPathSegment = String;
-type URLPath = Vec<URLPathSegment>;
+impl Serializable for Host {
+    fn serialize(&self) -> String {
+        match self {
+            Host::IPAddress(IPAddress::IPv4(ipv4)) => ipv4.serialize(),
+            Host::IPAddress(IPAddress::IPv6(ipv6)) => format!("[{}]", ipv6.serialize()),
+            Host::Domain(domain) => domain.clone(),
+            Host::Opaque(Opaque(opaque)) => opaque.clone(),
+            Host::Empty => String::new(),
+        }
+    }
+}
+
+// type URLPathSegment = String;
+// type URLPath = Vec<URLPathSegment>;
 
 #[derive(Debug)]
 pub enum ParseURLError {
@@ -778,14 +930,14 @@ pub enum ParseURLState {
 
 #[derive(Default, Clone, Debug)]
 pub struct URL {
-    scheme: String,
-    username: String,
-    password: String,
-    host: Option<Host>,
-    port: Option<u16>,
-    path: URLPath,
-    query: Option<String>,
-    fragment: Option<String>,
+    pub scheme: String,
+    pub username: String,
+    pub password: String,
+    pub host: Option<Host>,
+    pub port: Option<u16>,
+    pub path: URLPath,
+    pub query: Option<String>,
+    pub fragment: Option<String>,
 }
 
 impl URL {
@@ -794,16 +946,22 @@ impl URL {
     }
 
     fn shorten_path(&mut self) {
-        let path = &mut self.path;
+        assert!(!self.path.is_opaque());
 
-        if self.scheme.as_str() == "file"
-            && path.len() == 1
-            && is_normalized_windows_drive_letter(&path[0])
-        {
-            return;
+        if let URLPath::List(path) = &mut self.path {
+            if self.scheme.as_str() == "file"
+                && path.len() == 1
+                && is_normalized_windows_drive_letter(&path[0])
+            {
+                return;
+            }
+
+            _ = path.pop();
         }
+    }
 
-        path.pop();
+    pub fn pure_parse(input: String) -> Result<URL, ParseURLError> {
+        URL::parse(input, None, None)
     }
 
     pub fn parse(
@@ -921,7 +1079,7 @@ impl URL {
                             state = ParseURLState::PathOrAuthority;
                             pointer.advance_by(1);
                         } else {
-                            url.path = vec![];
+                            url.path = URLPath::Segment(String::new());
                             state = ParseURLState::OpaquePath;
                         }
                     } else if state_override.is_none() {
@@ -934,13 +1092,13 @@ impl URL {
                 }
                 ParseURLState::NoScheme => {
                     if base.is_none()
-                        || (base.as_ref().is_some_and(|burl| !burl.path.is_empty())
+                        || (base.as_ref().is_some_and(|burl| burl.path.is_opaque())
                             && pointer.c != '#')
                     {
                         return Err(ParseURLError::MissingSchemeNonRelativeURL);
                     } else if let Some(burl) = base.as_ref()
                         && pointer.c != '#'
-                        && !burl.path.is_empty()
+                        && burl.path.is_opaque()
                     {
                         url.scheme = burl.scheme.clone();
                         url.path = burl.path.clone();
@@ -1219,7 +1377,7 @@ impl URL {
                             ) {
                                 url.shorten_path();
                             } else {
-                                url.path = vec![];
+                                url.path = URLPath::List(Vec::new());
                             }
 
                             state = ParseURLState::Path;
@@ -1237,13 +1395,18 @@ impl URL {
                         if let Some(burl) = base.as_ref()
                             && burl.scheme.as_str() == "file"
                         {
+                            let path = match &burl.path {
+                                URLPath::Segment(_) => unreachable!(),
+                                URLPath::List(l) => l,
+                            };
+
                             url.host = burl.host.clone();
 
                             if !starts_with_windows_drive_letter(
                                 &pointer.chars[pointer.pointer as usize..].iter().collect(),
-                            ) && is_normalized_windows_drive_letter(&burl.path[0])
+                            ) && is_normalized_windows_drive_letter(&path[0])
                             {
-                                url.path.push(burl.path[0].clone());
+                                url.path.push(path[0].clone());
                             }
                         }
 
@@ -1333,7 +1496,7 @@ impl URL {
                             url.path.push(String::new());
                         } else if !is_single_dot(&buffer) {
                             if url.scheme.as_str() == "file"
-                                && url.path.is_empty()
+                                && url.path.is_empty_list()
                                 && is_windows_drive_letter(&buffer)
                             {
                                 buffer.replace_range(
@@ -1454,5 +1617,51 @@ impl URL {
         }
 
         return Ok(Some(url.clone()));
+    }
+}
+
+impl Serializable for URL {
+    fn serialize(&self) -> String {
+        let mut output = self.scheme.clone() + ":";
+        if let Some(host) = &self.host {
+            output.push_str("//");
+
+            if self.has_credentials() {
+                output.push_str(self.username.as_str());
+
+                if !self.password.is_empty() {
+                    output.push(':');
+                    output.push_str(self.password.as_str());
+                }
+
+                output.push('@');
+            }
+
+            output.push_str(host.serialize().as_str());
+
+            if let Some(port) = self.port {
+                output.push_str(format!(":{}", port).as_str());
+            }
+        }
+
+        if self.host.is_none()
+            && let URLPath::List(path_list) = &self.path
+            && path_list.len() > 1
+            && path_list[0].is_empty()
+        {
+            output.push_str("/.");
+        }
+
+        output.push_str(self.path.serialize().as_str());
+
+        if let Some(query) = &self.query {
+            output.push_str(format!("?{}", query).as_str());
+        }
+
+        if let Some(fragment) = &self.fragment {
+            output.push_str(format!("#{}", fragment).as_str());
+        }
+
+        output
     }
 }

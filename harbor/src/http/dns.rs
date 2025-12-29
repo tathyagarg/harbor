@@ -4,10 +4,10 @@ use std::{
     time::Instant,
 };
 
-use crate::http;
+use crate::http::{self, url::Serializable};
 
 pub struct DnsResolver {
-    resolved_urls: HashMap<(String, u16), (SocketAddr, Instant)>,
+    resolved_urls: HashMap<(http::url::Host, u16), (SocketAddr, Instant)>,
 }
 
 pub const DEFAULT_TTL_SECS: u64 = 300;
@@ -20,17 +20,17 @@ impl DnsResolver {
     }
 
     pub fn resolve_url(&mut self, url: String) -> SocketAddr {
-        let url_obj = http::construct_url(url).unwrap();
+        let url_obj = http::url::URL::parse(url, None, None).unwrap();
 
         self.resolve(
-            url_obj.host,
+            url_obj.host.unwrap(),
             url_obj
                 .port
-                .unwrap_or(http::preferred_default_port(url_obj.scheme)),
+                .unwrap_or(http::url::special_scheme_default_port(&url_obj.scheme).unwrap()),
         )
     }
 
-    pub fn resolve(&mut self, host: String, port: u16) -> SocketAddr {
+    pub fn resolve(&mut self, host: http::url::Host, port: u16) -> SocketAddr {
         let pair = (host.clone(), port);
 
         if let Some((addr, created_at)) = self.resolved_urls.get(&pair) {
@@ -41,7 +41,7 @@ impl DnsResolver {
             }
         }
 
-        let mut addrs = (host.as_str(), port).to_socket_addrs().unwrap();
+        let mut addrs = (host.serialize(), port).to_socket_addrs().unwrap();
         let sock_addr = addrs.next().unwrap();
 
         self.resolved_urls
