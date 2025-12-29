@@ -8,6 +8,8 @@ use winit::window::{Window, WindowId};
 
 use wgpu;
 
+use crate::http::url;
+
 mod html5;
 mod http;
 
@@ -234,8 +236,11 @@ impl ApplicationHandler<State> for App {
 fn main() {
     env_logger::init();
 
-    let url = http::url::URL::parse("https://arson.dev/awesome/".to_string(), None, None);
-    println!("{:?}", url.unwrap());
+    let url_target = String::from("https://arson.dev/awesome/");
+    println!("Parsing target: {}", url_target);
+
+    let url = http::url::URL::parse(url_target, None, None);
+    println!("Parsed: {:?}", url.unwrap());
 
     // type _T = html5::Location;
 
