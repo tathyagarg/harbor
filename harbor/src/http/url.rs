@@ -1,9 +1,11 @@
 #![allow(dead_code)]
 
+use std::num::{IntErrorKind, ParseIntError};
+
 use encoding_rs;
 use idna;
 
-pub const ForbiddenHostCodePoints: [char; 17] = [
+pub const FORBIDDEN_HOST_CODE_POINTS: [char; 17] = [
     '\u{0000}', '\u{0009}', '\u{000a}', '\u{000d}', '\u{0020}', '\u{0023}', '\u{002f}', '\u{003a}',
     '\u{003c}', '\u{003e}', '\u{003f}', '\u{0040}', '\u{005b}', '\u{005c}', '\u{005d}', '\u{005e}',
     '\u{007c}',
@@ -25,6 +27,60 @@ pub fn is_url_codepoint(c: char) -> bool {
         '\u{B0000}'..='\u{BFFFD}' | '\u{C0000}'..='\u{CFFFD}' |
         '\u{D0000}'..='\u{DFFFD}' | '\u{E1000}'..='\u{EFFFD}' |
         '\u{F0000}'..='\u{FFFFD}' | '\u{100000}'..='\u{10FFFD}')
+}
+
+pub const SPECIAL_SCHEMES: [&'static str; 6] = ["ftp", "file", "http", "https", "ws", "wss"];
+
+fn is_special_scheme(scheme: &String) -> bool {
+    SPECIAL_SCHEMES.contains(&scheme.as_str())
+}
+
+fn special_scheme_default_port(scheme: &String) -> Option<u16> {
+    if !is_special_scheme(scheme) {
+        return None;
+    };
+
+    return match scheme.as_str() {
+        "ftp" => Some(21),
+        "file" => None,
+        "http" => Some(80),
+        "https" => Some(443),
+        "ws" => Some(80),
+        "wss" => Some(443),
+        _ => unreachable!(),
+    };
+}
+
+fn _is_windows_drive_letter(codepoint: &String, second: &[char]) -> bool {
+    let mut iter = codepoint.chars();
+
+    iter.next().unwrap().is_ascii_alphabetic() && second.contains(&iter.next().unwrap())
+}
+
+fn is_windows_drive_letter(codepoint: &String) -> bool {
+    _is_windows_drive_letter(codepoint, &[':', '|'])
+}
+
+fn is_normalized_windows_drive_letter(codepoint: &String) -> bool {
+    _is_windows_drive_letter(codepoint, &[':'])
+}
+
+fn starts_with_windows_drive_letter(string: &String) -> bool {
+    string.chars().count() >= 2
+        && is_windows_drive_letter(string)
+        && (string.chars().count() == 2
+            || matches!(string.chars().nth(2).unwrap(), '/' | '\\' | '?' | '#'))
+}
+
+fn is_single_dot(segment: &String) -> bool {
+    matches!(segment.to_ascii_lowercase().as_str(), "." | "%2e")
+}
+
+fn is_double_dot(segment: &String) -> bool {
+    matches!(
+        segment.to_ascii_lowercase().as_str(),
+        ".." | ".%2e" | "%2e." | "%2e%2e"
+    )
 }
 
 struct StringPointer {
@@ -85,14 +141,19 @@ fn char_as_hex(c: char) -> u8 {
     return 0;
 }
 
+#[derive(Clone, Debug)]
 pub struct IPv4(u32);
+
+#[derive(Clone, Debug)]
 pub struct IPv6([u16; 8]);
 
+#[derive(Clone, Debug)]
 pub enum IPAddress {
     IPv4(IPv4),
     IPv6(IPv6),
 }
 
+#[derive(Debug)]
 pub enum IPv6ParseError {
     IPv6InvalidCompression,
     IPv6TooManyPieces,
@@ -493,20 +554,32 @@ impl IPv4 {
     }
 }
 
-fn utf8_percent_encode_set(b: u8) -> bool {
-    !matches!(
-        b,
-        b'A'..=b'Z'
-        | b'a'..=b'z'
-        | b'0'..=b'9'
-        | b'-' | b'.' | b'_' | b'~'
-    )
+type PercentEncodeSet = dyn Fn(u8) -> bool;
+
+fn c0_percent_encode_set(b: u8) -> bool {
+    b <= 0x1f || b > 0x7e
+}
+
+fn query_percent_encode_set(b: u8) -> bool {
+    c0_percent_encode_set(b) || matches!(b, 0x20 | 0x22 | 0x23 | 0x3c | 0x3e)
+}
+
+fn special_query_percent_encode_set(b: u8) -> bool {
+    query_percent_encode_set(b) || b == 0x27
+}
+
+fn path_percent_encode_set(b: u8) -> bool {
+    query_percent_encode_set(b) || matches!(b, 0x3f | 0x5e | 0x60 | 0x7b | 0x7d)
+}
+
+fn fragment_percent_encode_set(b: u8) -> bool {
+    c0_percent_encode_set(b) || matches!(b, 0x20 | 0x22 | 0x3c | 0x3e | 0x60)
 }
 
 pub fn percent_encoding_after_encoding(
     encoding: &'static encoding_rs::Encoding,
-    input: String,
-    percent_encode_set: &dyn Fn(u8) -> bool,
+    input: &String,
+    percent_encode_set: &PercentEncodeSet,
     space_as_plus: Option<bool>,
 ) -> String {
     let mut output = String::new();
@@ -567,16 +640,18 @@ pub fn utf8_decode_no_bom(bytes: Vec<u8>) -> String {
     String::from_utf8(bytes).unwrap()
 }
 
+#[derive(Clone, Debug)]
 pub struct Opaque(String);
 
+#[derive(Debug)]
 pub enum OpaqueParseError {
     HostInvalidCodePoint,
     InvalidURLUnit,
 }
 
 impl Opaque {
-    pub fn parse(input: String) -> Result<Opaque, OpaqueParseError> {
-        for forbidden in ForbiddenHostCodePoints {
+    pub fn parse(input: &String) -> Result<Opaque, OpaqueParseError> {
+        for forbidden in FORBIDDEN_HOST_CODE_POINTS {
             if input.contains(forbidden) {
                 return Err(OpaqueParseError::HostInvalidCodePoint);
             }
@@ -597,7 +672,7 @@ impl Opaque {
         let result = percent_encoding_after_encoding(
             encoding_rs::Encoding::for_label(b"utf-8").unwrap(),
             input,
-            &utf8_percent_encode_set,
+            &c0_percent_encode_set,
             None,
         );
 
@@ -605,6 +680,7 @@ impl Opaque {
     }
 }
 
+#[derive(Clone, Debug)]
 pub enum Host {
     Domain(String),
     IPAddress(IPAddress),
@@ -612,6 +688,7 @@ pub enum Host {
     Empty,
 }
 
+#[derive(Debug)]
 pub enum HostParseError {
     IPv6UnclosedValidation,
     IPv6ParsingError(IPv6ParseError),
@@ -621,7 +698,7 @@ pub enum HostParseError {
 }
 
 impl Host {
-    pub fn parse(input: String, is_opaque: Option<bool>) -> Result<Host, HostParseError> {
+    pub fn parse(input: &String, is_opaque: Option<bool>) -> Result<Host, HostParseError> {
         if input.starts_with('[') {
             if !input.ends_with(']') {
                 return Err(HostParseError::IPv6UnclosedValidation);
@@ -660,9 +737,722 @@ impl Host {
     }
 }
 
-pub struct SpecURL {
+type URLPathSegment = String;
+type URLPath = Vec<URLPathSegment>;
+
+#[derive(Debug)]
+pub enum ParseURLError {
+    Failure,
+    MissingSchemeNonRelativeURL,
+    HostMissing,
+    HostParseError(HostParseError),
+    PortOutOfRange,
+    ParseIntError(ParseIntError),
+    PortInvalid,
+}
+
+#[derive(Clone)]
+pub enum ParseURLState {
+    SchemeStart,
+    Scheme,
+    NoScheme,
+    SpecialRelativeOrAuthority,
+    PathOrAuthority,
+    Relative,
+    RelativeSlash,
+    SpecialAuthoritySlashes,
+    SpecialAuthorityIgnoreSlashes,
+    Authority,
+    Host,
+    Hostname,
+    Port,
+    File,
+    FileSlash,
+    FileHost,
+    PathStart,
+    Path,
+    OpaquePath,
+    Query,
+    Fragment,
+}
+
+#[derive(Default, Clone, Debug)]
+pub struct URL {
     scheme: String,
     username: String,
     password: String,
     host: Option<Host>,
+    port: Option<u16>,
+    path: URLPath,
+    query: Option<String>,
+    fragment: Option<String>,
+}
+
+impl URL {
+    fn has_credentials(&self) -> bool {
+        !self.username.is_empty() || !self.password.is_empty()
+    }
+
+    fn shorten_path(&mut self) {
+        let path = &mut self.path;
+
+        if self.scheme.as_str() == "file"
+            && path.len() == 1
+            && is_normalized_windows_drive_letter(&path[0])
+        {
+            return;
+        }
+
+        path.pop();
+    }
+
+    pub fn parse(
+        input: String,
+        base: Option<URL>,
+        encoding: Option<&'static encoding_rs::Encoding>,
+    ) -> Result<URL, ParseURLError> {
+        let maybe_url = URL::basic_url_parser(input, base, encoding, None, None);
+        return match maybe_url {
+            Err(e) => Err(e),
+            Ok(o_url) => {
+                let url = o_url.unwrap();
+                if url.scheme.as_str() != "blob" {
+                    return Ok(url);
+                }
+
+                todo!()
+            }
+        };
+    }
+
+    fn basic_url_parser(
+        input: String,
+        base: Option<URL>,
+        mut encoding: Option<&'static encoding_rs::Encoding>,
+        mut url: Option<&mut URL>,
+        state_override: Option<ParseURLState>,
+    ) -> Result<Option<URL>, ParseURLError> {
+        let mut input = input;
+        if url.is_none() {
+            input = input.trim().to_string();
+        }
+
+        let mut local_url;
+        let url: &mut URL = match url.as_deref_mut() {
+            Some(existing) => existing,
+            None => {
+                local_url = URL::default();
+                &mut local_url
+            }
+        };
+
+        input = input.replace("\t", "").replace("\n", "");
+
+        let mut state = state_override.clone().unwrap_or(ParseURLState::SchemeStart);
+        let mut buffer = String::new();
+        let mut at_sign_seen = false;
+        let mut inside_brackets = false;
+        let mut password_token_seen = false;
+
+        let mut pointer = StringPointer::new(input);
+
+        while !pointer.is_eof {
+            match state {
+                ParseURLState::SchemeStart => {
+                    if pointer.c.is_ascii_alphabetic() {
+                        buffer.push(pointer.c.to_ascii_lowercase());
+                        state = ParseURLState::Scheme;
+                    } else if state_override.is_none() {
+                        state = ParseURLState::NoScheme;
+                        pointer.advance_by(-1);
+                    } else {
+                        return Err(ParseURLError::Failure);
+                    }
+                }
+                ParseURLState::Scheme => {
+                    if pointer.c.is_alphanumeric() || matches!(pointer.c, '+' | '-' | '.') {
+                        buffer.push(pointer.c.to_ascii_lowercase());
+                    } else if pointer.c == ':' {
+                        if state_override.is_some() {
+                            if is_special_scheme(&url.scheme) && !is_special_scheme(&buffer) {
+                                return Ok(None);
+                            }
+
+                            if !is_special_scheme(&url.scheme) && is_special_scheme(&buffer) {
+                                return Ok(None);
+                            }
+
+                            if (url.has_credentials() || url.port.is_some())
+                                && buffer.as_str() == "file"
+                            {
+                                return Ok(None);
+                            }
+
+                            if url.scheme.as_str() == "file"
+                                && url.host.as_ref().is_some_and(|h| matches!(h, Host::Empty))
+                            {
+                                return Ok(None);
+                            }
+                        }
+
+                        url.scheme = buffer.clone();
+
+                        if state_override.is_some() {
+                            if url.port.is_some_and(|port| {
+                                special_scheme_default_port(&url.scheme)
+                                    .is_some_and(|default| port == default)
+                            }) {
+                                url.port = None;
+                            }
+                        }
+
+                        buffer = String::new();
+
+                        if url.scheme.as_str() == "file" {
+                            state = ParseURLState::File;
+                        } else if is_special_scheme(&url.scheme)
+                            && base.as_ref().is_some_and(|burl| burl.scheme == url.scheme)
+                        {
+                            assert!(is_special_scheme(&base.as_ref().unwrap().scheme));
+                            state = ParseURLState::SpecialRelativeOrAuthority;
+                        } else if is_special_scheme(&url.scheme) {
+                            state = ParseURLState::SpecialAuthoritySlashes;
+                        } else if pointer.remaining.starts_with(&['/']) {
+                            state = ParseURLState::PathOrAuthority;
+                            pointer.advance_by(1);
+                        } else {
+                            url.path = vec![];
+                            state = ParseURLState::OpaquePath;
+                        }
+                    } else if state_override.is_none() {
+                        buffer = String::new();
+                        state = ParseURLState::NoScheme;
+                        pointer.advance_by(-pointer.pointer);
+                    } else {
+                        return Err(ParseURLError::Failure);
+                    }
+                }
+                ParseURLState::NoScheme => {
+                    if base.is_none()
+                        || (base.as_ref().is_some_and(|burl| !burl.path.is_empty())
+                            && pointer.c != '#')
+                    {
+                        return Err(ParseURLError::MissingSchemeNonRelativeURL);
+                    } else if let Some(burl) = base.as_ref()
+                        && pointer.c != '#'
+                        && !burl.path.is_empty()
+                    {
+                        url.scheme = burl.scheme.clone();
+                        url.path = burl.path.clone();
+                        url.query = burl.query.clone();
+                        url.fragment = Some(String::new());
+                        state = ParseURLState::Fragment;
+                    } else if base
+                        .as_ref()
+                        .is_some_and(|burl| burl.scheme.as_str() != "file")
+                    {
+                        state = ParseURLState::Relative;
+                        pointer.advance_by(-1);
+                    } else {
+                        state = ParseURLState::File;
+                        pointer.advance_by(-1);
+                    }
+                }
+                ParseURLState::SpecialRelativeOrAuthority => {
+                    if pointer.c == '/' && pointer.remaining.starts_with(&['/']) {
+                        state = ParseURLState::SpecialAuthorityIgnoreSlashes;
+                        pointer.advance_by(1);
+                    } else {
+                        state = ParseURLState::Relative;
+                        pointer.advance_by(-1);
+                    }
+                }
+                ParseURLState::PathOrAuthority => {
+                    if pointer.c == '/' {
+                        state = ParseURLState::Authority;
+                    } else {
+                        state = ParseURLState::Path;
+                        pointer.advance_by(-1);
+                    }
+                }
+                ParseURLState::Relative => {
+                    assert!(
+                        base.as_ref()
+                            .is_some_and(|burl| burl.scheme.as_str() != "file")
+                    );
+                    if let Some(burl) = base.as_ref() {
+                        url.scheme = burl.scheme.clone();
+                        if pointer.c == '/' {
+                            state = ParseURLState::RelativeSlash;
+                        } else if is_special_scheme(&url.scheme) && pointer.c == '\\' {
+                            state = ParseURLState::RelativeSlash;
+                        } else {
+                            url.username = burl.username.clone();
+                            url.password = burl.password.clone();
+                            url.host = burl.host.clone();
+                            url.port = burl.port.clone();
+                            url.path = burl.path.clone();
+                            url.query = burl.query.clone();
+
+                            if pointer.c == '?' {
+                                url.query = Some(String::new());
+                                state = ParseURLState::Query;
+                            } else if pointer.c == '#' {
+                                url.fragment = Some(String::new());
+                                state = ParseURLState::Fragment;
+                            } else if !pointer.is_eof {
+                                url.query = None;
+                                url.shorten_path();
+                                state = ParseURLState::Path;
+                                pointer.advance_by(-1);
+                            }
+                        }
+                    }
+                }
+                ParseURLState::RelativeSlash => {
+                    if is_special_scheme(&url.scheme) && (pointer.c == '/' || pointer.c == '\\') {
+                        state = ParseURLState::SpecialAuthorityIgnoreSlashes;
+                    } else if pointer.c == '/' {
+                        state = ParseURLState::Authority;
+                    } else {
+                        if let Some(burl) = base.as_ref() {
+                            url.username = burl.username.clone();
+                            url.password = burl.password.clone();
+                            url.host = burl.host.clone();
+                            url.port = burl.port.clone();
+
+                            state = ParseURLState::Path;
+                            pointer.advance_by(-1);
+                        }
+                    }
+                }
+                ParseURLState::SpecialAuthoritySlashes => {
+                    if pointer.c == '/' && pointer.remaining.starts_with(&['/']) {
+                        state = ParseURLState::SpecialAuthorityIgnoreSlashes;
+                        pointer.advance_by(1);
+                    } else {
+                        state = ParseURLState::SpecialAuthorityIgnoreSlashes;
+                        pointer.advance_by(-1);
+                    }
+                }
+                ParseURLState::SpecialAuthorityIgnoreSlashes => {
+                    if pointer.c != '/' && pointer.c != '\\' {
+                        state = ParseURLState::Authority;
+                        pointer.advance_by(-1);
+                    }
+                }
+                ParseURLState::Authority => {
+                    if pointer.c == '@' {
+                        if at_sign_seen {
+                            buffer.push_str("%40");
+                        }
+
+                        at_sign_seen = true;
+
+                        for code_point in buffer.chars() {
+                            if code_point == ':' && !password_token_seen {
+                                password_token_seen = true;
+                                continue;
+                            }
+
+                            let raw_encoded_code_points = percent_encoding_after_encoding(
+                                encoding_rs::Encoding::for_label(b"utf-8").unwrap(),
+                                &code_point.to_string(),
+                                &path_percent_encode_set,
+                                None,
+                            );
+                            let encoded_code_points = raw_encoded_code_points.as_str();
+
+                            if password_token_seen {
+                                url.password.push_str(encoded_code_points);
+                            } else {
+                                url.username.push_str(encoded_code_points);
+                            }
+                        }
+
+                        buffer = String::new();
+                    } else if (pointer.is_eof || matches!(pointer.c, '/' | '?' | '#'))
+                        || (is_special_scheme(&url.scheme) && pointer.c == '\\')
+                    {
+                        if at_sign_seen && buffer.is_empty() {
+                            return Err(ParseURLError::HostMissing);
+                        }
+
+                        pointer.advance_by(-(buffer.chars().count() as isize + 1));
+                        buffer = String::new();
+                        state = ParseURLState::Host;
+                    } else {
+                        buffer.push(pointer.c);
+                    }
+                }
+                ParseURLState::Host | ParseURLState::Hostname => {
+                    if state_override.is_some() && url.scheme.as_str() == "file" {
+                        pointer.advance_by(-1);
+                        state = ParseURLState::FileHost;
+                    } else if pointer.c == ':' && !inside_brackets {
+                        if buffer.is_empty() {
+                            return Err(ParseURLError::HostMissing);
+                        }
+
+                        if state_override
+                            .as_ref()
+                            .is_some_and(|s| matches!(s, ParseURLState::Hostname))
+                        {
+                            return Err(ParseURLError::HostMissing);
+                        }
+
+                        let maybe_host =
+                            Host::parse(&buffer, Some(!is_special_scheme(&url.scheme)));
+
+                        match maybe_host {
+                            Err(e) => return Err(ParseURLError::HostParseError(e)),
+                            Ok(host) => {
+                                url.host = Some(host);
+                                buffer = String::new();
+                                state = ParseURLState::Port;
+                            }
+                        }
+                    } else if (pointer.is_eof || matches!(pointer.c, '/' | '?' | '#'))
+                        || (is_special_scheme(&url.scheme) && pointer.c == '\\')
+                    {
+                        pointer.advance_by(-1);
+
+                        if is_special_scheme(&url.scheme) && buffer.is_empty() {
+                            return Err(ParseURLError::HostMissing);
+                        } else if state_override.is_some()
+                            && buffer.is_empty()
+                            && (url.has_credentials() || url.port.is_some())
+                        {
+                            return Err(ParseURLError::Failure);
+                        }
+
+                        let maybe_host =
+                            Host::parse(&buffer, Some(!is_special_scheme(&url.scheme)));
+
+                        match maybe_host {
+                            Err(e) => return Err(ParseURLError::HostParseError(e)),
+                            Ok(host) => {
+                                url.host = Some(host);
+                                buffer = String::new();
+                                state = ParseURLState::PathStart;
+                            }
+                        }
+
+                        if state_override.is_some() {
+                            return Ok(None);
+                        }
+                    } else {
+                        if pointer.c == '[' {
+                            inside_brackets = true;
+                        } else if pointer.c == ']' {
+                            inside_brackets = false;
+                        }
+
+                        buffer.push(pointer.c);
+                    }
+                }
+                ParseURLState::Port => {
+                    if pointer.c.is_ascii_digit() {
+                        buffer.push(pointer.c);
+                    } else if (pointer.is_eof || matches!(pointer.c, '/' | '?' | '#'))
+                        || (is_special_scheme(&url.scheme) && pointer.c == '\\')
+                        || state_override.is_some()
+                    {
+                        if !buffer.is_empty() {
+                            let port = buffer.parse::<u16>();
+
+                            match port {
+                                Err(e) if *e.kind() == IntErrorKind::PosOverflow => {
+                                    return Err(ParseURLError::PortOutOfRange);
+                                }
+                                Err(e) => return Err(ParseURLError::ParseIntError(e)),
+                                Ok(port) => {
+                                    if special_scheme_default_port(&url.scheme)
+                                        .is_some_and(|default| port == default)
+                                    {
+                                        url.port = None;
+                                    } else {
+                                        url.port = Some(port);
+                                    }
+
+                                    buffer = String::new();
+                                    if state_override.is_some() {
+                                        return Ok(None);
+                                    }
+                                }
+                            };
+                        }
+
+                        if state_override.is_some() {
+                            return Err(ParseURLError::Failure);
+                        }
+
+                        state = ParseURLState::PathStart;
+                        pointer.advance_by(-1);
+                    } else {
+                        return Err(ParseURLError::PortInvalid);
+                    }
+                }
+                ParseURLState::File => {
+                    url.scheme = String::from("file");
+                    url.host = Some(Host::Empty);
+
+                    if pointer.c == '/' || pointer.c == '\\' {
+                        state = ParseURLState::FileSlash;
+                    } else if let Some(burl) = base.as_ref()
+                        && burl.scheme.as_str() == "file"
+                    {
+                        url.host = burl.host.clone();
+                        url.path = burl.path.clone();
+                        url.query = burl.query.clone();
+
+                        if pointer.c == '?' {
+                            url.query = Some(String::new());
+                            state = ParseURLState::Query;
+                        } else if pointer.c == '#' {
+                            url.fragment = Some(String::new());
+                            state = ParseURLState::Fragment;
+                        } else if !pointer.is_eof {
+                            url.query = None;
+                            if !starts_with_windows_drive_letter(
+                                &pointer.chars[pointer.pointer as usize..].iter().collect(),
+                            ) {
+                                url.shorten_path();
+                            } else {
+                                url.path = vec![];
+                            }
+
+                            state = ParseURLState::Path;
+                            pointer.advance_by(-1);
+                        }
+                    } else {
+                        state = ParseURLState::Path;
+                        pointer.advance_by(-1);
+                    }
+                }
+                ParseURLState::FileSlash => {
+                    if pointer.c == '/' || pointer.c == '\\' {
+                        state = ParseURLState::FileHost;
+                    } else {
+                        if let Some(burl) = base.as_ref()
+                            && burl.scheme.as_str() == "file"
+                        {
+                            url.host = burl.host.clone();
+
+                            if !starts_with_windows_drive_letter(
+                                &pointer.chars[pointer.pointer as usize..].iter().collect(),
+                            ) && is_normalized_windows_drive_letter(&burl.path[0])
+                            {
+                                url.path.push(burl.path[0].clone());
+                            }
+                        }
+
+                        state = ParseURLState::Path;
+                        pointer.advance_by(-1);
+                    }
+                }
+                ParseURLState::FileHost => {
+                    if pointer.is_eof || matches!(pointer.c, '/' | '\\' | '?' | '#') {
+                        pointer.advance_by(-1);
+                        if state_override.is_none() && is_windows_drive_letter(&buffer) {
+                            state = ParseURLState::Path;
+                        } else if buffer.is_empty() {
+                            url.host = Some(Host::Empty);
+                            if state_override.is_some() {
+                                return Ok(None);
+                            }
+
+                            state = ParseURLState::PathStart;
+                        } else {
+                            let maybe_host =
+                                Host::parse(&buffer, Some(!is_special_scheme(&url.scheme)));
+
+                            let host = match maybe_host {
+                                Err(e) => return Err(ParseURLError::HostParseError(e)),
+                                Ok(host) => match host {
+                                    Host::Opaque(val) if val.0.as_str() == "localhost" => {
+                                        Host::Empty
+                                    }
+                                    _ => host,
+                                },
+                            };
+
+                            url.host = Some(host);
+
+                            if state_override.is_some() {
+                                return Ok(None);
+                            }
+
+                            buffer = String::new();
+                            state = ParseURLState::PathStart;
+                        }
+                    } else {
+                        buffer.push(pointer.c);
+                    }
+                }
+                ParseURLState::PathStart => {
+                    if is_special_scheme(&url.scheme) {
+                        state = ParseURLState::Path;
+                        if pointer.c != '/' && pointer.c != '\\' {
+                            pointer.advance_by(-1);
+                        }
+                    } else if state_override.is_none() && pointer.c == '?' {
+                        url.query = Some(String::new());
+                        state = ParseURLState::Query;
+                    } else if state_override.is_none() && pointer.c == '#' {
+                        url.fragment = Some(String::new());
+                        state = ParseURLState::Fragment;
+                    } else if !pointer.is_eof {
+                        state = ParseURLState::Path;
+                        if pointer.c != '/' {
+                            pointer.advance_by(-1);
+                        }
+                    } else if state_override.is_some() && url.host.is_none() {
+                        url.path.push(String::new());
+                    }
+                }
+                ParseURLState::Path => {
+                    if (pointer.is_eof || pointer.c == '/')
+                        || (is_special_scheme(&url.scheme) && pointer.c == '\\')
+                        || (state_override.is_none() && matches!(pointer.c, '?' | '#'))
+                    {
+                        if is_double_dot(&buffer) {
+                            url.shorten_path();
+
+                            if pointer.c != '/'
+                                && !is_special_scheme(&url.scheme)
+                                && pointer.c == '\\'
+                            {
+                                url.path.push(String::new());
+                            }
+                        } else if is_single_dot(&buffer)
+                            && (pointer.c != '/'
+                                && !is_special_scheme(&url.scheme)
+                                && pointer.c == '\\')
+                        {
+                            url.path.push(String::new());
+                        } else if !is_single_dot(&buffer) {
+                            if url.scheme.as_str() == "file"
+                                && url.path.is_empty()
+                                && is_windows_drive_letter(&buffer)
+                            {
+                                buffer.replace_range(
+                                    buffer
+                                        .char_indices()
+                                        .nth(2)
+                                        .map(|(pos, ch)| (pos..pos + ch.len_utf8()))
+                                        .unwrap(),
+                                    ":",
+                                );
+                            }
+
+                            url.path.push(buffer.clone());
+                        }
+
+                        buffer = String::new();
+
+                        if pointer.c == '?' {
+                            url.query = Some(String::new());
+                            state = ParseURLState::Query;
+                        }
+
+                        if pointer.c == '#' {
+                            url.fragment = Some(String::new());
+                            state = ParseURLState::Fragment;
+                        }
+                    } else {
+                        buffer.push_str(&percent_encoding_after_encoding(
+                            encoding_rs::Encoding::for_label(b"utf-8").unwrap(),
+                            &String::from(pointer.c),
+                            &path_percent_encode_set,
+                            None,
+                        ));
+                    }
+                }
+                ParseURLState::OpaquePath => {
+                    if pointer.c == '?' {
+                        url.query = Some(String::new());
+                        state = ParseURLState::Query;
+                    } else if pointer.c == '#' {
+                        url.fragment = Some(String::new());
+                        state = ParseURLState::Fragment;
+                    } else if pointer.c == ' ' {
+                        if pointer.remaining.starts_with(&['?'])
+                            || pointer.remaining.starts_with(&['#'])
+                        {
+                            url.path.push("%20".to_string());
+                        } else {
+                            url.path.push(" ".to_string());
+                        }
+                    } else if !pointer.is_eof {
+                        buffer.push_str(&percent_encoding_after_encoding(
+                            encoding_rs::Encoding::for_label(b"utf-8").unwrap(),
+                            &String::from(pointer.c),
+                            &c0_percent_encode_set,
+                            None,
+                        ));
+                    }
+                }
+                ParseURLState::Query => {
+                    if encoding
+                        .as_ref()
+                        .map(|enc| enc.name().eq_ignore_ascii_case("utf-8"))
+                        != Some(true)
+                        && (!is_special_scheme(&url.scheme)
+                            || matches!(url.scheme.as_str(), "ws" | "wss"))
+                    {
+                        encoding = encoding_rs::Encoding::for_label(b"utf-8");
+                    }
+
+                    if (state_override.is_none() && pointer.c == '#') && pointer.is_eof {
+                        let new_query_percent_encode_set = if is_special_scheme(&url.scheme) {
+                            special_query_percent_encode_set
+                        } else {
+                            query_percent_encode_set
+                        };
+
+                        let result = percent_encoding_after_encoding(
+                            encoding.unwrap(),
+                            &buffer,
+                            &new_query_percent_encode_set,
+                            None,
+                        );
+
+                        url.query = Some(match &url.query {
+                            Some(q) => q.to_owned() + result.as_str(),
+                            None => result,
+                        });
+
+                        buffer = String::new();
+
+                        if pointer.c == '#' {
+                            url.fragment = Some(String::new());
+                            state = ParseURLState::Fragment;
+                        }
+                    } else if !pointer.is_eof {
+                        buffer.push(pointer.c);
+                    }
+                }
+                ParseURLState::Fragment => {
+                    if !pointer.is_eof {
+                        let result = percent_encoding_after_encoding(
+                            encoding.unwrap(),
+                            &buffer,
+                            &fragment_percent_encode_set,
+                            None,
+                        );
+
+                        url.fragment = Some(match &url.fragment {
+                            Some(f) => f.to_owned() + result.as_str(),
+                            None => result,
+                        });
+                    }
+                }
+            };
+
+            pointer.advance_by(1);
+        }
+
+        return Ok(Some(url.clone()));
+    }
 }
