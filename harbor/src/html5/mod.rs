@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 /// Custom implementation of the HTML5 spec:
 /// https://html.spec.whatwg.org/
+pub mod tokenize;
 
 /// Although USVString and String aren't identical, I am using this alias for the time being and
 /// may change it later.

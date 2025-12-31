@@ -903,7 +903,7 @@ pub enum ParseURLError {
     PortInvalid,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum ParseURLState {
     SchemeStart,
     Scheme,
@@ -1014,7 +1014,7 @@ impl URL {
 
         let mut pointer = StringPointer::new(input);
 
-        while !pointer.is_eof {
+        loop {
             match state {
                 ParseURLState::SchemeStart => {
                     if pointer.c.is_ascii_alphabetic() {
@@ -1612,6 +1612,10 @@ impl URL {
                     }
                 }
             };
+
+            if pointer.is_eof {
+                break;
+            }
 
             pointer.advance_by(1);
         }

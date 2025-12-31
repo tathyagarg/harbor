@@ -256,6 +256,8 @@ impl Request {
                         eprintln!("Error in writing: {}", e);
                     }
 
+                    println!("Sending: {}", self.encode());
+
                     let mut response_decoder = ResponseDecoder::new();
 
                     let mut content_length: Option<usize> = None;
@@ -274,7 +276,12 @@ impl Request {
                         }
 
                         if let Some(len) = content_length {
-                            if response_decoder.response.body.as_ref().unwrap().len() >= len {
+                            if response_decoder
+                                .response
+                                .body
+                                .as_ref()
+                                .is_some_and(|body| body.len() >= len)
+                            {
                                 break;
                             }
                         } else if let Some(len) = response_decoder
@@ -341,10 +348,11 @@ impl ResponseDecoder {
     }
 
     pub fn decode(&mut self, data: &[u8]) {
-        let string_data = String::from_utf8(data.to_vec())
-            .unwrap()
-            .trim_start_matches(' ')
-            .to_string();
+        let mut string_data = String::from_utf8(data.to_vec()).unwrap();
+
+        if !matches!(self.state, ResponseDecoderState::Body) {
+            string_data = string_data.trim_start_matches(' ').to_string();
+        }
 
         match self.state {
             ResponseDecoderState::Protocol => {
@@ -361,7 +369,6 @@ impl ResponseDecoder {
 
                 self.state = ResponseDecoderState::Status;
 
-                // Subtract an extra 1 to account for the ' ' character
                 self.decode(remaining.as_bytes())
             }
             // All following states may be false alerts, brought about by a recursion when the

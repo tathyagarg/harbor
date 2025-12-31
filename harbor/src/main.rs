@@ -236,7 +236,7 @@ impl ApplicationHandler<State> for App {
 fn main() {
     env_logger::init();
 
-    let url_target = String::from("https://arson.dev/awesome/");
+    let url_target = String::from("https://arson.dev/");
     println!("Parsing target: {}", url_target);
 
     let url = http::url::URL::pure_parse(url_target.clone()).unwrap();
