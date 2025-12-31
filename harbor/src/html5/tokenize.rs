@@ -70,6 +70,14 @@ impl Tag {
             attributes: vec![],
         }
     }
+
+    fn attribute_names_iter(&self) -> impl Iterator<Item = String> {
+        self.attributes.iter().map(|x| x.0.clone())
+    }
+
+    fn attribute_names(&self) -> Vec<String> {
+        self.attribute_names_iter().collect()
+    }
 }
 
 pub enum TagToken {
@@ -94,8 +102,12 @@ pub enum ParseError {
     MissingEndTagName,
     EOFInTag,
     EOFInScriptHTMLCommentLikeText,
+    UnexpectedEqualsSignBeforeAttributeName,
+    UnexpectedCharacterInAttributeName,
+    DuplicateAttribute,
 }
 
+#[derive(Clone, PartialEq)]
 pub enum TokenizerState {
     Data = 1,
     RCDATA = 2,
@@ -120,7 +132,18 @@ pub enum TokenizerState {
     ScriptDataEscapedDash = 21,
     ScriptDataEscapedDashDash = 22,
     ScriptDataEscapedLessThanSign = 23,
+    ScriptDataEscapedEndTagOpen = 24,
+    ScriptDataEscapedEndTagName = 25,
+    ScriptDataDoubleEscapeStart = 26,
+    ScriptDataDoubleEscaped = 27,
+    ScriptDataDoubleEscapedDash = 28,
+    ScriptDataDoubleEscapedDashDash = 29,
+    ScriptDataDoubleEscapedLessThanSign = 30,
+    ScriptDataDoubleEscapeEnd = 31,
     BeforeAttributeName = 32,
+    AttributeName = 33,
+    AfterAttributeName = 34,
+    BeforeAttributeValue = 35,
     SelfClosingStartTag = 40,
     BogusComment = 41,
     MarkupDeclarationOpen = 42,
@@ -129,7 +152,12 @@ pub enum TokenizerState {
 
 pub struct Tokenizer<'a> {
     stream: &'a mut InputStream,
+
     state: TokenizerState,
+    prev_state: TokenizerState,
+
+    leave_callback: Option<Box<dyn Fn(&mut Tokenizer)>>,
+
     return_state: Option<TokenizerState>,
 
     tag_token: Option<TagToken>,
@@ -144,6 +172,8 @@ impl<'a> Tokenizer<'a> {
         Tokenizer {
             stream,
             state: TokenizerState::Data,
+            prev_state: TokenizerState::Data,
+            leave_callback: None,
             return_state: None,
             tag_token: None,
             comment_token: None,
@@ -200,16 +230,69 @@ impl<'a> Tokenizer<'a> {
         self.stream.reconsume();
     }
 
-    fn push_to_tag(&mut self, ch: char) {
+    fn apply_to_tag(&mut self, f: impl Fn(&mut Tag) -> Tag) -> Tag {
         if let Some(tag_tok) = &mut self.tag_token {
             match tag_tok {
-                TagToken::Start(tag) => tag.name.push(ch),
-                TagToken::End(tag) => tag.name.push(ch),
+                TagToken::Start(tag) => f(tag),
+                TagToken::End(tag) => f(tag),
             }
+        } else {
+            unreachable!()
         }
     }
 
+    fn apply_to_tag_noret(&mut self, f: impl Fn(&mut Tag)) {
+        _ = self.apply_to_tag(|t: &mut Tag| {
+            f(t);
+            t.clone()
+        });
+    }
+
+    fn push_to_tag(&mut self, ch: char) {
+        self.apply_to_tag_noret(|t: &mut Tag| t.name.push(ch))
+    }
+
+    fn new_tag_attr(&mut self, name: &String, value: &String) {
+        self.apply_to_tag_noret(|t: &mut Tag| t.attributes.push((name.clone(), value.clone())));
+    }
+
+    fn push_to_attr_name(&mut self, ch: char) {
+        self.apply_to_tag_noret(|t: &mut Tag| t.attributes.last_mut().unwrap().0.push(ch));
+    }
+
+    fn tag_attribute_names_iter(&self) -> impl Iterator<Item = String> {
+        if let Some(tag_tok) = &self.tag_token {
+            match tag_tok {
+                TagToken::Start(start) => start.attribute_names_iter(),
+                TagToken::End(end) => end.attribute_names_iter(),
+            }
+        } else {
+            unreachable!()
+        }
+    }
+
+    fn tag_attribute_names(&self) -> Vec<String> {
+        self.tag_attribute_names_iter().collect()
+    }
+
+    fn curr_tag_attr_name(&mut self) -> String {
+        self.apply_to_tag(|t: &mut Tag| t.clone())
+            .attributes
+            .last()
+            .unwrap()
+            .0
+            .clone()
+    }
+
     pub fn tokenize(&mut self) {
+        if self.prev_state != self.state {
+            if let Some(callback) = self.leave_callback.take() {
+                callback(self);
+            }
+        }
+
+        self.prev_state = self.state.clone();
+
         match self.state {
             TokenizerState::Data => {
                 // https://html.spec.whatwg.org/multipage/parsing.html#data-state
@@ -672,6 +755,341 @@ impl<'a> Tokenizer<'a> {
                     }
                 } else {
                     self.error(ParseError::EOFInScriptHTMLCommentLikeText);
+                }
+            }
+            TokenizerState::ScriptDataEscapedDashDash => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#script-data-escaped-dash-dash-state
+                if let Some(ch) = self.stream.consume() {
+                    match ch {
+                        '\u{002D}' => {
+                            self.emit(Token::Character('\u{002D}'));
+                        }
+                        '\u{003C}' => {
+                            self.state = TokenizerState::ScriptDataEscapedLessThanSign;
+                        }
+                        '\u{003E}' => {
+                            self.state = TokenizerState::ScriptData;
+                            self.emit(Token::Character('\u{003E}'));
+                        }
+                        '\u{0000}' => {
+                            self.error(ParseError::UnexpectedNullCharacter);
+                            self.state = TokenizerState::ScriptDataEscaped;
+                            self.emit(Token::Character('\u{FFFD}'));
+                        }
+                        _ => {
+                            self.state = TokenizerState::ScriptData;
+                            self.emit(Token::Character(ch));
+                        }
+                    }
+                } else {
+                    self.error(ParseError::EOFInScriptHTMLCommentLikeText);
+                    self.emit(Token::EOF);
+                }
+            }
+            TokenizerState::ScriptDataEscapedLessThanSign => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#script-data-escaped-less-than-sign-state
+                let anything_else = |_self: &mut Tokenizer<'a>| {
+                    _self.emit(Token::Character('\u{003C}'));
+                    _self.reconsume(TokenizerState::ScriptData);
+                };
+
+                if let Some(ch) = self.stream.consume() {
+                    match ch {
+                        '\u{002F}' => {
+                            self.temporary_buffer = String::new();
+                            self.state = TokenizerState::ScriptDataEscapedEndTagOpen;
+                        }
+                        _ if ch.is_ascii_alphabetic() => {
+                            self.temporary_buffer = String::new();
+                            self.emit(Token::Character('\u{003C}'));
+                            self.reconsume(TokenizerState::ScriptDataDoubleEscapeStart);
+                        }
+                        _ => anything_else(self),
+                    }
+                } else {
+                    anything_else(self)
+                }
+            }
+            TokenizerState::ScriptDataEscapedEndTagOpen => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#script-data-escaped-end-tag-open-state
+                if let Some(ch) = self.stream.consume()
+                    && ch.is_ascii_alphabetic()
+                {
+                    self.tag_token = Some(TagToken::End(Tag::empty()));
+                    self.reconsume(TokenizerState::ScriptDataEscapedEndTagName);
+                } else {
+                    self.emit(Token::Character('\u{003C}'));
+                    self.emit(Token::Character('\u{002F}'));
+                    self.reconsume(TokenizerState::ScriptDataEscaped);
+                }
+            }
+            TokenizerState::ScriptDataEscapedEndTagName => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#script-data-escaped-end-tag-name-state
+                let is_appr = self.is_current_appropriate_end_tag();
+
+                let anything_else = |_self: &mut Tokenizer<'a>| {
+                    _self.emit(Token::Character('\u{003C}'));
+                    _self.emit(Token::Character('\u{002F}'));
+
+                    for ch in _self.temporary_buffer.clone().chars() {
+                        _self.emit(Token::Character(ch));
+                    }
+
+                    _self.reconsume(TokenizerState::ScriptDataEscaped);
+                };
+
+                if let Some(ch) = self.stream.consume() {
+                    match ch {
+                        '\u{0009}' | '\u{000A}' | '\u{000C}' | '\u{0020}' if is_appr => {
+                            self.state = TokenizerState::BeforeAttributeName;
+                        }
+                        '\u{002F}' if is_appr => {
+                            self.state = TokenizerState::SelfClosingStartTag;
+                        }
+                        '\u{003E}' if is_appr => {
+                            self.state = TokenizerState::Data;
+                            self.emit_current_tag();
+                        }
+                        _ if ch.is_ascii_uppercase() => {
+                            self.push_to_tag(ch.to_ascii_lowercase());
+                            self.temporary_buffer.push(ch);
+                        }
+                        _ if ch.is_ascii_lowercase() => {
+                            self.push_to_tag(ch);
+                            self.temporary_buffer.push(ch);
+                        }
+                        _ => anything_else(self),
+                    }
+                } else {
+                    anything_else(self)
+                }
+            }
+            TokenizerState::ScriptDataDoubleEscapeStart => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#script-data-double-escape-start-state
+                let anything_else = |_self: &mut Tokenizer<'a>| {
+                    _self.reconsume(TokenizerState::ScriptDataEscaped);
+                };
+
+                if let Some(ch) = self.stream.consume() {
+                    match ch {
+                        '\u{0009}' | '\u{00A}' | '\u{000C}' | '\u{0020}' | '\u{002F}'
+                        | '\u{003E}' => {
+                            self.state = if self.temporary_buffer.as_str() == "script" {
+                                TokenizerState::ScriptDataDoubleEscaped
+                            } else {
+                                TokenizerState::ScriptDataEscaped
+                            };
+
+                            self.emit(Token::Character(ch));
+                        }
+                        _ if ch.is_ascii_uppercase() => {
+                            self.temporary_buffer.push(ch.to_ascii_lowercase());
+                            self.emit(Token::Character(ch));
+                        }
+                        _ if ch.is_ascii_lowercase() => {
+                            self.temporary_buffer.push(ch);
+                            self.emit(Token::Character(ch));
+                        }
+                        _ => anything_else(self),
+                    }
+                } else {
+                    anything_else(self)
+                }
+            }
+            TokenizerState::ScriptDataDoubleEscaped => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#script-data-double-escaped-state
+                if let Some(ch) = self.stream.consume() {
+                    match ch {
+                        '\u{002D}' => {
+                            self.state = TokenizerState::ScriptDataDoubleEscapedDash;
+                            self.emit(Token::Character('\u{002D}'));
+                        }
+                        '\u{003C}' => {
+                            self.state = TokenizerState::ScriptDataEscapedLessThanSign;
+                            self.emit(Token::Character('\u{003C}'));
+                        }
+                        '\u{0000}' => {
+                            self.error(ParseError::UnexpectedNullCharacter);
+                            self.emit(Token::Character('\u{FFFD}'));
+                        }
+                        _ => {
+                            self.emit(Token::Character(ch));
+                        }
+                    }
+                } else {
+                    self.error(ParseError::EOFInScriptHTMLCommentLikeText);
+                    self.emit(Token::EOF);
+                }
+            }
+            TokenizerState::ScriptDataDoubleEscapedDash => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#script-data-double-escaped-dash-state
+                if let Some(ch) = self.stream.consume() {
+                    match ch {
+                        '\u{002D}' => {
+                            self.state = TokenizerState::ScriptDataDoubleEscapedDashDash;
+                            self.emit(Token::Character('\u{002D}'));
+                        }
+                        '\u{003C}' => {
+                            self.state = TokenizerState::ScriptDataDoubleEscapedLessThanSign;
+                            self.emit(Token::Character('\u{003C}'));
+                        }
+                        '\u{0000}' => {
+                            self.error(ParseError::UnexpectedNullCharacter);
+                            self.state = TokenizerState::ScriptDataDoubleEscaped;
+                            self.emit(Token::Character('\u{FFFD}'));
+                        }
+                        _ => {
+                            self.state = TokenizerState::ScriptDataDoubleEscaped;
+                            self.emit(Token::Character(ch));
+                        }
+                    }
+                } else {
+                    self.error(ParseError::EOFInScriptHTMLCommentLikeText);
+                    self.emit(Token::EOF);
+                }
+            }
+            TokenizerState::ScriptDataDoubleEscapedDashDash => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#script-data-double-escaped-dash-dash-state
+                if let Some(ch) = self.stream.consume() {
+                    match ch {
+                        '\u{002D}' => self.emit(Token::Character('\u{002D}')),
+                        '\u{003C}' => {
+                            self.state = TokenizerState::ScriptDataDoubleEscapedLessThanSign;
+                            self.emit(Token::Character('\u{003C}'));
+                        }
+                        '\u{003E}' => {
+                            self.state = TokenizerState::ScriptData;
+                            self.emit(Token::Character('\u{003E}'));
+                        }
+                        '\u{0000}' => {
+                            self.error(ParseError::UnexpectedNullCharacter);
+                            self.state = TokenizerState::ScriptDataDoubleEscaped;
+                            self.emit(Token::Character('\u{FFFD}'));
+                        }
+                        _ => {
+                            self.state = TokenizerState::ScriptDataDoubleEscaped;
+                            self.emit(Token::Character(ch));
+                        }
+                    }
+                } else {
+                    self.error(ParseError::EOFInScriptHTMLCommentLikeText);
+                    self.emit(Token::EOF);
+                }
+            }
+            TokenizerState::ScriptDataDoubleEscapedLessThanSign => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#script-data-double-escaped-less-than-sign-state
+                if let Some(ch) = self.stream.consume()
+                    && ch == '\u{002F}'
+                {
+                    self.temporary_buffer = String::new();
+                    self.state = TokenizerState::ScriptDataDoubleEscapeEnd;
+                    self.emit(Token::Character('\u{002F}'));
+                } else {
+                    self.reconsume(TokenizerState::ScriptDataDoubleEscaped);
+                }
+            }
+            TokenizerState::ScriptDataDoubleEscapeEnd => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#script-data-double-escape-end-state
+                let anything_else = |_self: &mut Tokenizer<'a>| {
+                    _self.reconsume(TokenizerState::ScriptDataDoubleEscaped);
+                };
+
+                if let Some(ch) = self.stream.consume() {
+                    match ch {
+                        '\u{0009}' | '\u{000A}' | '\u{000C}' | '\u{0020}' | '\u{002F}'
+                        | '\u{003E}' => {
+                            self.state = if self.temporary_buffer.as_str() == "script" {
+                                TokenizerState::ScriptDataEscaped
+                            } else {
+                                TokenizerState::ScriptDataDoubleEscaped
+                            };
+
+                            self.emit(Token::Character(ch));
+                        }
+                        _ if ch.is_ascii_uppercase() => {
+                            self.temporary_buffer.push(ch.to_ascii_lowercase());
+                            self.emit(Token::Character(ch));
+                        }
+                        _ if ch.is_ascii_lowercase() => {
+                            self.temporary_buffer.push(ch);
+                            self.emit(Token::Character(ch));
+                        }
+                        _ => anything_else(self),
+                    }
+                } else {
+                    anything_else(self);
+                }
+            }
+            TokenizerState::BeforeAttributeName => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#before-attribute-name-state
+                let eof_or_002f_003e = |_self: &mut Tokenizer<'a>| {
+                    _self.reconsume(TokenizerState::AfterAttributeName);
+                };
+
+                if let Some(ch) = self.stream.consume() {
+                    match ch {
+                        '\u{0009}' | '\u{000A}' | '\u{000C}' | '\u{0020}' => {
+                            // ignore
+                        }
+                        '\u{002F}' | '\u{003E}' => eof_or_002f_003e(self),
+                        '\u{003D}' => {
+                            self.error(ParseError::UnexpectedEqualsSignBeforeAttributeName);
+                            self.new_tag_attr(&String::from(ch), &String::new());
+                            self.state = TokenizerState::AttributeName;
+                        }
+                        _ => {
+                            self.new_tag_attr(&String::new(), &String::new());
+                            self.reconsume(TokenizerState::AttributeName);
+                        }
+                    }
+                } else {
+                    eof_or_002f_003e(self);
+                }
+            }
+            TokenizerState::AttributeName => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#attribute-name-state
+
+                self.leave_callback = Some(Box::new(|_self: &mut Tokenizer| {
+                    let curr_tag_name = _self.curr_tag_attr_name();
+
+                    for name in _self.tag_attribute_names() {
+                        if curr_tag_name == name {
+                            _self.error(ParseError::DuplicateAttribute);
+                            _self.apply_to_tag_noret(|t: &mut Tag| {
+                                t.attributes.pop();
+                            });
+                        }
+                    }
+                }));
+
+                // there's a lot of chars other than U+0009 that this runs for but I'm not making a
+                // var name that long
+                let eof_or_0009 = |_self: &mut Tokenizer<'a>| {
+                    _self.reconsume(TokenizerState::AfterAttributeName);
+                };
+
+                if let Some(ch) = self.stream.consume() {
+                    match ch {
+                        '\u{0009}' | '\u{000A}' | '\u{000C}' | '\u{0020}' | '\u{002F}'
+                        | '\u{0003E}' => eof_or_0009(self),
+                        '\u{003D}' => self.state = TokenizerState::BeforeAttributeValue,
+                        _ if ch.is_ascii_uppercase() => {
+                            self.push_to_attr_name(ch.to_ascii_lowercase())
+                        }
+                        '\u{0000}' => {
+                            self.error(ParseError::UnexpectedNullCharacter);
+                            self.push_to_attr_name('\u{FFFD}');
+                        }
+                        _ => {
+                            if matches!(ch, '\u{0022}' | '\u{0027}' | '\u{003C}') {
+                                self.error(ParseError::UnexpectedCharacterInAttributeName);
+                            }
+
+                            self.push_to_attr_name(ch);
+                        }
+                    }
+                } else {
+                    eof_or_0009(self);
                 }
             }
             _ => {}
