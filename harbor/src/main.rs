@@ -236,34 +236,43 @@ impl ApplicationHandler<State> for App {
 fn main() {
     env_logger::init();
 
-    let url_target = String::from("https://arson.dev/");
-    println!("Parsing target: {}", url_target);
+    let html_text = "<!DOCTYPE html><html><head><title>Test</title></head><body><h1>Hello, world!</h1></body></html>";
+    let mut stream = html5::tokenize::InputStream::new(String::from(html_text));
 
-    let url = http::url::URL::pure_parse(url_target.clone()).unwrap();
-    println!("Parsed: {:?}", url);
-    println!("Path serialized: {}", url.path.serialize());
+    let mut tokenizer = html5::tokenize::Tokenizer::new(&mut stream);
 
-    // type _T = html5::Location;
+    tokenizer.tokenize();
 
-    let mut client = http::Client::new(http::Protocol::HTTP1_1, true);
-    let url = client.connect_to_url(url_target);
+    println!("Tokens: {:?}", tokenizer.emitted_tokens);
 
-    println!("Sending request to: {}", url.serialize());
+    // let url_target = String::from("https://arson.dev/");
+    // println!("Parsing target: {}", url_target);
 
-    let resp = client.send_request(http::Request {
-        method: String::from("GET"),
-        request_target: url.path.serialize(),
-        protocol: http::Protocol::HTTP1_1,
-        headers: vec![
-            http::Header::new(String::from("User-Agent"), String::from("Harbor Browser")),
-            http::Header::new(String::from("Host"), url.host.unwrap().serialize()),
-        ],
-        body: None,
-    });
+    // let url = http::url::URL::pure_parse(url_target.clone()).unwrap();
+    // println!("Parsed: {:?}", url);
+    // println!("Path serialized: {}", url.path.serialize());
 
-    if let Some(response) = resp {
-        println!("{}", response);
-    }
+    // // type _T = html5::Location;
+
+    // let mut client = http::Client::new(http::Protocol::HTTP1_1, true);
+    // let url = client.connect_to_url(url_target);
+
+    // println!("Sending request to: {}", url.serialize());
+
+    // let resp = client.send_request(http::Request {
+    //     method: String::from("GET"),
+    //     request_target: url.path.serialize(),
+    //     protocol: http::Protocol::HTTP1_1,
+    //     headers: vec![
+    //         http::Header::new(String::from("User-Agent"), String::from("Harbor Browser")),
+    //         http::Header::new(String::from("Host"), url.host.unwrap().serialize()),
+    //     ],
+    //     body: None,
+    // });
+
+    // if let Some(response) = resp {
+    //     println!("{}", response);
+    // }
 
     // let event_loop = EventLoop::with_user_event().build().unwrap();
     // event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
