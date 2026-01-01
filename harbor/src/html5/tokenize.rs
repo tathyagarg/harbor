@@ -6,20 +6,122 @@ fn preprocess_input(input: &String) -> String {
     input.replace("\r\n", "\n").replace("\r", "\n")
 }
 
+fn is_leading_surrogate(code: u32) -> bool {
+    (0xD800..=0xDBFF).contains(&code)
+}
+
+fn is_trailing_surrogate(code: u32) -> bool {
+    (0xDC00..=0xDFFF).contains(&code)
+}
+
+fn is_surrogate(code: u32) -> bool {
+    is_leading_surrogate(code) || is_trailing_surrogate(code)
+}
+
+fn is_noncharacter(code: u32) -> bool {
+    matches!(
+        code,
+        0xFDD0
+            ..=0xFDEF
+                | 0xFFFE
+                | 0xFFFF
+                | 0x1FFFE
+                | 0x1FFFF
+                | 0x2FFFE
+                | 0x2FFFF
+                | 0x3FFFE
+                | 0x3FFFF
+                | 0x4FFFE
+                | 0x4FFFF
+                | 0x5FFFE
+                | 0x5FFFF
+                | 0x6FFFE
+                | 0x6FFFF
+                | 0x7FFFE
+                | 0x7FFFF
+                | 0x8FFFE
+                | 0x8FFFF
+                | 0x9FFFE
+                | 0x9FFFF
+                | 0xAFFFE
+                | 0xAFFFF
+                | 0xBFFFE
+                | 0xBFFFF
+                | 0xCFFFE
+                | 0xCFFFF
+                | 0xDFFFE
+                | 0xDFFFF
+                | 0xEFFFE
+                | 0xEFFFF
+                | 0xFFFFE
+                | 0xFFFFF
+                | 0x10FFFE
+                | 0x10FFFF
+    )
+}
+
+fn is_c0_control(code: u32) -> bool {
+    (0x0000..=0x001F).contains(&code)
+}
+
+fn is_control(code: u32) -> bool {
+    is_c0_control(code) || (0x007F..=0x009F).contains(&code)
+}
+
+fn is_ascii_whitespace(ch: char) -> bool {
+    matches!(ch, '\u{0009}' | '\u{000A}' | '\u{000C}' | '\u{0020}')
+}
+
+fn map_character_reference(code: u32) -> u32 {
+    match code {
+        0x80 => 0x20AC,
+        0x82 => 0x201A,
+        0x83 => 0x0192,
+        0x84 => 0x201E,
+        0x85 => 0x2026,
+        0x86 => 0x2020,
+        0x87 => 0x2021,
+        0x88 => 0x02C6,
+        0x89 => 0x2030,
+        0x8A => 0x0160,
+        0x8B => 0x2039,
+        0x8C => 0x0152,
+        0x8E => 0x017D,
+        0x91 => 0x2018,
+        0x92 => 0x2019,
+        0x93 => 0x201C,
+        0x94 => 0x201D,
+        0x95 => 0x2022,
+        0x96 => 0x2013,
+        0x97 => 0x2014,
+        0x98 => 0x02DC,
+        0x99 => 0x2122,
+        0x9A => 0x0161,
+        0x9B => 0x203A,
+        0x9C => 0x0153,
+        0x9E => 0x017E,
+        0x9F => 0x0178,
+        _ => code,
+    }
+}
+
 pub struct InputStream {
     input: Vec<char>,
     pos: usize,
     is_reconsume: bool,
     is_eof: bool,
+
+    is_started: bool,
 }
 
 impl InputStream {
-    fn new(data: String) -> InputStream {
+    pub fn new(data: String) -> InputStream {
         InputStream {
             input: data.chars().collect::<Vec<char>>(),
             pos: 0,
             is_reconsume: false,
             is_eof: false,
+            is_started: false,
         }
     }
 
@@ -28,11 +130,15 @@ impl InputStream {
     }
 
     fn advance(&mut self) -> Option<char> {
-        if self.pos + 1 > self.input.len() {
+        if self.pos + 1 >= self.input.len() {
             self.is_eof = true;
             return None;
         }
 
+        if !self.is_started {
+            self.is_started = true;
+            return Some(self.current());
+        }
         self.pos += 1;
         Some(self.current())
     }
@@ -50,8 +156,19 @@ impl InputStream {
         self.is_reconsume = true;
     }
 
-    fn matches(&self, text: &str, case_sensitive: Option<bool>) -> bool {
-        let data_string = self.input[self.pos..self.pos + text.len() + 1]
+    fn matches(
+        &self,
+        text: &str,
+        case_sensitive: Option<bool>,
+        start_from_next: Option<bool>,
+    ) -> bool {
+        let add = if start_from_next.unwrap_or(false) {
+            1
+        } else {
+            0
+        };
+
+        let data_string = self.input[self.pos + add..self.pos + text.len() + add]
             .iter()
             .collect::<String>();
 
@@ -65,7 +182,7 @@ impl InputStream {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Tag {
     name: String,
     is_self_closing: bool,
@@ -138,11 +255,11 @@ impl TagToken {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub struct DOCTYPE {
-    name: String,
-    public_identifier: String,
-    system_identifier: String,
+    name: Option<String>,
+    public_identifier: Option<String>,
+    system_identifier: Option<String>,
 
     force_quirks: bool,
 }
@@ -151,8 +268,20 @@ impl DOCTYPE {
     pub fn set_quirks(&mut self) {
         self.force_quirks = true;
     }
+
+    pub fn with_name(&self, name: String) -> Self {
+        Self {
+            name: Some(name),
+            ..self.clone()
+        }
+    }
+
+    pub fn with_empty_name(&self) -> Self {
+        self.with_name(String::new())
+    }
 }
 
+#[derive(Debug)]
 pub enum Token {
     DOCTYPE(DOCTYPE),
     StartTag(Tag),
@@ -162,6 +291,7 @@ pub enum Token {
     EOF,
 }
 
+#[derive(Debug)]
 pub enum ParseError {
     UnexpectedNullCharacter,
     UnexpectedQuestionMarkInsteadOfTagName,
@@ -184,6 +314,26 @@ pub enum ParseError {
     EOFInDOCTYPE,
     MissingWhitespaceBeforeDOCTYPEName,
     MissingDOCTYPEName,
+    InvalidCharacterSequenceAfterDOCTYPEName,
+    MissingWhitespaceAfterDOCTYPEPublicKeyword,
+    MissingDOCTYPEPublicIdentifier,
+    MissingQuoteBeforeDOCTYPEPublicIdentifier,
+    AbruptDOCTYPEPublicIdentifier,
+    MissingWhitespaceBetweenDOCTYPEPublicAndSystemIdentifiers,
+    MissingQuoteBeforeDOCTYPESystemIdentifier,
+    MissingWhitespaceAfterDOCTYPESystemKeyword,
+    MissingDOCTYPESystemIdentifier,
+    AbruptDOCTYPESystemIdentifier,
+    UnexpectedCharacterAfterDOCTYPESystemIdentifier,
+    EOFInCDATA,
+    AbsenceOfDigitsInNumericCharacterReference,
+    MissingSemicolonAfterCharacterReference,
+    MissingWhitespaceBetweenAttributes,
+    NullCharacterReference,
+    CharacterReferenceOutsideUnicodeRange,
+    SurrogateCharacterReference,
+    NoncharacterCharacterReference,
+    ControlCharacterReference,
 }
 
 #[derive(Clone, PartialEq)]
@@ -244,7 +394,30 @@ pub enum TokenizerState {
     BeforeDOCTYPEName = 54,
     DOCTYPEName = 55,
     AfterDOCTYPEName = 56,
+    AfterDOCTYPEPublicKeyword = 57,
+    BeforeDOCTYPEPublicIdentifier = 58,
+    DOCTYPEPublicIdentifierDoubleQuoted = 59,
+    DOCTYPEPublicIdentifierSingleQuoted = 60,
+    AfterDOCTYPEPublicIdentifier = 61,
+    BetweenDOCTYPEPublicAndSystemIdentifiers = 62,
+    AfterDOCTYPESystemKeyword = 63,
+    BeforeDOCTYPESystemIdentifier = 64,
+    DOCTYPESystemIdentifierDoubleQuoted = 65,
+    DOCTYPESystemIdentifierSingleQuoted = 66,
+    AfterDOCTYPESystemIdentifier = 67,
+    BogusDOCTYPE = 68,
+    CDATASection = 69,
+    CDATASectionBracket = 70,
+    CDATASectionEnd = 71,
     CharacterReference = 72,
+    NamedCharacterReference = 73,
+    AmbiguousAmpersand = 74,
+    NumericCharacterReference = 75,
+    HexadecimalCharacterReferenceStart = 76,
+    DecimalCharacterReferenceStart = 77,
+    HexadecimalCharacterReference = 78,
+    DecimalCharacterReference = 79,
+    NumericCharacterReferenceEnd = 80,
 }
 
 pub struct Tokenizer<'a> {
@@ -262,8 +435,9 @@ pub struct Tokenizer<'a> {
     doctype_token: Option<DOCTYPE>,
 
     temporary_buffer: String,
+    character_reference_code: u32,
 
-    emitted_tokens: Vec<Token>,
+    pub emitted_tokens: Vec<Token>,
 }
 
 impl<'a> Tokenizer<'a> {
@@ -278,6 +452,7 @@ impl<'a> Tokenizer<'a> {
             comment_token: None,
             doctype_token: None,
             temporary_buffer: String::new(),
+            character_reference_code: 0,
             emitted_tokens: vec![],
         }
     }
@@ -332,7 +507,8 @@ impl<'a> Tokenizer<'a> {
     }
 
     fn error(&self, err: ParseError) {
-        todo!()
+        // For now, just print the error to the console.
+        println!("Parse error: {:?}", err);
     }
 
     fn reconsume(&mut self, state: TokenizerState) {
@@ -390,11 +566,48 @@ impl<'a> Tokenizer<'a> {
 
     fn push_to_doctype_name(&mut self, ch: char) {
         if let Some(doctype) = &mut self.doctype_token {
-            doctype.name.push(ch);
+            if let Some(name) = &mut doctype.name {
+                name.push(ch);
+            }
+        }
+    }
+
+    fn set_doctype_quirks(&mut self) {
+        if let Some(doctype) = &mut self.doctype_token {
+            doctype.set_quirks();
+        }
+    }
+
+    fn char_ref_as_part_of_attr(&self) -> bool {
+        self.return_state.as_ref().is_some_and(|s| {
+            matches!(
+                s,
+                TokenizerState::AttributeValueDoubleQuoted
+                    | TokenizerState::AttributeValueSingleQuoted
+                    | TokenizerState::AttributeValueUnquoted
+            )
+        })
+    }
+
+    fn flush_consumed_as_char_ref(&mut self) {
+        let part_of_attr = self.char_ref_as_part_of_attr();
+
+        for ch in self.temporary_buffer.clone().chars() {
+            if part_of_attr {
+                self.push_to_attr_val(ch);
+            } else {
+                self.emit(Token::Character(ch));
+            }
         }
     }
 
     pub fn tokenize(&mut self) {
+        while !self.stream.is_eof {
+            self.step();
+        }
+    }
+
+    pub fn step(&mut self) {
         if self.prev_state != self.state {
             if let Some(callback) = self.leave_callback.take() {
                 callback(self);
@@ -1322,6 +1535,28 @@ impl<'a> Tokenizer<'a> {
                     self.emit(Token::EOF)
                 }
             }
+            TokenizerState::AfterAttributeValueQuoted => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#after-attribute-value-quoted-state
+                if let Some(ch) = self.stream.consume() {
+                    match ch {
+                        '\u{0009}' | '\u{000A}' | '\u{000C}' | '\u{0020}' => {
+                            self.state = TokenizerState::BeforeAttributeName
+                        }
+                        '\u{002F}' => self.state = TokenizerState::SelfClosingStartTag,
+                        '\u{003E}' => {
+                            self.state = TokenizerState::Data;
+                            self.emit_tag();
+                        }
+                        _ => {
+                            self.error(ParseError::MissingWhitespaceBetweenAttributes);
+                            self.reconsume(TokenizerState::BeforeAttributeName);
+                        }
+                    }
+                } else {
+                    self.error(ParseError::EOFInTag);
+                    self.emit(Token::EOF);
+                }
+            }
             TokenizerState::SelfClosingStartTag => {
                 // https://html.spec.whatwg.org/multipage/parsing.html#self-closing-start-tag-state
                 if let Some(ch) = self.stream.consume() {
@@ -1348,7 +1583,7 @@ impl<'a> Tokenizer<'a> {
                         }
                         '\u{0000}' => {
                             self.error(ParseError::UnexpectedNullCharacter);
-                            self.push_to_comment('\u{FFFFD}');
+                            self.push_to_comment('\u{FFFD}');
                         }
                         _ => self.push_to_comment(ch),
                     }
@@ -1359,18 +1594,18 @@ impl<'a> Tokenizer<'a> {
             TokenizerState::MarkupDeclarationOpen => {
                 // https://html.spec.whatwg.org/multipage/parsing.html#markup-declaration-open-state
                 // what the actual FUCK is this state
-                if self.stream.matches("--", None) {
+                if self.stream.matches("--", None, Some(true)) {
                     _ = self.stream.consume();
                     _ = self.stream.consume();
 
                     self.comment_token = Some(String::new());
                     self.state = TokenizerState::CommentStart;
-                } else if self.stream.matches("DOCTYPE", Some(false)) {
+                } else if self.stream.matches("DOCTYPE", Some(false), Some(true)) {
                     for _i in 0.."DOCTYPE".len() {
                         _ = self.stream.consume();
                     }
                     self.state = TokenizerState::DOCTYPE;
-                } else if self.stream.matches("[CDATA[", Some(true)) {
+                } else if self.stream.matches("[CDATA[", Some(true), Some(true)) {
                     for _i in 0.."[CDATA[".len() {
                         _ = self.stream.consume();
                     }
@@ -1578,11 +1813,12 @@ impl<'a> Tokenizer<'a> {
                     }
                 } else {
                     self.error(ParseError::EOFInDOCTYPE);
-                    let mut doc = DOCTYPE::default();
-                    doc.set_quirks();
+                    self.doctype_token = Some(DOCTYPE::default());
 
-                    self.doctype_token = Some(doc);
+                    self.set_doctype_quirks();
+
                     self.emit_doctype();
+                    self.emit(Token::EOF);
                 }
             }
             TokenizerState::BeforeDOCTYPEName => {
@@ -1591,46 +1827,37 @@ impl<'a> Tokenizer<'a> {
                     match ch {
                         '\u{0009}' | '\u{000A}' | '\u{000C}' | '\u{0020}' => {}
                         _ if ch.is_ascii_uppercase() => {
-                            let mut token = DOCTYPE::default();
-                            token.name.push(ch.to_ascii_lowercase());
-
-                            self.doctype_token = Some(token);
+                            self.doctype_token = Some(
+                                DOCTYPE::default().with_name(ch.to_ascii_lowercase().to_string()),
+                            );
                             self.state = TokenizerState::DOCTYPEName;
                         }
                         '\u{0000}' => {
                             self.error(ParseError::UnexpectedNullCharacter);
 
-                            let mut token = DOCTYPE::default();
-                            token.name.push('\u{FFFD}');
-
-                            self.doctype_token = Some(token);
+                            self.doctype_token =
+                                Some(DOCTYPE::default().with_name('\u{FFFD}'.to_string()));
                             self.state = TokenizerState::DOCTYPEName;
                         }
                         '\u{003E}' => {
                             self.error(ParseError::MissingDOCTYPEName);
 
-                            let mut token = DOCTYPE::default();
-                            token.set_quirks();
-
-                            self.doctype_token = Some(token);
+                            self.doctype_token = Some(DOCTYPE::default());
                             self.state = TokenizerState::Data;
 
+                            self.set_doctype_quirks();
                             self.emit_doctype();
                         }
                         _ => {
-                            let mut token = DOCTYPE::default();
-                            token.name.push(ch);
-
-                            self.doctype_token = Some(token);
+                            self.doctype_token = Some(DOCTYPE::default().with_name(ch.to_string()));
                             self.state = TokenizerState::DOCTYPEName;
                         }
                     }
                 } else {
                     self.error(ParseError::EOFInDOCTYPE);
-                    let mut token = DOCTYPE::default();
-                    token.set_quirks();
+                    self.doctype_token = Some(DOCTYPE::default());
 
-                    self.doctype_token = Some(token);
+                    self.set_doctype_quirks();
 
                     self.emit_doctype();
                     self.emit(Token::EOF);
@@ -1658,15 +1885,701 @@ impl<'a> Tokenizer<'a> {
                     }
                 } else {
                     self.error(ParseError::EOFInDOCTYPE);
-                    if let Some(doctype) = &mut self.doctype_token {
-                        doctype.set_quirks();
-                    }
+                    self.set_doctype_quirks();
 
                     self.emit_doctype();
                     self.emit(Token::EOF);
                 }
             }
-            _ => {}
+            TokenizerState::AfterDOCTYPEName => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#after-doctype-name-state
+                if let Some(ch) = self.stream.consume() {
+                    match ch {
+                        '\u{0009}' | '\u{000A}' | '\u{000C}' | '\u{0020}' => {}
+                        '\u{003E}' => {
+                            self.state = TokenizerState::Data;
+                            self.emit_doctype();
+                        }
+                        _ => {
+                            if self.stream.matches("public", Some(false), None) {
+                                for _i in 0.."public".len() {
+                                    _ = self.stream.consume();
+                                }
+
+                                self.state = TokenizerState::AfterDOCTYPEPublicKeyword;
+                            } else if self.stream.matches("system", Some(false), None) {
+                                for _i in 0.."system".len() {
+                                    _ = self.stream.consume();
+                                }
+
+                                self.state = TokenizerState::AfterDOCTYPESystemKeyword;
+                            } else {
+                                self.error(ParseError::InvalidCharacterSequenceAfterDOCTYPEName);
+                                self.set_doctype_quirks();
+
+                                self.reconsume(TokenizerState::BogusDOCTYPE);
+                            }
+                        }
+                    }
+                } else {
+                    self.error(ParseError::EOFInDOCTYPE);
+
+                    self.set_doctype_quirks();
+
+                    self.emit_doctype();
+                    self.emit(Token::EOF);
+                }
+            }
+            TokenizerState::AfterDOCTYPEPublicKeyword => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#after-doctype-public-keyword-state
+                if let Some(ch) = self.stream.consume() {
+                    match ch {
+                        '\u{0009}' | '\u{000A}' | '\u{000C}' | '\u{0020}' => {
+                            self.state = TokenizerState::BeforeDOCTYPEPublicIdentifier;
+                        }
+                        '\u{0022}' => {
+                            self.error(ParseError::MissingWhitespaceAfterDOCTYPEPublicKeyword);
+                            self.doctype_token.as_mut().unwrap().public_identifier =
+                                Some(String::new());
+                            self.state = TokenizerState::DOCTYPEPublicIdentifierDoubleQuoted;
+                        }
+                        '\u{0027}' => {
+                            self.error(ParseError::MissingWhitespaceAfterDOCTYPEPublicKeyword);
+                            self.doctype_token.as_mut().unwrap().public_identifier =
+                                Some(String::new());
+                            self.state = TokenizerState::DOCTYPEPublicIdentifierSingleQuoted;
+                        }
+                        '\u{003E}' => {
+                            self.error(ParseError::MissingDOCTYPEPublicIdentifier);
+                            self.set_doctype_quirks();
+
+                            self.state = TokenizerState::Data;
+                            self.emit_doctype();
+                        }
+                        _ => {
+                            self.error(ParseError::MissingQuoteBeforeDOCTYPEPublicIdentifier);
+                            self.set_doctype_quirks();
+
+                            self.reconsume(TokenizerState::BogusDOCTYPE);
+                        }
+                    }
+                } else {
+                    self.error(ParseError::EOFInDOCTYPE);
+                    self.set_doctype_quirks();
+
+                    self.emit_doctype();
+                    self.emit(Token::EOF);
+                }
+            }
+            TokenizerState::BeforeDOCTYPEPublicIdentifier => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#before-doctype-public-identifier-state
+                if let Some(ch) = self.stream.consume() {
+                    match ch {
+                        '\u{0009}' | '\u{000A}' | '\u{000C}' | '\u{0020}' => {}
+                        '\u{0022}' => {
+                            self.doctype_token.as_mut().unwrap().public_identifier =
+                                Some(String::new());
+                            self.state = TokenizerState::DOCTYPEPublicIdentifierDoubleQuoted;
+                        }
+                        '\u{0027}' => {
+                            self.doctype_token.as_mut().unwrap().public_identifier =
+                                Some(String::new());
+                            self.state = TokenizerState::DOCTYPEPublicIdentifierSingleQuoted;
+                        }
+                        '\u{003E}' => {
+                            self.error(ParseError::MissingDOCTYPEPublicIdentifier);
+                            self.set_doctype_quirks();
+
+                            self.state = TokenizerState::Data;
+                            self.emit_doctype();
+                        }
+                        _ => {
+                            self.error(ParseError::MissingQuoteBeforeDOCTYPEPublicIdentifier);
+                            self.set_doctype_quirks();
+
+                            self.reconsume(TokenizerState::BogusDOCTYPE);
+                        }
+                    }
+                } else {
+                    self.error(ParseError::EOFInDOCTYPE);
+                    self.set_doctype_quirks();
+
+                    self.emit_doctype();
+                    self.emit(Token::EOF);
+                }
+            }
+            TokenizerState::DOCTYPEPublicIdentifierDoubleQuoted => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#doctype-public-identifier-(double-quoted)-state
+                if let Some(ch) = self.stream.consume() {
+                    match ch {
+                        '\u{0022}' => self.state = TokenizerState::AfterDOCTYPEPublicIdentifier,
+                        '\u{0000}' => {
+                            self.error(ParseError::UnexpectedNullCharacter);
+                            self.doctype_token
+                                .as_mut()
+                                .unwrap()
+                                .public_identifier
+                                .as_mut()
+                                .unwrap()
+                                .push('\u{FFFD}');
+                        }
+                        '\u{003E}' => {
+                            self.error(ParseError::AbruptDOCTYPEPublicIdentifier);
+                            self.set_doctype_quirks();
+
+                            self.state = TokenizerState::Data;
+                            self.emit_doctype();
+                        }
+                        _ => {
+                            self.doctype_token
+                                .as_mut()
+                                .unwrap()
+                                .public_identifier
+                                .as_mut()
+                                .unwrap()
+                                .push(ch);
+                        }
+                    }
+                } else {
+                    self.error(ParseError::EOFInDOCTYPE);
+                    self.set_doctype_quirks();
+
+                    self.emit_doctype();
+                    self.emit(Token::EOF);
+                }
+            }
+            TokenizerState::DOCTYPEPublicIdentifierSingleQuoted => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#doctype-public-identifier-(single-quoted)-state
+                if let Some(ch) = self.stream.consume() {
+                    match ch {
+                        '\u{0027}' => self.state = TokenizerState::AfterDOCTYPEPublicIdentifier,
+                        '\u{0000}' => {
+                            self.error(ParseError::UnexpectedNullCharacter);
+                            self.doctype_token
+                                .as_mut()
+                                .unwrap()
+                                .public_identifier
+                                .as_mut()
+                                .unwrap()
+                                .push('\u{FFFD}');
+                        }
+                        '\u{003E}' => {
+                            self.error(ParseError::AbruptDOCTYPEPublicIdentifier);
+                            self.set_doctype_quirks();
+
+                            self.state = TokenizerState::Data;
+                            self.emit_doctype();
+                        }
+                        _ => {
+                            self.doctype_token
+                                .as_mut()
+                                .unwrap()
+                                .public_identifier
+                                .as_mut()
+                                .unwrap()
+                                .push(ch);
+                        }
+                    }
+                } else {
+                    self.error(ParseError::EOFInDOCTYPE);
+                    self.set_doctype_quirks();
+
+                    self.emit_doctype();
+                    self.emit(Token::EOF);
+                }
+            }
+            TokenizerState::AfterDOCTYPEPublicIdentifier => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#after-doctype-public-identifier-state
+                if let Some(ch) = self.stream.consume() {
+                    match ch {
+                        '\u{0009}' | '\u{000A}' | '\u{000C}' | '\u{0020}' => {
+                            self.state = TokenizerState::BetweenDOCTYPEPublicAndSystemIdentifiers;
+                        }
+                        '\u{003E}' => {
+                            self.state = TokenizerState::Data;
+                            self.emit_doctype();
+                        }
+                        '\u{0022}' => {
+                            self.error(
+                                ParseError::MissingWhitespaceBetweenDOCTYPEPublicAndSystemIdentifiers,
+                            );
+                            self.doctype_token.as_mut().unwrap().system_identifier =
+                                Some(String::new());
+                            self.state = TokenizerState::DOCTYPESystemIdentifierDoubleQuoted;
+                        }
+                        '\u{0027}' => {
+                            self.error(
+                                ParseError::MissingWhitespaceBetweenDOCTYPEPublicAndSystemIdentifiers,
+                            );
+                            self.doctype_token.as_mut().unwrap().system_identifier =
+                                Some(String::new());
+                            self.state = TokenizerState::DOCTYPESystemIdentifierSingleQuoted;
+                        }
+                        _ => {
+                            self.error(ParseError::MissingQuoteBeforeDOCTYPESystemIdentifier);
+                            self.set_doctype_quirks();
+
+                            self.reconsume(TokenizerState::BogusDOCTYPE);
+                        }
+                    }
+                } else {
+                    self.error(ParseError::EOFInDOCTYPE);
+                    self.set_doctype_quirks();
+
+                    self.emit_doctype();
+                    self.emit(Token::EOF);
+                }
+            }
+            TokenizerState::BetweenDOCTYPEPublicAndSystemIdentifiers => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#between-doctype-public-and-system-identifiers-state
+                if let Some(ch) = self.stream.consume() {
+                    match ch {
+                        '\u{0009}' | '\u{000A}' | '\u{000C}' | '\u{0020}' => {}
+                        '\u{003E}' => {
+                            self.state = TokenizerState::Data;
+                            self.emit_doctype();
+                        }
+                        '\u{0022}' => {
+                            self.doctype_token.as_mut().unwrap().system_identifier =
+                                Some(String::new());
+                            self.state = TokenizerState::DOCTYPESystemIdentifierDoubleQuoted;
+                        }
+                        '\u{0027}' => {
+                            self.doctype_token.as_mut().unwrap().system_identifier =
+                                Some(String::new());
+                            self.state = TokenizerState::DOCTYPESystemIdentifierSingleQuoted;
+                        }
+                        _ => {
+                            self.error(ParseError::MissingQuoteBeforeDOCTYPESystemIdentifier);
+                            self.set_doctype_quirks();
+
+                            self.reconsume(TokenizerState::BogusDOCTYPE);
+                        }
+                    }
+                } else {
+                    self.error(ParseError::EOFInDOCTYPE);
+                    self.set_doctype_quirks();
+
+                    self.emit_doctype();
+                    self.emit(Token::EOF);
+                }
+            }
+            TokenizerState::AfterDOCTYPESystemKeyword => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#after-doctype-system-keyword-state
+                if let Some(ch) = self.stream.consume() {
+                    match ch {
+                        '\u{0009}' | '\u{000A}' | '\u{000C}' | '\u{0020}' => {
+                            self.state = TokenizerState::BeforeDOCTYPESystemIdentifier;
+                        }
+                        '\u{0022}' => {
+                            self.error(ParseError::MissingWhitespaceAfterDOCTYPESystemKeyword);
+                            self.doctype_token.as_mut().unwrap().system_identifier =
+                                Some(String::new());
+                            self.state = TokenizerState::DOCTYPESystemIdentifierDoubleQuoted;
+                        }
+                        '\u{0027}' => {
+                            self.error(ParseError::MissingWhitespaceAfterDOCTYPESystemKeyword);
+                            self.doctype_token.as_mut().unwrap().system_identifier =
+                                Some(String::new());
+                            self.state = TokenizerState::DOCTYPESystemIdentifierSingleQuoted;
+                        }
+                        '\u{003E}' => {
+                            self.error(ParseError::MissingDOCTYPESystemIdentifier);
+                            self.set_doctype_quirks();
+
+                            self.state = TokenizerState::Data;
+                            self.emit_doctype();
+                        }
+                        _ => {
+                            self.error(ParseError::MissingQuoteBeforeDOCTYPESystemIdentifier);
+                            self.set_doctype_quirks();
+
+                            self.reconsume(TokenizerState::BogusDOCTYPE);
+                        }
+                    }
+                } else {
+                    self.error(ParseError::EOFInDOCTYPE);
+                    self.set_doctype_quirks();
+
+                    self.emit_doctype();
+                    self.emit(Token::EOF);
+                }
+            }
+            TokenizerState::BeforeDOCTYPESystemIdentifier => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#before-doctype-system-identifier-state
+                if let Some(ch) = self.stream.consume() {
+                    match ch {
+                        '\u{0009}' | '\u{000A}' | '\u{000C}' | '\u{0020}' => {}
+                        '\u{0022}' => {
+                            self.doctype_token.as_mut().unwrap().system_identifier =
+                                Some(String::new());
+                            self.state = TokenizerState::DOCTYPESystemIdentifierDoubleQuoted;
+                        }
+                        '\u{0027}' => {
+                            self.doctype_token.as_mut().unwrap().system_identifier =
+                                Some(String::new());
+                            self.state = TokenizerState::DOCTYPESystemIdentifierSingleQuoted;
+                        }
+                        '\u{003E}' => {
+                            self.error(ParseError::MissingDOCTYPESystemIdentifier);
+                            self.set_doctype_quirks();
+
+                            self.state = TokenizerState::Data;
+                            self.emit_doctype();
+                        }
+                        _ => {
+                            self.error(ParseError::MissingQuoteBeforeDOCTYPESystemIdentifier);
+                            self.set_doctype_quirks();
+
+                            self.reconsume(TokenizerState::BogusDOCTYPE);
+                        }
+                    }
+                } else {
+                    self.error(ParseError::EOFInDOCTYPE);
+                    self.set_doctype_quirks();
+
+                    self.emit_doctype();
+                    self.emit(Token::EOF);
+                }
+            }
+            TokenizerState::DOCTYPESystemIdentifierDoubleQuoted => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#doctype-system-identifier-(double-quoted)-state
+                if let Some(ch) = self.stream.consume() {
+                    match ch {
+                        '\u{0022}' => self.state = TokenizerState::AfterDOCTYPESystemIdentifier,
+                        '\u{0000}' => {
+                            self.error(ParseError::UnexpectedNullCharacter);
+                            self.doctype_token
+                                .as_mut()
+                                .unwrap()
+                                .system_identifier
+                                .as_mut()
+                                .unwrap()
+                                .push('\u{FFFD}');
+                        }
+                        '\u{003E}' => {
+                            self.error(ParseError::AbruptDOCTYPESystemIdentifier);
+                            self.set_doctype_quirks();
+
+                            self.state = TokenizerState::Data;
+                            self.emit_doctype();
+                        }
+                        _ => {
+                            self.doctype_token
+                                .as_mut()
+                                .unwrap()
+                                .system_identifier
+                                .as_mut()
+                                .unwrap()
+                                .push(ch);
+                        }
+                    }
+                } else {
+                    self.error(ParseError::EOFInDOCTYPE);
+                    self.set_doctype_quirks();
+
+                    self.emit_doctype();
+                    self.emit(Token::EOF);
+                }
+            }
+            TokenizerState::DOCTYPESystemIdentifierSingleQuoted => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#doctype-system-identifier-(single-quoted)-state
+                if let Some(ch) = self.stream.consume() {
+                    match ch {
+                        '\u{0027}' => self.state = TokenizerState::AfterDOCTYPESystemIdentifier,
+                        '\u{0000}' => {
+                            self.error(ParseError::UnexpectedNullCharacter);
+                            self.doctype_token
+                                .as_mut()
+                                .unwrap()
+                                .system_identifier
+                                .as_mut()
+                                .unwrap()
+                                .push('\u{FFFD}');
+                        }
+                        '\u{003E}' => {
+                            self.error(ParseError::AbruptDOCTYPESystemIdentifier);
+                            self.set_doctype_quirks();
+
+                            self.state = TokenizerState::Data;
+                            self.emit_doctype();
+                        }
+                        _ => {
+                            self.doctype_token
+                                .as_mut()
+                                .unwrap()
+                                .system_identifier
+                                .as_mut()
+                                .unwrap()
+                                .push(ch);
+                        }
+                    }
+                } else {
+                    self.error(ParseError::EOFInDOCTYPE);
+                    self.set_doctype_quirks();
+
+                    self.emit_doctype();
+                    self.emit(Token::EOF);
+                }
+            }
+            TokenizerState::AfterDOCTYPESystemIdentifier => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#after-doctype-system-identifier-state
+                if let Some(ch) = self.stream.consume() {
+                    match ch {
+                        '\u{0009}' | '\u{000A}' | '\u{000C}' | '\u{0020}' => {}
+                        '\u{003E}' => {
+                            self.state = TokenizerState::Data;
+                            self.emit_doctype();
+                        }
+                        _ => {
+                            // NOTE: Does not set the doctype to quirks mode
+
+                            self.error(ParseError::UnexpectedCharacterAfterDOCTYPESystemIdentifier);
+                            self.reconsume(TokenizerState::BogusDOCTYPE);
+                        }
+                    }
+                } else {
+                    self.error(ParseError::EOFInDOCTYPE);
+                    self.set_doctype_quirks();
+
+                    self.emit_doctype();
+                    self.emit(Token::EOF);
+                }
+            }
+            TokenizerState::BogusDOCTYPE => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#bogus-doctype-state
+                if let Some(ch) = self.stream.consume() {
+                    match ch {
+                        '\u{003E}' => {
+                            self.state = TokenizerState::Data;
+                            self.emit_doctype();
+                        }
+                        '\u{0000}' => {
+                            self.error(ParseError::UnexpectedNullCharacter);
+                        }
+                        _ => {}
+                    }
+                } else {
+                    self.emit_doctype();
+                    self.emit(Token::EOF);
+                }
+            }
+            TokenizerState::CDATASection => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#cdata-section-state
+                if let Some(ch) = self.stream.consume() {
+                    match ch {
+                        '\u{005D}' => {
+                            self.state = TokenizerState::CDATASectionBracket;
+                        }
+                        _ => {
+                            self.emit(Token::Character(ch));
+                        }
+                    }
+                } else {
+                    self.error(ParseError::EOFInCDATA);
+                    self.emit(Token::EOF);
+                }
+            }
+            TokenizerState::CDATASectionBracket => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#cdata-section-bracket-state
+                if self.stream.consume().is_some_and(|c| c == '\u{005D}') {
+                    self.state = TokenizerState::CDATASectionEnd;
+                } else {
+                    self.emit(Token::Character('\u{005D}'));
+                    self.reconsume(TokenizerState::CDATASection);
+                }
+            }
+            TokenizerState::CDATASectionEnd => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#cdata-section-end-state
+                let anything_else = |_self: &mut Tokenizer| {
+                    _self.emit(Token::Character('\u{005D}'));
+                    _self.emit(Token::Character('\u{005D}'));
+                    _self.reconsume(TokenizerState::CDATASection);
+                };
+
+                if let Some(ch) = self.stream.consume() {
+                    match ch {
+                        '\u{005D}' => self.emit(Token::Character('\u{005D}')),
+                        '\u{003E}' => self.state = TokenizerState::Data,
+                        _ => anything_else(self),
+                    }
+                } else {
+                    anything_else(self);
+                }
+            }
+            TokenizerState::CharacterReference => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#character-reference-state
+                self.temporary_buffer = String::new();
+                self.temporary_buffer.push('\u{0026}');
+
+                let anything_else = |_self: &mut Tokenizer| {
+                    _self.flush_consumed_as_char_ref();
+                    let return_state = _self.return_state.clone().unwrap();
+                    _self.reconsume(return_state);
+                };
+
+                if let Some(ch) = self.stream.consume() {
+                    match ch {
+                        '\u{0023}' => {
+                            self.temporary_buffer.push(ch);
+                            self.state = TokenizerState::NumericCharacterReference;
+                        }
+                        _ if ch.is_ascii_alphanumeric() => {
+                            self.reconsume(TokenizerState::NamedCharacterReference);
+                        }
+                        _ => anything_else(self),
+                    }
+                } else {
+                    anything_else(self);
+                }
+            }
+            TokenizerState::NamedCharacterReference => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#named-character-reference-state
+                // TODO: FUCK THIS
+                for _ in 0..100 {
+                    println!("TATTU YOU NEED TO DO TS ITS RELEVANT");
+                }
+            }
+            TokenizerState::AmbiguousAmpersand => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#ambiguous-ampersand-state
+                // TODO: This is only reachable through NamedCharacterReference
+            }
+            TokenizerState::NumericCharacterReference => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#numeric-character-reference-state
+                self.character_reference_code = 0;
+
+                if self
+                    .stream
+                    .consume()
+                    .is_some_and(|ch| matches!(ch, '\u{0078}' | '\u{0058}'))
+                {
+                    self.temporary_buffer.push(self.stream.current());
+                    self.state = TokenizerState::HexadecimalCharacterReferenceStart;
+                } else {
+                    self.reconsume(TokenizerState::DecimalCharacterReferenceStart);
+                }
+            }
+            TokenizerState::HexadecimalCharacterReferenceStart => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#hexadecimal-character-reference-start-state
+                if self
+                    .stream
+                    .consume()
+                    .is_some_and(|ch| ch.is_ascii_hexdigit())
+                {
+                    self.reconsume(TokenizerState::HexadecimalCharacterReference);
+                } else {
+                    self.error(ParseError::AbsenceOfDigitsInNumericCharacterReference);
+                    self.flush_consumed_as_char_ref();
+                    self.reconsume(self.return_state.clone().unwrap());
+                }
+            }
+            TokenizerState::DecimalCharacterReferenceStart => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#decimal-character-reference-start-state
+                if self.stream.consume().is_some_and(|ch| ch.is_ascii_digit()) {
+                    self.reconsume(TokenizerState::DecimalCharacterReference);
+                } else {
+                    self.error(ParseError::AbsenceOfDigitsInNumericCharacterReference);
+                    self.flush_consumed_as_char_ref();
+                    self.reconsume(self.return_state.clone().unwrap());
+                }
+            }
+            TokenizerState::HexadecimalCharacterReference => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#hexadecimal-character-reference-state
+                let anything_else = |_self: &mut Tokenizer| {
+                    _self.error(ParseError::MissingSemicolonAfterCharacterReference);
+                    _self.reconsume(TokenizerState::NumericCharacterReferenceEnd);
+                };
+
+                if let Some(ch) = self.stream.consume() {
+                    match ch {
+                        _ if ch.is_ascii_digit() => {
+                            self.character_reference_code *= 16;
+                            self.character_reference_code += ch as u32 - 0x30;
+                        }
+                        '\u{0041}'..='\u{0046}' => {
+                            self.character_reference_code *= 16;
+                            self.character_reference_code += ch as u32 - 0x37;
+                        }
+                        '\u{0061}'..='\u{0066}' => {
+                            self.character_reference_code *= 16;
+                            self.character_reference_code += ch as u32 - 0x57;
+                        }
+                        '\u{003B}' => {
+                            self.state = TokenizerState::NumericCharacterReferenceEnd;
+                        }
+                        _ => {
+                            anything_else(self);
+                        }
+                    }
+                } else {
+                    anything_else(self);
+                }
+            }
+            TokenizerState::DecimalCharacterReference => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#decimal-character-reference-state
+                let anything_else = |_self: &mut Tokenizer| {
+                    _self.error(ParseError::MissingSemicolonAfterCharacterReference);
+                    _self.reconsume(TokenizerState::NumericCharacterReferenceEnd);
+                };
+
+                if let Some(ch) = self.stream.consume() {
+                    match ch {
+                        _ if ch.is_ascii_digit() => {
+                            self.character_reference_code *= 10;
+                            self.character_reference_code += ch as u32 - 0x30;
+                        }
+                        '\u{003B}' => {
+                            self.state = TokenizerState::NumericCharacterReferenceEnd;
+                        }
+                        _ => {
+                            anything_else(self);
+                        }
+                    }
+                } else {
+                    anything_else(self);
+                }
+            }
+            TokenizerState::NumericCharacterReferenceEnd => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#numeric-character-reference-end-state
+                match self.character_reference_code {
+                    0x00 => {
+                        self.error(ParseError::NullCharacterReference);
+                        self.character_reference_code = 0xFFFD;
+                    }
+                    0x10FFFF.. => {
+                        self.error(ParseError::CharacterReferenceOutsideUnicodeRange);
+                        self.character_reference_code = 0xFFFD;
+                    }
+                    _ if is_surrogate(self.character_reference_code) => {
+                        self.error(ParseError::SurrogateCharacterReference);
+                        self.character_reference_code = 0xFFFD;
+                    }
+                    _ if is_noncharacter(self.character_reference_code) => {
+                        self.error(ParseError::NoncharacterCharacterReference);
+                    }
+                    _ => {
+                        if self.character_reference_code == 0x0D
+                            || (is_control(self.character_reference_code)
+                                && !is_ascii_whitespace(
+                                    char::from_u32(self.character_reference_code).unwrap(),
+                                ))
+                        {
+                            self.error(ParseError::ControlCharacterReference);
+                        }
+
+                        self.character_reference_code =
+                            map_character_reference(self.character_reference_code);
+                    }
+                }
+
+                self.temporary_buffer = String::new();
+                self.temporary_buffer
+                    .push(char::from_u32(self.character_reference_code).unwrap_or('\u{FFFD}'));
+                self.flush_consumed_as_char_ref();
+
+                let return_state = self.return_state.clone().unwrap();
+                self.state = return_state;
+            }
         }
     }
 }
