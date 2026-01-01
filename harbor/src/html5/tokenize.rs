@@ -49,6 +49,20 @@ impl InputStream {
     fn reconsume(&mut self) {
         self.is_reconsume = true;
     }
+
+    fn matches(&self, text: &str, case_sensitive: Option<bool>) -> bool {
+        let data_string = self.input[self.pos..self.pos + text.len() + 1]
+            .iter()
+            .collect::<String>();
+
+        let data = data_string.as_str();
+
+        if case_sensitive.unwrap_or(true) {
+            data.eq(text)
+        } else {
+            data.eq_ignore_ascii_case(text)
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -85,8 +99,62 @@ pub enum TagToken {
     End(Tag),
 }
 
+impl TagToken {
+    fn apply(&mut self, f: impl Fn(&mut Tag) -> Tag) -> Tag {
+        match self {
+            TagToken::Start(start) => f(start),
+            TagToken::End(end) => f(end),
+        }
+    }
+
+    fn apply_no_ret(&mut self, f: impl Fn(&mut Tag)) {
+        self.apply(|t: &mut Tag| {
+            f(t);
+            t.clone()
+        });
+    }
+
+    fn new_tag_attr(&mut self, data: Option<(String, String)>) {
+        self.apply_no_ret(|t: &mut Tag| {
+            t.attributes
+                .push(data.clone().unwrap_or((String::new(), String::new())))
+        });
+    }
+
+    fn push_to_attr_name(&mut self, ch: char) {
+        self.apply_no_ret(|t: &mut Tag| t.attributes.last_mut().unwrap().0.push(ch));
+    }
+
+    fn push_to_attr_val(&mut self, ch: char) {
+        self.apply_no_ret(|t: &mut Tag| t.attributes.last_mut().unwrap().1.push(ch));
+    }
+
+    fn set_self_closing(&mut self) {
+        self.apply_no_ret(|t: &mut Tag| t.is_self_closing = true);
+    }
+
+    fn current_attr(&mut self) -> (String, String) {
+        self.apply(|t| t.clone()).attributes.last().unwrap().clone()
+    }
+}
+
+#[derive(Default, Clone)]
+pub struct DOCTYPE {
+    name: String,
+    public_identifier: String,
+    system_identifier: String,
+
+    force_quirks: bool,
+}
+
+impl DOCTYPE {
+    pub fn set_quirks(&mut self) {
+        self.force_quirks = true;
+    }
+}
+
 pub enum Token {
-    DOCTYPE,
+    DOCTYPE(DOCTYPE),
     StartTag(Tag),
     EndTag(Tag),
     Comment(String),
@@ -105,6 +173,17 @@ pub enum ParseError {
     UnexpectedEqualsSignBeforeAttributeName,
     UnexpectedCharacterInAttributeName,
     DuplicateAttribute,
+    MissingAttributeValue,
+    UnexpectedCharacterInUnquotedAttributeValue,
+    UnexpectedSolidusInTag,
+    IncorrectlyOpenedComment,
+    AbruptClosingOfEmptyComment,
+    EOFInComment,
+    NestedComment,
+    IncorrectlyClosedComment,
+    EOFInDOCTYPE,
+    MissingWhitespaceBeforeDOCTYPEName,
+    MissingDOCTYPEName,
 }
 
 #[derive(Clone, PartialEq)]
@@ -144,9 +223,27 @@ pub enum TokenizerState {
     AttributeName = 33,
     AfterAttributeName = 34,
     BeforeAttributeValue = 35,
+    AttributeValueDoubleQuoted = 36,
+    AttributeValueSingleQuoted = 37,
+    AttributeValueUnquoted = 38,
+    AfterAttributeValueQuoted = 39,
     SelfClosingStartTag = 40,
     BogusComment = 41,
     MarkupDeclarationOpen = 42,
+    CommentStart = 43,
+    CommentStartDash = 44,
+    Comment = 45,
+    CommentLessThanSign = 46,
+    CommentLessThanSignBang = 47,
+    CommentLessThanSignBangDash = 48,
+    CommentLessThanSignBangDashDash = 49,
+    CommentEndDash = 50,
+    CommentEnd = 51,
+    CommentEndBang = 52,
+    DOCTYPE = 53,
+    BeforeDOCTYPEName = 54,
+    DOCTYPEName = 55,
+    AfterDOCTYPEName = 56,
     CharacterReference = 72,
 }
 
@@ -162,6 +259,8 @@ pub struct Tokenizer<'a> {
 
     tag_token: Option<TagToken>,
     comment_token: Option<String>,
+    doctype_token: Option<DOCTYPE>,
+
     temporary_buffer: String,
 
     emitted_tokens: Vec<Token>,
@@ -177,6 +276,7 @@ impl<'a> Tokenizer<'a> {
             return_state: None,
             tag_token: None,
             comment_token: None,
+            doctype_token: None,
             temporary_buffer: String::new(),
             emitted_tokens: vec![],
         }
@@ -212,7 +312,17 @@ impl<'a> Tokenizer<'a> {
         self.emitted_tokens.push(token);
     }
 
-    fn emit_current_tag(&mut self) {
+    fn emit_doctype(&mut self) {
+        self.emit(Token::DOCTYPE(self.doctype_token.clone().unwrap()));
+    }
+
+    fn emit_comment(&mut self) {
+        self.emit(Token::Comment(
+            self.comment_token.clone().unwrap_or(String::new()),
+        ));
+    }
+
+    fn emit_tag(&mut self) {
         if let Some(tag) = &self.tag_token {
             match tag {
                 TagToken::Start(tag) => self.emit(Token::StartTag(tag.clone())),
@@ -230,34 +340,27 @@ impl<'a> Tokenizer<'a> {
         self.stream.reconsume();
     }
 
-    fn apply_to_tag(&mut self, f: impl Fn(&mut Tag) -> Tag) -> Tag {
-        if let Some(tag_tok) = &mut self.tag_token {
-            match tag_tok {
-                TagToken::Start(tag) => f(tag),
-                TagToken::End(tag) => f(tag),
-            }
-        } else {
-            unreachable!()
-        }
-    }
-
-    fn apply_to_tag_noret(&mut self, f: impl Fn(&mut Tag)) {
-        _ = self.apply_to_tag(|t: &mut Tag| {
-            f(t);
-            t.clone()
-        });
-    }
-
     fn push_to_tag(&mut self, ch: char) {
-        self.apply_to_tag_noret(|t: &mut Tag| t.name.push(ch))
+        self.tag_token
+            .as_mut()
+            .unwrap()
+            .apply_no_ret(|t: &mut Tag| t.name.push(ch))
     }
 
-    fn new_tag_attr(&mut self, name: &String, value: &String) {
-        self.apply_to_tag_noret(|t: &mut Tag| t.attributes.push((name.clone(), value.clone())));
+    fn new_tag_attr(&mut self, data: Option<(String, String)>) {
+        self.tag_token.as_mut().unwrap().new_tag_attr(data);
     }
 
     fn push_to_attr_name(&mut self, ch: char) {
-        self.apply_to_tag_noret(|t: &mut Tag| t.attributes.last_mut().unwrap().0.push(ch));
+        self.tag_token.as_mut().unwrap().push_to_attr_name(ch);
+    }
+
+    fn push_to_attr_val(&mut self, ch: char) {
+        self.tag_token.as_mut().unwrap().push_to_attr_val(ch);
+    }
+
+    fn tag_set_self_closing(&mut self) {
+        self.tag_token.as_mut().unwrap().set_self_closing();
     }
 
     fn tag_attribute_names_iter(&self) -> impl Iterator<Item = String> {
@@ -276,12 +379,19 @@ impl<'a> Tokenizer<'a> {
     }
 
     fn curr_tag_attr_name(&mut self) -> String {
-        self.apply_to_tag(|t: &mut Tag| t.clone())
-            .attributes
-            .last()
-            .unwrap()
-            .0
-            .clone()
+        self.tag_token.as_mut().unwrap().current_attr().0
+    }
+
+    fn push_to_comment(&mut self, ch: char) {
+        if let Some(comment) = &mut self.comment_token {
+            comment.push(ch);
+        }
+    }
+
+    fn push_to_doctype_name(&mut self, ch: char) {
+        if let Some(doctype) = &mut self.doctype_token {
+            doctype.name.push(ch);
+        }
     }
 
     pub fn tokenize(&mut self) {
@@ -462,7 +572,7 @@ impl<'a> Tokenizer<'a> {
                         }
                         '\u{003E}' => {
                             self.state = TokenizerState::Data;
-                            self.emit_current_tag();
+                            self.emit_tag();
                         }
                         _ if ch.is_ascii_uppercase() => {
                             self.push_to_tag(ch.to_ascii_lowercase());
@@ -528,7 +638,7 @@ impl<'a> Tokenizer<'a> {
                         }
                         '\u{003E}' if is_appr => {
                             self.state = TokenizerState::Data;
-                            self.emit_current_tag();
+                            self.emit_tag();
                         }
                         _ if ch.is_ascii_uppercase() => {
                             self.push_to_tag(ch.to_ascii_lowercase());
@@ -593,7 +703,7 @@ impl<'a> Tokenizer<'a> {
                         }
                         '\u{003E}' if is_appr => {
                             self.state = TokenizerState::Data;
-                            self.emit_current_tag();
+                            self.emit_tag();
                         }
                         _ if ch.is_ascii_uppercase() => {
                             self.push_to_tag(ch.to_ascii_lowercase());
@@ -670,7 +780,7 @@ impl<'a> Tokenizer<'a> {
                         }
                         '\u{003E}' if is_appr => {
                             self.state = TokenizerState::Data;
-                            self.emit_current_tag();
+                            self.emit_tag();
                         }
                         _ if ch.is_ascii_uppercase() => {
                             self.push_to_tag(ch.to_ascii_lowercase());
@@ -848,7 +958,7 @@ impl<'a> Tokenizer<'a> {
                         }
                         '\u{003E}' if is_appr => {
                             self.state = TokenizerState::Data;
-                            self.emit_current_tag();
+                            self.emit_tag();
                         }
                         _ if ch.is_ascii_uppercase() => {
                             self.push_to_tag(ch.to_ascii_lowercase());
@@ -1034,11 +1144,11 @@ impl<'a> Tokenizer<'a> {
                         '\u{002F}' | '\u{003E}' => eof_or_002f_003e(self),
                         '\u{003D}' => {
                             self.error(ParseError::UnexpectedEqualsSignBeforeAttributeName);
-                            self.new_tag_attr(&String::from(ch), &String::new());
+                            self.new_tag_attr(Some((String::from(ch), String::new())));
                             self.state = TokenizerState::AttributeName;
                         }
                         _ => {
-                            self.new_tag_attr(&String::new(), &String::new());
+                            self.new_tag_attr(None);
                             self.reconsume(TokenizerState::AttributeName);
                         }
                     }
@@ -1055,9 +1165,11 @@ impl<'a> Tokenizer<'a> {
                     for name in _self.tag_attribute_names() {
                         if curr_tag_name == name {
                             _self.error(ParseError::DuplicateAttribute);
-                            _self.apply_to_tag_noret(|t: &mut Tag| {
-                                t.attributes.pop();
-                            });
+                            _self
+                                .tag_token
+                                .as_mut()
+                                .unwrap()
+                                .apply_no_ret(|t| _ = t.attributes.pop());
                         }
                     }
                 }));
@@ -1090,6 +1202,468 @@ impl<'a> Tokenizer<'a> {
                     }
                 } else {
                     eof_or_0009(self);
+                }
+            }
+            TokenizerState::AfterAttributeName => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#after-attribute-name-state
+                if let Some(ch) = self.stream.consume() {
+                    match ch {
+                        '\u{0009}' | '\u{000A}' | '\u{000C}' | '\u{0020}' => {}
+                        '\u{002F}' => self.state = TokenizerState::SelfClosingStartTag,
+                        '\u{003D}' => self.state = TokenizerState::BeforeAttributeValue,
+                        '\u{003E}' => {
+                            self.state = TokenizerState::Data;
+                            self.emit_tag();
+                        }
+                        _ => {
+                            self.new_tag_attr(None);
+                            self.reconsume(TokenizerState::AttributeName);
+                        }
+                    }
+                } else {
+                    self.error(ParseError::EOFInTag);
+                    self.emit(Token::EOF);
+                }
+            }
+            TokenizerState::BeforeAttributeValue => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#before-attribute-value-state
+                let anything_else = |_self: &mut Tokenizer| {
+                    _self.reconsume(TokenizerState::AttributeValueUnquoted);
+                };
+
+                if let Some(ch) = self.stream.consume() {
+                    match ch {
+                        '\u{0009}' | '\u{000A}' | '\u{000C}' | '\u{0020}' => {}
+                        '\u{0022}' => self.state = TokenizerState::AttributeValueDoubleQuoted,
+                        '\u{0027}' => self.state = TokenizerState::AttributeValueSingleQuoted,
+                        '\u{003E}' => {
+                            self.error(ParseError::MissingAttributeValue);
+                            self.state = TokenizerState::Data;
+                            self.emit_tag();
+                        }
+                        _ => anything_else(self),
+                    }
+                } else {
+                    anything_else(self);
+                }
+            }
+            TokenizerState::AttributeValueDoubleQuoted => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#attribute-value-(double-quoted)-state
+                if let Some(ch) = self.stream.consume() {
+                    match ch {
+                        '\u{0022}' => self.state = TokenizerState::AfterAttributeValueQuoted,
+                        '\u{0026}' => {
+                            self.return_state = Some(TokenizerState::AttributeValueDoubleQuoted);
+                            self.state = TokenizerState::CharacterReference;
+                        }
+                        '\u{0000}' => {
+                            self.error(ParseError::UnexpectedNullCharacter);
+                            self.push_to_attr_name('\u{FFFD}');
+                        }
+                        _ => self.push_to_attr_val(ch),
+                    }
+                } else {
+                    self.error(ParseError::EOFInTag);
+                    self.emit(Token::EOF);
+                }
+            }
+            TokenizerState::AttributeValueSingleQuoted => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#attribute-value-(single-quoted)-state
+                if let Some(ch) = self.stream.consume() {
+                    match ch {
+                        '\u{0027}' => self.state = TokenizerState::AfterAttributeValueQuoted,
+                        '\u{0026}' => {
+                            self.return_state = Some(TokenizerState::AttributeValueSingleQuoted);
+                            self.state = TokenizerState::CharacterReference;
+                        }
+                        '\u{0000}' => {
+                            self.error(ParseError::UnexpectedNullCharacter);
+                            self.push_to_attr_val('\u{FFFD}');
+                        }
+                        _ => self.push_to_attr_val(ch),
+                    }
+                } else {
+                    self.error(ParseError::EOFInTag);
+                    self.emit(Token::EOF);
+                }
+            }
+            TokenizerState::AttributeValueUnquoted => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#attribute-value-(unquoted)-state
+                if let Some(ch) = self.stream.consume() {
+                    match ch {
+                        '\u{0009}' | '\u{000A}' | '\u{000C}' | '\u{0020}' => {
+                            self.state = TokenizerState::BeforeAttributeName
+                        }
+                        '\u{0026}' => {
+                            self.return_state = Some(TokenizerState::AttributeValueUnquoted);
+                            self.state = TokenizerState::CharacterReference;
+                        }
+                        '\u{003E}' => {
+                            self.state = TokenizerState::Data;
+                            self.emit_tag();
+                        }
+                        '\u{0000}' => {
+                            self.error(ParseError::UnexpectedNullCharacter);
+                            self.push_to_attr_val('\u{FFFD}');
+                        }
+                        _ => {
+                            if matches!(
+                                ch,
+                                '\u{0022}' | '\u{0027}' | '\u{003C}' | '\u{003D}' | '\u{0060}'
+                            ) {
+                                self.error(ParseError::UnexpectedCharacterInUnquotedAttributeValue);
+                            }
+
+                            self.push_to_attr_val(ch);
+                        }
+                    }
+                } else {
+                    self.error(ParseError::EOFInTag);
+                    self.emit(Token::EOF)
+                }
+            }
+            TokenizerState::SelfClosingStartTag => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#self-closing-start-tag-state
+                if let Some(ch) = self.stream.consume() {
+                    if ch == '\u{003E}' {
+                        self.tag_set_self_closing();
+                        self.state = TokenizerState::Data;
+                        self.emit_tag();
+                    } else {
+                        self.error(ParseError::UnexpectedSolidusInTag);
+                        self.reconsume(TokenizerState::BeforeAttributeName);
+                    }
+                } else {
+                    self.error(ParseError::EOFInTag);
+                    self.emit(Token::EOF);
+                }
+            }
+            TokenizerState::BogusComment => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#bogus-comment-state
+                if let Some(ch) = self.stream.consume() {
+                    match ch {
+                        '\u{003E}' => {
+                            self.state = TokenizerState::Data;
+                            self.emit_comment();
+                        }
+                        '\u{0000}' => {
+                            self.error(ParseError::UnexpectedNullCharacter);
+                            self.push_to_comment('\u{FFFFD}');
+                        }
+                        _ => self.push_to_comment(ch),
+                    }
+                } else {
+                    self.emit_comment();
+                }
+            }
+            TokenizerState::MarkupDeclarationOpen => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#markup-declaration-open-state
+                // what the actual FUCK is this state
+                if self.stream.matches("--", None) {
+                    _ = self.stream.consume();
+                    _ = self.stream.consume();
+
+                    self.comment_token = Some(String::new());
+                    self.state = TokenizerState::CommentStart;
+                } else if self.stream.matches("DOCTYPE", Some(false)) {
+                    for _i in 0.."DOCTYPE".len() {
+                        _ = self.stream.consume();
+                    }
+                    self.state = TokenizerState::DOCTYPE;
+                } else if self.stream.matches("[CDATA[", Some(true)) {
+                    for _i in 0.."[CDATA[".len() {
+                        _ = self.stream.consume();
+                    }
+
+                    // TODO: If there is an adjusted current node and it is not an element in the
+                    // HTML namespace, then switch to the CDATA section state.
+                    // Otherwise, this is a cdata-in-html-content parse error.
+
+                    self.comment_token = Some(String::from("[CDATA["));
+                    self.state = TokenizerState::BogusComment;
+                } else {
+                    // NOTE: Nothing is consumed via this state - this is intended!
+
+                    self.error(ParseError::IncorrectlyOpenedComment);
+                    self.comment_token = Some(String::new());
+                    self.state = TokenizerState::BogusComment;
+                }
+            }
+            TokenizerState::CommentStart => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#comment-start-state
+                let anything_else =
+                    |_self: &mut Tokenizer| _self.reconsume(TokenizerState::Comment);
+
+                if let Some(ch) = self.stream.consume() {
+                    match ch {
+                        '\u{002D}' => self.state = TokenizerState::CommentStartDash,
+                        '\u{003E}' => {
+                            self.error(ParseError::AbruptClosingOfEmptyComment);
+                            self.state = TokenizerState::Data;
+                            self.emit_comment();
+                        }
+                        _ => anything_else(self),
+                    }
+                } else {
+                    anything_else(self);
+                }
+            }
+            TokenizerState::CommentStartDash => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#comment-start-dash-state
+                if let Some(ch) = self.stream.consume() {
+                    match ch {
+                        '\u{002D}' => self.state = TokenizerState::CommentEnd,
+                        '\u{003E}' => {
+                            self.error(ParseError::AbruptClosingOfEmptyComment);
+                            self.state = TokenizerState::Data;
+                            self.emit_comment();
+                        }
+                        _ => {
+                            self.push_to_comment('\u{002D}');
+                            self.reconsume(TokenizerState::Comment);
+                        }
+                    }
+                } else {
+                    self.error(ParseError::EOFInComment);
+                    self.emit_comment();
+                    self.emit(Token::EOF);
+                }
+            }
+            TokenizerState::Comment => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#comment-state
+                if let Some(ch) = self.stream.consume() {
+                    match ch {
+                        '\u{003C}' => {
+                            self.push_to_comment(ch);
+                            self.state = TokenizerState::CommentLessThanSign;
+                        }
+                        '\u{002D}' => self.state = TokenizerState::CommentEndDash,
+                        '\u{0000}' => {
+                            self.error(ParseError::UnexpectedNullCharacter);
+                            self.push_to_comment('\u{FFFD}');
+                        }
+                        _ => self.push_to_comment(ch),
+                    }
+                } else {
+                    self.error(ParseError::EOFInComment);
+                    self.emit_comment();
+                    self.emit(Token::EOF);
+                }
+            }
+            TokenizerState::CommentLessThanSign => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#comment-less-than-sign-state
+                let anything_else =
+                    |_self: &mut Tokenizer| _self.reconsume(TokenizerState::Comment);
+
+                if let Some(ch) = self.stream.consume() {
+                    match ch {
+                        '\u{0021}' => {
+                            self.push_to_comment(ch);
+                            self.state = TokenizerState::CommentLessThanSignBang;
+                        }
+                        '\u{003C}' => self.push_to_comment(ch),
+                        _ => anything_else(self),
+                    }
+                } else {
+                    anything_else(self);
+                }
+            }
+            TokenizerState::CommentLessThanSignBang => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#comment-less-than-sign-bang-state
+                if self.stream.consume().is_some_and(|c| c == '\u{002D}') {
+                    self.state = TokenizerState::CommentLessThanSignBangDash;
+                } else {
+                    self.reconsume(TokenizerState::Comment);
+                }
+            }
+            TokenizerState::CommentLessThanSignBangDash => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#comment-less-than-sign-bang-dash-state
+                if self.stream.consume().is_some_and(|c| c == '\u{002D}') {
+                    self.state = TokenizerState::CommentLessThanSignBangDashDash;
+                } else {
+                    self.reconsume(TokenizerState::CommentEndDash);
+                }
+            }
+            TokenizerState::CommentLessThanSignBangDashDash => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#comment-less-than-sign-bang-dash-dash-state
+                let consumed = self.stream.consume();
+
+                if consumed.is_none() || consumed.is_some_and(|c| c == '\u{003E}') {
+                    self.reconsume(TokenizerState::CommentEnd);
+                } else {
+                    self.error(ParseError::NestedComment);
+                    self.reconsume(TokenizerState::CommentEnd);
+                }
+            }
+            TokenizerState::CommentEndDash => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#comment-end-dash-state
+                if let Some(ch) = self.stream.consume() {
+                    match ch {
+                        '\u{002D}' => self.state = TokenizerState::CommentEnd,
+                        _ => {
+                            self.push_to_comment(ch);
+                            self.reconsume(TokenizerState::Comment);
+                        }
+                    }
+                } else {
+                    self.error(ParseError::EOFInComment);
+                    self.emit_comment();
+                    self.emit(Token::EOF);
+                }
+            }
+            TokenizerState::CommentEnd => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#comment-end-state
+                if let Some(ch) = self.stream.consume() {
+                    match ch {
+                        '\u{003E}' => {
+                            self.state = TokenizerState::Data;
+                            self.emit_comment();
+                        }
+                        '\u{0021}' => self.state = TokenizerState::CommentEndBang,
+                        '\u{002D}' => self.push_to_comment('\u{002D}'),
+                        _ => {
+                            self.push_to_comment('\u{002D}');
+                            self.push_to_comment('\u{002D}');
+                            self.reconsume(TokenizerState::Comment);
+                        }
+                    }
+                } else {
+                    self.error(ParseError::EOFInComment);
+                    self.emit_comment();
+                    self.emit(Token::EOF);
+                }
+            }
+            TokenizerState::CommentEndBang => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#comment-end-bang-state
+                if let Some(ch) = self.stream.consume() {
+                    match ch {
+                        '\u{002D}' => {
+                            self.push_to_comment('\u{002D}');
+                            self.push_to_comment('\u{002D}');
+                            self.push_to_comment('\u{0021}');
+
+                            self.state = TokenizerState::CommentEndDash;
+                        }
+                        '\u{003E}' => {
+                            self.error(ParseError::IncorrectlyClosedComment);
+                            self.state = TokenizerState::Data;
+                            self.emit_comment();
+                        }
+                        _ => {
+                            self.push_to_comment('\u{002D}');
+                            self.push_to_comment('\u{002D}');
+                            self.push_to_comment('\u{0021}');
+
+                            self.reconsume(TokenizerState::Comment);
+                        }
+                    }
+                } else {
+                    self.error(ParseError::EOFInComment);
+                    self.emit_comment();
+                    self.emit(Token::EOF);
+                }
+            }
+            TokenizerState::DOCTYPE => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#doctype-state
+                if let Some(ch) = self.stream.consume() {
+                    match ch {
+                        '\u{0009}' | '\u{000A}' | '\u{000C}' | '\u{0020}' => {
+                            self.state = TokenizerState::BeforeDOCTYPEName
+                        }
+                        '\u{003E}' => self.reconsume(TokenizerState::BeforeDOCTYPEName),
+                        _ => {
+                            self.error(ParseError::MissingWhitespaceBeforeDOCTYPEName);
+                            self.reconsume(TokenizerState::BeforeDOCTYPEName);
+                        }
+                    }
+                } else {
+                    self.error(ParseError::EOFInDOCTYPE);
+                    let mut doc = DOCTYPE::default();
+                    doc.set_quirks();
+
+                    self.doctype_token = Some(doc);
+                    self.emit_doctype();
+                }
+            }
+            TokenizerState::BeforeDOCTYPEName => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#before-doctype-name-state
+                if let Some(ch) = self.stream.consume() {
+                    match ch {
+                        '\u{0009}' | '\u{000A}' | '\u{000C}' | '\u{0020}' => {}
+                        _ if ch.is_ascii_uppercase() => {
+                            let mut token = DOCTYPE::default();
+                            token.name.push(ch.to_ascii_lowercase());
+
+                            self.doctype_token = Some(token);
+                            self.state = TokenizerState::DOCTYPEName;
+                        }
+                        '\u{0000}' => {
+                            self.error(ParseError::UnexpectedNullCharacter);
+
+                            let mut token = DOCTYPE::default();
+                            token.name.push('\u{FFFD}');
+
+                            self.doctype_token = Some(token);
+                            self.state = TokenizerState::DOCTYPEName;
+                        }
+                        '\u{003E}' => {
+                            self.error(ParseError::MissingDOCTYPEName);
+
+                            let mut token = DOCTYPE::default();
+                            token.set_quirks();
+
+                            self.doctype_token = Some(token);
+                            self.state = TokenizerState::Data;
+
+                            self.emit_doctype();
+                        }
+                        _ => {
+                            let mut token = DOCTYPE::default();
+                            token.name.push(ch);
+
+                            self.doctype_token = Some(token);
+                            self.state = TokenizerState::DOCTYPEName;
+                        }
+                    }
+                } else {
+                    self.error(ParseError::EOFInDOCTYPE);
+                    let mut token = DOCTYPE::default();
+                    token.set_quirks();
+
+                    self.doctype_token = Some(token);
+
+                    self.emit_doctype();
+                    self.emit(Token::EOF);
+                }
+            }
+            TokenizerState::DOCTYPEName => {
+                // https://html.spec.whatwg.org/multipage/parsing.html#doctype-name-state
+                if let Some(ch) = self.stream.consume() {
+                    match ch {
+                        '\u{0009}' | '\u{000A}' | '\u{000C}' | '\u{0020}' => {
+                            self.state = TokenizerState::AfterDOCTYPEName
+                        }
+                        '\u{003E}' => {
+                            self.state = TokenizerState::Data;
+                            self.emit_doctype();
+                        }
+                        _ if ch.is_ascii_uppercase() => {
+                            self.push_to_doctype_name(ch.to_ascii_lowercase());
+                        }
+                        '\u{0000}' => {
+                            self.error(ParseError::UnexpectedNullCharacter);
+                            self.push_to_doctype_name('\u{FFFD}');
+                        }
+                        _ => self.push_to_doctype_name(ch),
+                    }
+                } else {
+                    self.error(ParseError::EOFInDOCTYPE);
+                    if let Some(doctype) = &mut self.doctype_token {
+                        doctype.set_quirks();
+                    }
+
+                    self.emit_doctype();
+                    self.emit(Token::EOF);
                 }
             }
             _ => {}
