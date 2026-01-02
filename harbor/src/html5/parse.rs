@@ -1,8 +1,12 @@
-use crate::html5;
+use crate::html5::dom::*;
 
 /// This is likely a temporary file and will be merged with some other code when I understand what
 /// it is intended to integrate with. Until then, this is an independent implementation of an HTML5
 /// parser.
+
+struct _Document {
+    document: Document,
+}
 
 fn preprocess_input(input: &String) -> String {
     input.replace("\r\n", "\n").replace("\r", "\n")
@@ -186,9 +190,9 @@ impl InputStream {
 
 #[derive(Clone, Debug)]
 pub struct Tag {
-    name: String,
-    is_self_closing: bool,
-    attributes: Vec<(String, String)>,
+    pub name: String,
+    pub is_self_closing: bool,
+    pub attributes: Vec<(String, String)>,
 }
 
 impl Tag {
@@ -336,6 +340,7 @@ pub enum ParseError {
     SurrogateCharacterReference,
     NoncharacterCharacterReference,
     ControlCharacterReference,
+    Custom(&'static str),
 }
 
 #[derive(Clone, PartialEq)]
@@ -448,7 +453,112 @@ pub enum InsertMode {
 }
 
 impl InsertMode {
-    pub fn handle_initial(&self, tok: &mut Tokenizer) {}
+    pub fn handle_initial(&self, tokenizer: &mut Tokenizer, token: Token) -> bool {
+        match token {
+            Token::Character('\u{0009}' | '\u{000A}' | '\u{000C}' | '\u{000D}' | '\u{0020}') => {}
+            Token::Comment(data) => {
+                tokenizer.document.document._insert_comment(data.as_str());
+            }
+            Token::DOCTYPE(doctype) => {
+                if doctype.name.as_ref().unwrap().to_ascii_lowercase() != "html"
+                    || doctype.public_identifier.is_some()
+                    || doctype
+                        .system_identifier
+                        .as_ref()
+                        .is_some_and(|idtfr| idtfr.as_str() != "about:legacy-compat")
+                {
+                    tokenizer.error(ParseError::UnexpectedCharacterAfterDOCTYPESystemIdentifier);
+                }
+
+                tokenizer
+                    .document
+                    .document
+                    ._node
+                    .append_child(&NodeKind::DocumentType(
+                        DocumentType::new(
+                            doctype.name.unwrap_or(String::new()).as_str(),
+                            &tokenizer.document.document,
+                        )
+                        .with_public_id(doctype.public_identifier.unwrap_or(String::new()).as_str())
+                        .with_system_id(
+                            doctype.system_identifier.unwrap_or(String::new()).as_str(),
+                        ),
+                    ));
+
+                // TODO: Set quirks mode if needed:
+                // Reference: https://html.spec.whatwg.org/multipage/parsing.html#the-initial-insertion-mode
+
+                tokenizer.insertion_mode = InsertMode::BeforeHTML;
+            }
+            _ => {
+                // TODO: Set quirks mode:
+
+                tokenizer.insertion_mode = InsertMode::BeforeHTML;
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    fn handle_before_html(&self, tokenizer: &mut Tokenizer, token: Token) -> bool {
+        match token {
+            Token::DOCTYPE(_) => {
+                tokenizer.error(ParseError::Custom(
+                    "Unexpected DOCTYPE token in before html insertion mode",
+                ));
+            }
+            Token::Comment(data) => {
+                tokenizer.document.document._insert_comment(data.as_str());
+            }
+            Token::Character('\u{0009}' | '\u{000A}' | '\u{000C}' | '\u{000D}' | '\u{0020}') => {}
+            Token::StartTag(ref tag) if tag.name.as_str() == "html" => {
+                let element = create_element_given_token(
+                    &token,
+                    "html",
+                    &NodeKind::Document(tokenizer.document.document.clone()),
+                );
+
+                tokenizer
+                    .document
+                    .document
+                    ._node
+                    .append_child(&NodeKind::Element(element.clone()));
+
+                tokenizer.open_elements_stack.push(element);
+
+                tokenizer.insertion_mode = InsertMode::BeforeHead;
+            }
+            Token::EndTag(Tag { name, .. })
+                if !matches!(name.as_str(), "head" | "body" | "html" | "br") =>
+            {
+                tokenizer.error(ParseError::Custom(
+                    "Unexpected end tag token in before html insertion mode",
+                ));
+            }
+            _ => {
+                let element = create_element_given_token(
+                    &Token::StartTag(Tag::new(&String::from("html"))),
+                    "html",
+                    &NodeKind::Document(tokenizer.document.document.clone()),
+                );
+
+                tokenizer
+                    .document
+                    .document
+                    ._node
+                    .append_child(&NodeKind::Element(element.clone()));
+
+                tokenizer.open_elements_stack.push(element);
+
+                tokenizer.insertion_mode = InsertMode::BeforeHead;
+
+                return false;
+            }
+        }
+
+        return true;
+    }
 }
 
 pub struct Tokenizer<'a> {
@@ -471,7 +581,9 @@ pub struct Tokenizer<'a> {
     temporary_buffer: String,
     character_reference_code: u32,
 
-    document: html5::Document,
+    document: _Document,
+
+    open_elements_stack: Vec<Element>,
 
     pub emitted_tokens: Vec<Token>,
 }
@@ -492,7 +604,10 @@ impl<'a> Tokenizer<'a> {
             temporary_buffer: String::new(),
             character_reference_code: 0,
             // Initialize an empty document
-            document: html5::Document::new(html5::Origin::Opaque),
+            document: _Document {
+                document: Document::new(Origin::Opaque),
+            },
+            open_elements_stack: vec![],
             emitted_tokens: vec![],
         }
     }
@@ -521,6 +636,10 @@ impl<'a> Tokenizer<'a> {
             }
             None => false,
         }
+    }
+
+    fn adjusted_current_node(&self) -> Option<&Element> {
+        self.open_elements_stack.last()
     }
 
     fn emit(&mut self, token: Token) {

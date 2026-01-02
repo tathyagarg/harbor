@@ -1,0 +1,897 @@
+use crate::{
+    html5::parse::Token,
+    http::{self, url::Serializable},
+};
+
+type DOMString = String;
+type USVString = String;
+
+#[derive(Clone)]
+pub enum NodeKind {
+    Node(Node),
+    Element(Element),
+    Text(Text),
+    Comment(Comment),
+    DocumentType(DocumentType),
+    Document(Document),
+}
+
+impl NodeKind {
+    pub fn node(&self) -> &Node {
+        match self {
+            NodeKind::Node(n) => n,
+            NodeKind::Element(e) => &e._node,
+            NodeKind::Text(t) => &t._character_data._node,
+            NodeKind::Comment(c) => &c._character_data._node,
+            NodeKind::DocumentType(dt) => &dt._node,
+            NodeKind::Document(d) => &d._node,
+        }
+    }
+
+    pub fn node_mut(&mut self) -> &mut Node {
+        match self {
+            NodeKind::Node(n) => n,
+            NodeKind::Element(e) => &mut e._node,
+            NodeKind::Text(t) => &mut t._character_data._node,
+            NodeKind::Comment(c) => &mut c._character_data._node,
+            NodeKind::DocumentType(dt) => &mut dt._node,
+            NodeKind::Document(d) => &mut d._node,
+        }
+    }
+
+    pub fn set_parent(&mut self, parent: Option<Box<Node>>) {
+        self.node_mut()._parent_node = parent;
+    }
+
+    pub fn custom_element_registry(&self) -> Option<&CustomElementRegistry> {
+        match self {
+            NodeKind::Document(d) => d._custom_element_registry.as_ref(),
+            NodeKind::Element(e) => todo!("custom element registry for Element"),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq)]
+pub enum NodeType {
+    Element = 1,
+    Attribute = 2,
+    Text = 3,
+    CDataSection = 4,
+    EntityReference = 5,
+    Entity = 6,
+    ProcessingInstruction = 7,
+    Comment = 8,
+    Document = 9,
+    DocumentType = 10,
+    DocumentFragment = 11,
+    Notation = 12,
+}
+
+#[derive(Clone)]
+pub struct NodeList {
+    _nodes: Vec<NodeKind>,
+}
+
+impl NodeList {
+    pub fn new() -> Self {
+        Self { _nodes: vec![] }
+    }
+
+    pub fn length(&self) -> usize {
+        self._nodes.len()
+    }
+
+    pub fn item(&self, index: usize) -> Option<&NodeKind> {
+        self._nodes.get(index)
+    }
+
+    pub fn iter(&self) -> std::slice::Iter<'_, NodeKind> {
+        self._nodes.iter()
+    }
+}
+
+#[derive(Clone)]
+pub struct Node {
+    pub _node_type: NodeType,
+    pub _node_name: DOMString,
+
+    pub _base_uri: DOMString,
+
+    /// The Document this Node belongs to
+    /// Although ideally this would be a weak reference to avoid circular references,
+    /// for simplicity we use an Option<Document> here.
+    pub node_document: Option<Document>,
+
+    _parent_node: Option<Box<Node>>,
+    _child_nodes: NodeList,
+}
+
+trait INode {
+    fn new() -> Self
+    where
+        Self: Sized;
+
+    fn node_type(&self) -> u16;
+    fn node_name(&self) -> DOMString;
+}
+
+impl Node {
+    pub fn base_uri(&self) -> String {
+        let url = self.node_document.as_ref().unwrap().document_base_url();
+        url.serialize()
+    }
+
+    pub fn parent_node(&self) -> Option<&Box<Node>> {
+        self._parent_node.as_ref()
+    }
+
+    pub fn has_child_nodes(&self) -> bool {
+        !self._child_nodes._nodes.is_empty()
+    }
+
+    pub fn child_nodes(&self) -> &NodeList {
+        &self._child_nodes
+    }
+
+    pub fn first_child(&self) -> Option<&NodeKind> {
+        self._child_nodes.item(0)
+    }
+
+    pub fn last_child(&self) -> Option<&NodeKind> {
+        let len = self._child_nodes.length();
+        if len == 0 {
+            None
+        } else {
+            self._child_nodes.item(len - 1)
+        }
+    }
+
+    pub fn append_node_child(&mut self, child: Box<&mut Node>) {
+        child._parent_node = Some(Box::new(self.clone()));
+
+        self._child_nodes
+            ._nodes
+            .push(NodeKind::Node((*child).clone()));
+    }
+
+    pub fn append_child(&mut self, child: &NodeKind) {
+        let mut new_child = match child {
+            NodeKind::Node(n) => NodeKind::Node(n.clone()),
+            NodeKind::Element(e) => NodeKind::Element(e.clone()),
+            NodeKind::Text(t) => NodeKind::Text(t.clone()),
+            NodeKind::Comment(c) => NodeKind::Comment(c.clone()),
+            NodeKind::DocumentType(dt) => NodeKind::DocumentType(dt.clone()),
+            NodeKind::Document(d) => NodeKind::Document(d.clone()),
+        };
+
+        new_child.set_parent(Some(Box::new(self.clone())));
+        self._child_nodes._nodes.push(new_child);
+    }
+}
+
+#[derive(Clone)]
+pub struct CharacterData {
+    _node: Box<Node>,
+
+    pub data: DOMString,
+}
+
+impl CharacterData {
+    pub fn length(&self) -> usize {
+        self.data.len()
+    }
+
+    pub fn substring_data(&self, offset: usize, count: usize) -> DOMString {
+        let end = std::cmp::min(offset + count, self.data.len());
+        self.data[offset..end].to_string()
+    }
+
+    pub fn append_data(&mut self, data: &str) {
+        self.data.push_str(data);
+    }
+
+    pub fn insert_data(&mut self, offset: usize, data: &str) {
+        if offset <= self.data.len() {
+            self.data.insert_str(offset, data);
+        }
+    }
+
+    pub fn delete_data(&mut self, offset: usize, count: usize) {
+        let end = std::cmp::min(offset + count, self.data.len());
+        if offset < end {
+            self.data.replace_range(offset..end, "");
+        }
+    }
+
+    pub fn replace_data(&mut self, offset: usize, count: usize, data: &str) {
+        let end = std::cmp::min(offset + count, self.data.len());
+        if offset < end {
+            self.data.replace_range(offset..end, data);
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct Text {
+    _character_data: CharacterData,
+}
+
+impl Text {
+    pub fn new(data: &str, document: &Document) -> Self {
+        Self {
+            _character_data: CharacterData {
+                _node: Box::new(Node {
+                    _node_type: NodeType::Text,
+                    _node_name: "#text".to_string(),
+                    _base_uri: document.document_base_url().serialize(),
+                    node_document: Some(document.clone()),
+                    _parent_node: None,
+                    _child_nodes: NodeList::new(),
+                }),
+                data: data.to_string(),
+            },
+        }
+    }
+
+    pub fn split_text(&mut self, offset: usize) -> Text {
+        let original_data = &self._character_data.data;
+        let split_data = original_data[offset..].to_string();
+        self._character_data.data = original_data[..offset].to_string();
+
+        Text::new(
+            &split_data,
+            self._character_data._node.node_document.as_ref().unwrap(),
+        )
+    }
+}
+
+impl INode for Text {
+    fn new() -> Self
+    where
+        Self: Sized,
+    {
+        Self::new("", &Document::default())
+    }
+
+    fn node_type(&self) -> u16 {
+        NodeType::Text as u16
+    }
+
+    fn node_name(&self) -> DOMString {
+        DOMString::from("#text")
+    }
+}
+
+#[derive(Clone)]
+pub struct Comment {
+    _character_data: CharacterData,
+}
+
+impl Comment {
+    pub fn new(data: &str, document: &Document) -> Self {
+        Self {
+            _character_data: CharacterData {
+                _node: Box::new(Node {
+                    _node_type: NodeType::Comment,
+                    _node_name: "#comment".to_string(),
+                    _base_uri: document.document_base_url().serialize(),
+                    node_document: Some(document.clone()),
+                    _parent_node: None,
+                    _child_nodes: NodeList::new(),
+                }),
+                data: data.to_string(),
+            },
+        }
+    }
+}
+
+impl INode for Comment {
+    fn new() -> Self
+    where
+        Self: Sized,
+    {
+        Self::new("", &Document::default())
+    }
+
+    fn node_type(&self) -> u16 {
+        NodeType::Comment as u16
+    }
+
+    fn node_name(&self) -> DOMString {
+        DOMString::from("#comment")
+    }
+}
+
+#[derive(Clone)]
+pub struct DocumentType {
+    _node: Box<Node>,
+
+    _name: DOMString,
+    _public_id: DOMString,
+    _system_id: DOMString,
+}
+
+impl INode for DocumentType {
+    fn new() -> Self
+    where
+        Self: Sized,
+    {
+        Self::new("", &Document::default())
+    }
+
+    fn node_type(&self) -> u16 {
+        NodeType::DocumentType as u16
+    }
+
+    fn node_name(&self) -> DOMString {
+        self._name.clone()
+    }
+}
+
+impl DocumentType {
+    pub fn new(name: &str, document: &Document) -> Self {
+        Self {
+            _node: Box::new(Node {
+                _node_type: NodeType::DocumentType,
+                _node_name: name.to_string(),
+                _base_uri: document.document_base_url().serialize(),
+                node_document: Some(document.clone()),
+                _parent_node: None,
+                _child_nodes: NodeList::new(),
+            }),
+            _name: name.to_string(),
+            _public_id: String::new(),
+            _system_id: String::new(),
+        }
+    }
+
+    pub fn with_public_id(mut self, public_id: &str) -> Self {
+        self._public_id = public_id.to_string();
+        self
+    }
+
+    pub fn with_system_id(mut self, system_id: &str) -> Self {
+        self._system_id = system_id.to_string();
+        self
+    }
+
+    pub fn name(&self) -> &str {
+        &self._name
+    }
+
+    pub fn public_id(&self) -> &str {
+        &self._public_id
+    }
+
+    pub fn system_id(&self) -> &str {
+        &self._system_id
+    }
+}
+
+#[derive(Clone)]
+struct CustomElementDefinition {
+    // Placeholder for custom element definition properties
+    name: String,
+    local_name: String,
+    // TODO: Add more fields as per spec:
+    // https://html.spec.whatwg.org/multipage/custom-elements.html#custom-element-definition
+}
+
+#[derive(Clone)]
+pub struct CustomElementRegistry {
+    pub is_scoped: bool,
+
+    pub scoped_document_set: Vec<Document>,
+    pub definitions: Vec<CustomElementDefinition>,
+}
+
+impl CustomElementRegistry {
+    pub fn new(is_scoped: bool) -> Self {
+        Self {
+            is_scoped,
+            scoped_document_set: vec![],
+            definitions: vec![],
+        }
+    }
+}
+
+fn lookup_definition<'a>(
+    _registry: Option<&'a CustomElementRegistry>,
+    _local_name: &str,
+    _namespace: &Option<String>,
+    is: &Option<String>,
+) -> Option<&'a CustomElementDefinition> {
+    if _registry.is_none() {
+        return None;
+    }
+
+    if _namespace.is_none()
+        || _namespace
+            .as_ref()
+            .is_some_and(|n| n != "http://www.w3.org/1999/xhtml")
+    {
+        return None;
+    }
+
+    let registry = _registry.unwrap();
+    for definition in &registry.definitions {
+        // Placeholder for matching logic
+        // if definition.matches(local_name) {
+        //     return Some(definition);
+        // }
+    }
+
+    for definition in &registry.definitions {
+        // Placeholder for matching logic with 'is' attribute
+        // if let Some(is_value) = is {
+        //     if definition.matches_is(is_value, local_name) {
+        //         return Some(definition);
+        //     }
+        // }
+    }
+
+    return None;
+}
+
+pub enum CustomElementRegistryOrDefault {
+    Default,
+    Registry(CustomElementRegistry),
+}
+
+#[derive(Clone)]
+pub struct Element {
+    _node: Box<Node>,
+
+    pub namespace: Option<DOMString>,
+    pub namespace_prefix: Option<DOMString>,
+    pub local_name: DOMString,
+
+    pub custom_element_registry: Option<CustomElementRegistry>,
+    pub custom_element_state: DOMString,
+    // custom element definition
+    pub is_value: Option<DOMString>,
+}
+
+impl Element {
+    pub fn new(
+        document: &Document,
+        local_name: String,
+        namespace: Option<String>,
+        prefix: Option<String>,
+        is: Option<String>,
+        synchronous_custom_elements: Option<bool>,
+        _registry: Option<CustomElementRegistryOrDefault>,
+    ) -> Element {
+        let registry = match _registry {
+            Some(CustomElementRegistryOrDefault::Registry(reg)) => Some(reg),
+            Some(CustomElementRegistryOrDefault::Default) => {
+                document._custom_element_registry.clone()
+            }
+            None => None,
+        };
+
+        let definition = lookup_definition(registry.as_ref(), &local_name, &namespace, &is);
+
+        if definition
+            .as_ref()
+            .is_some_and(|def| def.name != local_name)
+        {
+            let result = Element::create_element_internal::<Element>(
+                document,
+                namespace,
+                prefix,
+                &local_name,
+                "custom".to_string(),
+                &is,
+                registry.as_ref(),
+            );
+
+            if synchronous_custom_elements.unwrap_or(false) {
+                todo!("upgrade the element to a custom element immediately");
+            } else {
+                todo!("enqueue the element for upgrade");
+            }
+
+            return result;
+        } else if definition.is_some() {
+            todo!("handle the case where the definition exists");
+        } else {
+            return Element::create_element_internal::<Element>(
+                document,
+                namespace,
+                prefix,
+                &local_name,
+                "uncustomized".to_string(),
+                &is,
+                registry.as_ref(),
+            );
+        }
+    }
+
+    fn create_element_internal<T: IElement>(
+        document: &Document,
+        namespace: Option<String>,
+        prefix: Option<String>,
+        local_name: &String,
+        state: String,
+        is: &Option<String>,
+        _registry: Option<&CustomElementRegistry>,
+    ) -> T {
+        let mut element = T::new()
+            .with_namespace(&namespace)
+            .with_prefix(&prefix)
+            .with_local_name(local_name)
+            .with_custom_element_state(&state)
+            .with_is_value(is)
+            .with_custom_element_registry(&_registry.cloned());
+
+        element.node_mut().node_document = Some(document.clone());
+
+        // assert!(element attribute list is empty)
+
+        element
+    }
+}
+
+impl INode for Element {
+    fn new() -> Self
+    where
+        Self: Sized,
+    {
+        Self {
+            _node: Box::new(Node {
+                _node_type: NodeType::Element,
+                _node_name: "".to_string(),
+                _base_uri: "".to_string(),
+                node_document: None,
+                _parent_node: None,
+                _child_nodes: NodeList::new(),
+            }),
+            namespace: None,
+            namespace_prefix: None,
+            local_name: "".to_string(),
+            custom_element_state: "".to_string(),
+            custom_element_registry: None,
+            is_value: None,
+        }
+    }
+
+    fn node_type(&self) -> u16 {
+        NodeType::Element as u16
+    }
+
+    fn node_name(&self) -> DOMString {
+        // Placeholder implementation
+        unimplemented!()
+    }
+}
+
+trait IElement {
+    fn new() -> Self
+    where
+        Self: Sized;
+
+    fn with_namespace(self, namespace: &Option<String>) -> Self
+    where
+        Self: Sized;
+
+    fn with_prefix(self, prefix: &Option<String>) -> Self
+    where
+        Self: Sized;
+
+    fn with_local_name(self, local_name: &str) -> Self
+    where
+        Self: Sized;
+
+    fn with_custom_element_state(self, state: &str) -> Self
+    where
+        Self: Sized;
+
+    fn with_custom_element_registry(self, registry: &Option<CustomElementRegistry>) -> Self
+    where
+        Self: Sized;
+
+    fn with_is_value(self, is: &Option<String>) -> Self
+    where
+        Self: Sized;
+
+    fn node_mut(&mut self) -> &mut Node;
+}
+
+impl IElement for Element {
+    fn new() -> Self
+    where
+        Self: Sized,
+    {
+        Element::new(
+            &Document::default(),
+            "".to_string(),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+    }
+
+    fn with_namespace(mut self, namespace: &Option<String>) -> Self
+    where
+        Self: Sized,
+    {
+        self.namespace = namespace.clone();
+        self
+    }
+
+    fn with_prefix(mut self, prefix: &Option<String>) -> Self
+    where
+        Self: Sized,
+    {
+        self.namespace_prefix = prefix.clone();
+        self
+    }
+
+    fn with_local_name(mut self, local_name: &str) -> Self
+    where
+        Self: Sized,
+    {
+        self.local_name = local_name.to_string();
+        self
+    }
+
+    fn with_custom_element_state(mut self, state: &str) -> Self
+    where
+        Self: Sized,
+    {
+        self.custom_element_state = state.to_string();
+        self
+    }
+
+    fn with_custom_element_registry(mut self, registry: &Option<CustomElementRegistry>) -> Self
+    where
+        Self: Sized,
+    {
+        self.custom_element_registry = registry.clone();
+        self
+    }
+
+    fn with_is_value(mut self, is: &Option<String>) -> Self
+    where
+        Self: Sized,
+    {
+        self.is_value = is.clone();
+        self
+    }
+
+    fn node_mut(&mut self) -> &mut Node {
+        &mut self._node
+    }
+}
+
+#[derive(Clone)]
+pub enum Origin {
+    Opaque,
+    Tuple(
+        String,
+        http::url::Host,
+        Option<u16>,
+        Option<http::url::Domain>,
+    ),
+}
+
+#[derive(Clone)]
+pub struct DOMImplementation {
+    // Placeholder for DOMImplementation properties and methods
+}
+
+#[derive(Clone)]
+pub struct Document {
+    pub _node: Box<Node>,
+
+    _encoding: &'static encoding_rs::Encoding,
+
+    _content_type: &'static str,
+    _url: http::url::URL,
+    _origin: Origin,
+
+    _type: &'static str,
+    _mode: &'static str,
+
+    _allow_declarative_shadow_roots: bool,
+
+    _custom_element_registry: Option<CustomElementRegistry>,
+
+    _implementation: DOMImplementation,
+
+    parser_cannot_change_mode: bool,
+}
+
+impl Default for Document {
+    /// Creates a new Document with default values.
+    /// According to the HTML5 specification:
+    /// > Unless stated otherwise, a document’s encoding is the utf-8 encoding, content type is "application/xml", URL is "about:blank", origin is an opaque origin, type is "xml", mode is "no-quirks", allow declarative shadow roots is false, and custom element registry is null.
+    fn default() -> Self {
+        let mut document = Self {
+            _node: Box::new(Node {
+                _node_type: NodeType::Document,
+                _node_name: "#document".to_string(),
+                _base_uri: "".to_string(),
+                node_document: None,
+                _parent_node: None,
+                _child_nodes: NodeList::new(),
+            }),
+            _encoding: encoding_rs::Encoding::for_label(b"utf-8").unwrap(),
+
+            _content_type: "application/xml",
+            _url: http::url::URL::pure_parse(String::from("about:blank")).unwrap(),
+            _origin: Origin::Opaque,
+
+            _type: "xml",
+            _mode: "no-quirks",
+
+            _allow_declarative_shadow_roots: false,
+
+            _custom_element_registry: None,
+
+            _implementation: DOMImplementation {},
+
+            parser_cannot_change_mode: false,
+        };
+
+        document._node.node_document = Some(document.clone());
+        document.ensure_maintains_integrity();
+
+        document
+    }
+}
+
+impl Document {
+    /// Creates a new Document with the specified origin.
+    ///
+    /// NOTE: Ideally, the origin would be derived according to the spec
+    /// However, for simplicity, we accept an Origin parameter.
+    ///
+    /// TODO: Implement according to spec:
+    /// > ... set this’s origin to the origin of current global object’s associated Document.
+    pub fn new(origin: Origin) -> Self {
+        Self {
+            _origin: origin,
+            ..Self::default()
+        }
+    }
+
+    fn ensure_maintains_integrity(&self) {
+        assert!(matches!(self._type, "html" | "xml"));
+        assert!(matches!(
+            self._mode,
+            "no-quirks" | "quirks" | "limited-quirks"
+        ));
+    }
+
+    pub fn is_xml(&self) -> bool {
+        self._type == "xml"
+    }
+
+    pub fn is_html(&self) -> bool {
+        self._type == "html"
+    }
+
+    pub fn is_quirks_mode(&self) -> bool {
+        self._mode == "quirks"
+    }
+
+    pub fn is_no_quirks_mode(&self) -> bool {
+        self._mode == "no-quirks"
+    }
+
+    pub fn is_limited_quirks_mode(&self) -> bool {
+        self._mode == "limited-quirks"
+    }
+
+    pub fn implementation(&self) -> &DOMImplementation {
+        &self._implementation
+    }
+
+    pub fn url(&self) -> &http::url::URL {
+        &self._url
+    }
+
+    pub fn document_uri(&self) -> &http::url::URL {
+        &self._url
+    }
+
+    pub fn compat_mode(&self) -> &str {
+        if self.is_quirks_mode() {
+            "BackCompat"
+        } else {
+            "CSS1Compat"
+        }
+    }
+
+    pub fn character_set(&self) -> &'static encoding_rs::Encoding {
+        self._encoding
+    }
+
+    pub fn charset(&self) -> &'static encoding_rs::Encoding {
+        self._encoding
+    }
+
+    pub fn input_encoding(&self) -> &'static encoding_rs::Encoding {
+        self._encoding
+    }
+
+    pub fn content_type(&self) -> &str {
+        self._content_type
+    }
+
+    /// TODO: Implement according to spec:
+    /// The document base URL of a Document document is the URL record obtained by running these steps:
+    /// 1. If document has no descendant base element that has an href attribute, then return document's fallback base URL.
+    /// 2. Otherwise, return the frozen base URL of the first base element in document that has an href attribute, in tree order.
+    ///
+    /// NOTE: For simplicity, this implementation always returns the document's URL.
+    pub fn document_base_url(&self) -> &http::url::URL {
+        &self._url
+    }
+
+    pub fn doctype(&self) -> Option<&NodeKind> {
+        for child in self._node.child_nodes().iter() {
+            if let NodeKind::DocumentType(_) = child {
+                return Some(child);
+            }
+        }
+        None
+    }
+
+    pub fn _insert_comment(&mut self, data: &str) {
+        self._node
+            .append_child(&NodeKind::Comment(Comment::new(data, self)));
+    }
+}
+
+pub fn create_element_given_token(
+    token: &Token,
+    namespace: &str,
+    intended_parent: &NodeKind,
+) -> Element {
+    let intended_parent_node = intended_parent.node();
+
+    let tag = match &token {
+        Token::StartTag(t) => t,
+        Token::EndTag(t) => t,
+        _ => panic!("Token must be a StartTag or EndTag"),
+    };
+
+    let document = intended_parent_node.node_document.as_ref().unwrap();
+    let local_name = tag.name.clone();
+
+    let registry = intended_parent.custom_element_registry();
+    let defintion = lookup_definition(registry, &local_name, &Some(namespace.to_string()), &None);
+
+    let will_execute_script = defintion.is_some();
+
+    if will_execute_script {
+        todo!("handle custom element creation with script execution");
+    }
+
+    let mut element = Element::new(
+        document,
+        local_name,
+        Some(namespace.to_string()),
+        None,
+        None,
+        Some(will_execute_script),
+        match registry {
+            Some(r) => Some(CustomElementRegistryOrDefault::Registry(r.clone())),
+            None => None,
+        },
+    );
+
+    for attr in tag.attributes.iter() {
+        // TODO: Set attributes on the element
+    }
+
+    // TODO: other random bullshit
+
+    element
+}
