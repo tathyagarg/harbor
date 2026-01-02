@@ -820,9 +820,11 @@ impl Serializable for URLPath {
     }
 }
 
+pub type Domain = String;
+
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub enum Host {
-    Domain(String),
+    Domain(Domain),
     IPAddress(IPAddress),
     Opaque(Opaque),
     Empty,

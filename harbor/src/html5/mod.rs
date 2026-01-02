@@ -1,374 +1,312 @@
 #![allow(dead_code)]
+
+use crate::http::{self, url::Serializable};
 /// Custom implementation of the HTML5 spec:
 /// https://html.spec.whatwg.org/
-pub mod tokenize;
-
-/// Although USVString and String aren't identical, I am using this alias for the time being and
-/// may change it later.
-type USVString = String;
+pub mod parse;
 
 type DOMString = String;
+type USVString = String;
 
-/// Placeholder
-type ValueOfType = i32;
-
-#[derive(Clone)]
-enum DocumentReadyState {
-    Loading,
-    Interactive,
-    Complete,
-}
-
-#[derive(Clone)]
-pub struct Document {
-    // : Node
-    node: Box<Node>,
-
-    /// [PutForwards=href, LegacyUnforgeable] readonly attribute Location? location
-    location: Option<Location>,
-
-    /// attribute USVString domain
-    domain: USVString,
-
-    /// readonly attribute USVString referrer;
-    referrer_ro: USVString,
-
-    /// attribute USVString cookie;
-    cookie: USVString,
-
-    /// readonly attribute DOMString lastModified;
-    last_modified_ro: DOMString,
-
-    /// readonly attribute DocumentReadyState readyState;
-    ready_state_ro: DocumentReadyState,
-    // TODO: Rest of the goddamn attributes
-}
-
-trait IDocument {}
-
-/// [Exposed=Window]
-#[derive(Default, Clone)]
-pub struct Location {
-    /// [LegacyUnforgeable] stringifier attribute USVString href;
-    href: USVString,
-
-    /// [LegacyUnforgeable] readonly attribute USVString origin;
-    origin_ro: USVString,
-
-    /// [LegacyUnforgeable] attribute USVString protocol;
-    protocol: USVString,
-
-    /// [LegacyUnforgeable] attribute USVString host;
-    /// Returns the Location object's URL's host and port (if different from the default port for the scheme).
-    host: USVString,
-
-    /// [LegacyUnforgeable] attribute USVString hostname;
-    hostname: USVString,
-
-    /// [LegacyUnforgeable] attribute USVString port;
-    port: USVString,
-
-    /// [LegacyUnforgeable] attribute USVString pathname;
-    pathname: USVString,
-
-    /// [LegacyUnforgeable] attribute USVString search;
-    search: USVString,
-
-    /// [LegacyUnforgeable] attribute USVString hash;
-    hash: USVString,
-
-    /// [LegacyUnforgeable, SameObject] readonly attribute DOMStringList ancestorOrigins;
-    ancestor_origins: DOMStringList,
-
-    /// [[DefineOwnProperty]]("valueOf", { [[Value]]: valueOf, [[Writable]]: false, [[Enumerable]]: false, [[Configurable]]: false })
-    value_of: ValueOfType,
-}
-
-// TODO: Implement Location functions:
-// https://html.spec.whatwg.org/#the-location-interface
-impl Location {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// [LegacyUnforgeable] undefined assign(USVString url);
-    pub fn assign(&mut self, url: USVString) -> () {}
-
-    /// [LegacyUnforgeable] undefined replace(USVString url);
-    pub fn replace(&mut self, url: USVString) -> () {}
-
-    /// [LegacyUnforgeable] undefined reload();
-    pub fn reload(&mut self) -> () {}
-}
-
-/// [Exposed=(Window,Worker)]
-#[derive(Default, Clone)]
-pub struct DOMStringList {
-    list: Vec<DOMString>,
-}
-
-impl DOMStringList {
-    /// readonly attribute unsigned long length;
-    pub fn length(&self) -> u32 {
-        self.list.len() as u32
-    }
-
-    /// getter DOMString? item(unsigned long index);
-    fn item(&self, index: u32) -> Option<DOMString> {
-        if index + 1 > self.length() {
-            return None;
-        }
-
-        let elem = self.list.iter().nth(index as usize).unwrap().to_owned();
-        Some(elem)
-    }
-
-    /// boolean contains(DOMString string);
-    fn contains(&self, string: DOMString) -> bool {
-        self.list.contains(&string)
-    }
-}
-
-pub struct EventTarget {
-    listeners: Vec<i32>,
-}
-
-pub trait IEventTarget {
-    /// constructor();
-    fn new() -> Self;
-
-    /// undefined addEventListener(DOMString type, EventListener? callback, optional (AddEventListenerOptions or boolean) options = {});
-    fn add_event_listener(
-        &mut self,
-        type_: DOMString,
-        callback: Option<EventListener>,
-        options: Option<AddEventListenerOptions>,
-    ) -> ();
-
-    /// undefined removeEventListener(DOMString type, EventListener? callback, optional (EventListenerOptions or boolean) options = {});
-    fn remove_event_listener(
-        &mut self,
-        type_: DOMString,
-        callback: Option<EventListener>,
-        options: Option<EventListenerOptions>,
-    ) -> ();
-
-    /// boolean dispatchEvent(Event event);
-    fn dispatch_event(&self, event: Event) -> bool;
-}
-
-/// TODO
-impl IEventTarget for EventTarget {
-    fn new() -> Self {
-        todo!()
-    }
-
-    fn add_event_listener(
-        &mut self,
-        type_: DOMString,
-        callback: Option<EventListener>,
-        options: Option<AddEventListenerOptions>,
-    ) -> () {
-        todo!()
-    }
-
-    fn remove_event_listener(
-        &mut self,
-        type_: DOMString,
-        callback: Option<EventListener>,
-        options: Option<EventListenerOptions>,
-    ) -> () {
-        todo!()
-    }
-
-    fn dispatch_event(&self, event: Event) -> bool {
-        todo!()
-    }
-}
-
-pub struct EventListenerOptions {
-    /// boolean capture = false;
-    capture: bool,
-}
-
-pub struct AddEventListenerOptions {
-    /// : EventListenerOptions
-    event_listener_options: EventListenerOptions,
-
-    /// boolean passive;
-    passive: bool,
-
-    /// boolean once = false;
-    once: bool,
-
-    /// AbortSignal signal;
-    signal: AbortSignal,
-}
-
-/// TODO: Implement Abort signal
-pub struct AbortSignal {}
-
-pub struct EventListener {}
-
-pub trait IEventListener {
-    /// undefined handleEvent(Event event);
-    fn handle_event(&self, event: Event) -> ();
-}
-
-/// TODO
-pub struct Event {}
-
-pub trait IEvent {}
-
-#[derive(Clone)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum NodeType {
-    ElementNode = 1,
-    AttributeNode = 2,
-    TextNode = 3,
-    CDataSectionNode = 4,
-    EntityReferenceNode = 5, // legacy
-    EntityNode = 6,          // legacy
-    ProcessingInstructionNode = 7,
-    CommentNode = 8,
-    DocumentNode = 9,
-    DocumentTypeNode = 10,
-    DocumentFragmentNode = 11,
-    NotationNode = 12, // legacy
+    Element = 1,
+    Attribute = 2,
+    Text = 3,
+    CDataSection = 4,
+    EntityReference = 5,
+    Entity = 6,
+    ProcessingInstruction = 7,
+    Comment = 8,
+    Document = 9,
+    DocumentType = 10,
+    DocumentFragment = 11,
+    Notation = 12,
 }
 
-pub enum DocumentPosition {
-    Disconnected = 0x01,
-    Preceding = 0x02,
-    Following = 0x04,
-    Contains = 0x08,
-    ContainedBy = 0x10,
-    ImplementationSpecific = 0x20,
+#[derive(Clone)]
+pub struct NodeList {
+    _nodes: Vec<Box<Node>>,
+}
+
+impl NodeList {
+    pub fn new() -> Self {
+        Self { _nodes: vec![] }
+    }
+
+    pub fn length(&self) -> usize {
+        self._nodes.len()
+    }
+
+    pub fn item(&self, index: usize) -> Option<&Box<Node>> {
+        self._nodes.get(index)
+    }
+
+    pub fn iter(&self) -> std::slice::Iter<'_, Box<Node>> {
+        self._nodes.iter()
+    }
 }
 
 #[derive(Clone)]
 pub struct Node {
-    /// readonly attribute unsigned short nodeType;
-    node_type_ro: NodeType,
+    pub _node_type: NodeType,
+    pub _node_name: DOMString,
 
-    /// readonly attribute DOMString nodeName;
-    node_name_ro: DOMString,
+    pub _base_uri: DOMString,
 
-    /// readonly attribute boolean isConnected;
-    is_connected_ro: bool,
+    /// The Document this Node belongs to
+    /// Although ideally this would be a weak reference to avoid circular references,
+    /// for simplicity we use an Option<Document> here.
+    pub node_document: Option<Document>,
 
-    /// readonly attribute Document? ownerDocument;
-    owner_document_ro: Option<Document>,
-
-    /// readonly attribute Node? parentNode;
-    parent_node_ro: Box<Option<Node>>,
-
-    /// readonly attribute Element? parentElement;
-    /// TODO
-
-    /// [SameObject] readonly attribute NodeList childNodes;
-    child_nodes_ro: NodeList,
-
-    /// readonly attribute Node? firstChild;
-    first_child_ro: Box<Option<Node>>,
-
-    /// readonly attribute Node? lastChild;
-    last_child_ro: Box<Option<Node>>,
-
-    /// readonly attribute Node? previousSibling;
-    previous_sibling_ro: Box<Option<Node>>,
-
-    /// readonly attribute Node? nextSibling;
-    next_sibling_ro: Box<Option<Node>>,
-
-    /// [CEReactions] attribute DOMString? nodeValue;
-    node_value: Option<DOMString>,
-
-    /// [CEReactions] attribute DOMString? textContent;
-    text_content: Option<DOMString>,
-}
-
-struct GetRootNodeOptions {
-    composed: bool,
+    _parent_node: Option<Box<Node>>,
+    _child_nodes: NodeList,
 }
 
 trait INode {
-    /// Node getRootNode(optional GetRootNodeOptions options = {});
-    fn get_root_node(&self, options: Option<GetRootNodeOptions>) -> Node;
-
-    /// boolean hasChildNodes();
-    fn has_child_nodes(&self) -> bool;
-
-    /// [CEReactions] undefined normalize();
-    fn normalize(&mut self) -> ();
-
-    /// [CEReactions, NewObject] Node cloneNode(optional boolean subtree = false);
-    fn clone_node(&self, subtree: Option<bool>) -> Node;
-
-    /// boolean isEqualNode(Node? otherNode);
-    fn is_equal_node(&self, other_node: Option<&Node>) -> bool;
-
-    /// boolean isSameNode(Node? otherNode);
-    fn is_same_node(&self, other_node: Option<&Node>) -> bool;
-
-    /// unsigned short compareDocumentPosition(Node other);
-    fn compare_document_position(&self, other: &Node) -> DocumentPosition;
-
-    /// boolean contains(Node? other);
-    fn contains(&self, other: Option<&Node>) -> bool;
-
-    /// DOMString? lookupPrefix(DOMString? namespace);
-    fn lookup_prefix(&self, namespace: Option<DOMString>) -> Option<DOMString>;
-
-    /// DOMString? lookupNamespaceURI(DOMString? prefix);
-    fn lookup_namespace_uri(&self, prefix: Option<DOMString>) -> Option<DOMString>;
-
-    /// boolean isDefaultNamespace(DOMString? namespace);
-    fn is_default_namespace(&self, namespace: Option<DOMString>) -> bool;
-
-    /// [CEReactions] Node insertBefore(Node node, Node? child);
-    fn insert_before(&mut self, node: &Node, child: Option<&Node>) -> Node;
-
-    /// [CEReactions] Node appendChild(Node node);
-    fn append_child(&mut self, node: &Node) -> Node;
-
-    /// [CEReactions] Node replaceChild(Node node, Node child);
-    fn replace_child(&mut self, node: &Node, child: &Node) -> Node;
-
-    /// [CEReactions] Node removeChild(Node child);
-    fn remove_child(&mut self, child: &Node) -> Node;
-
-    /// readonly attribute USVString baseURI;
-    fn base_uri(&self) -> USVString;
+    fn node_type(&self) -> u16;
+    fn node_name(&self) -> &DOMString;
 }
 
-// impl INode for Node {
-//     fn base_uri(&self) -> USVString {
-//         self.owner_document_ro.unwrap()
-//     }
-// }
-
-/// [Exposed=Window]
-#[derive(Clone)]
-struct NodeList {
-    iterable: Vec<Node>,
-}
-
-trait INodeList {
-    fn item(&self, index: u32) -> Option<Node>;
-    fn length(&self) -> u32;
-}
-
-impl INodeList for NodeList {
-    fn item(&self, index: u32) -> Option<Node> {
-        if index + 1 > self.length() {
-            return None;
-        }
-
-        let elem = self.iterable.iter().nth(index as usize).unwrap().to_owned();
-        Some(elem)
+impl Node {
+    pub fn base_uri(&self) -> String {
+        let url = self.node_document.as_ref().unwrap().document_base_url();
+        url.serialize()
     }
 
-    fn length(&self) -> u32 {
-        self.iterable.len() as u32
+    pub fn parent_node(&self) -> Option<&Box<Node>> {
+        self._parent_node.as_ref()
+    }
+
+    pub fn has_child_nodes(&self) -> bool {
+        !self._child_nodes._nodes.is_empty()
+    }
+
+    pub fn child_nodes(&self) -> &NodeList {
+        &self._child_nodes
+    }
+
+    pub fn first_child(&self) -> Option<&Box<Node>> {
+        self._child_nodes.item(0)
+    }
+
+    pub fn last_child(&self) -> Option<&Box<Node>> {
+        let len = self._child_nodes.length();
+        if len == 0 {
+            None
+        } else {
+            self._child_nodes.item(len - 1)
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct CustomElementRegistry {
+    pub is_scoped: bool,
+
+    pub document_set: Vec<Document>,
+}
+
+pub struct Element {
+    _node: Box<Node>,
+
+    pub namespace: Option<DOMString>,
+    pub namespace_prefix: Option<DOMString>,
+    pub local_name: DOMString,
+
+    // custom element registry
+    pub custom_element_state: DOMString,
+    // custom element definition
+    // is value
+}
+
+impl Element {
+    pub fn new(
+        document: &Document,
+        local_name: String,
+        namespace: Option<String>,
+        prefix: Option<String>,
+        // is: Option<String>,
+        synchronous_custom_elements: Option<bool>,
+    ) -> Element {
+        todo!()
+    }
+}
+
+impl INode for Element {
+    fn node_type(&self) -> u16 {
+        NodeType::Element as u16
+    }
+
+    fn node_name(&self) -> &DOMString {
+        // Placeholder implementation
+        unimplemented!()
+    }
+}
+
+#[derive(Clone)]
+pub enum Origin {
+    Opaque,
+    Tuple(
+        String,
+        http::url::Host,
+        Option<u16>,
+        Option<http::url::Domain>,
+    ),
+}
+
+#[derive(Clone)]
+pub struct DOMImplementation {
+    // Placeholder for DOMImplementation properties and methods
+}
+
+#[derive(Clone)]
+pub struct Document {
+    _node: Box<Node>,
+
+    _encoding: &'static encoding_rs::Encoding,
+
+    _content_type: &'static str,
+    _url: http::url::URL,
+    _origin: Origin,
+
+    _type: &'static str,
+    _mode: &'static str,
+
+    _allow_declarative_shadow_roots: bool,
+
+    _custom_element_registry: Option<CustomElementRegistry>,
+
+    _implementation: DOMImplementation,
+}
+
+impl Default for Document {
+    /// Creates a new Document with default values.
+    /// According to the HTML5 specification:
+    /// > Unless stated otherwise, a document’s encoding is the utf-8 encoding, content type is "application/xml", URL is "about:blank", origin is an opaque origin, type is "xml", mode is "no-quirks", allow declarative shadow roots is false, and custom element registry is null.
+    fn default() -> Self {
+        let mut document = Self {
+            _node: Box::new(Node {
+                _node_type: NodeType::Document,
+                _node_name: "#document".to_string(),
+                _base_uri: "".to_string(),
+                node_document: None,
+                _parent_node: None,
+                _child_nodes: NodeList::new(),
+            }),
+            _encoding: encoding_rs::Encoding::for_label(b"utf-8").unwrap(),
+            _content_type: "application/xml",
+            _url: http::url::URL::pure_parse(String::from("about:blank")).unwrap(),
+            _origin: Origin::Opaque,
+            _type: "xml",
+            _mode: "no-quirks",
+            _allow_declarative_shadow_roots: false,
+            _custom_element_registry: None,
+            _implementation: DOMImplementation {},
+        };
+
+        document._node.node_document = Some(document.clone());
+        document.ensure_maintains_integrity();
+
+        document
+    }
+}
+
+impl Document {
+    /// Creates a new Document with the specified origin.
+    ///
+    /// NOTE: Ideally, the origin would be derived according to the spec
+    /// However, for simplicity, we accept an Origin parameter.
+    ///
+    /// TODO: Implement according to spec:
+    /// > ... set this’s origin to the origin of current global object’s associated Document.
+    pub fn new(origin: Origin) -> Self {
+        Self {
+            _origin: origin,
+            ..Self::default()
+        }
+    }
+
+    fn ensure_maintains_integrity(&self) {
+        assert!(matches!(self._type, "html" | "xml"));
+        assert!(matches!(
+            self._mode,
+            "no-quirks" | "quirks" | "limited-quirks"
+        ));
+    }
+
+    pub fn is_xml(&self) -> bool {
+        self._type == "xml"
+    }
+
+    pub fn is_html(&self) -> bool {
+        self._type == "html"
+    }
+
+    pub fn is_quirks_mode(&self) -> bool {
+        self._mode == "quirks"
+    }
+
+    pub fn is_no_quirks_mode(&self) -> bool {
+        self._mode == "no-quirks"
+    }
+
+    pub fn is_limited_quirks_mode(&self) -> bool {
+        self._mode == "limited-quirks"
+    }
+
+    pub fn implementation(&self) -> &DOMImplementation {
+        &self._implementation
+    }
+
+    pub fn url(&self) -> &http::url::URL {
+        &self._url
+    }
+
+    pub fn document_uri(&self) -> &http::url::URL {
+        &self._url
+    }
+
+    pub fn compat_mode(&self) -> &str {
+        if self.is_quirks_mode() {
+            "BackCompat"
+        } else {
+            "CSS1Compat"
+        }
+    }
+
+    pub fn character_set(&self) -> &'static encoding_rs::Encoding {
+        self._encoding
+    }
+
+    pub fn charset(&self) -> &'static encoding_rs::Encoding {
+        self._encoding
+    }
+
+    pub fn input_encoding(&self) -> &'static encoding_rs::Encoding {
+        self._encoding
+    }
+
+    pub fn content_type(&self) -> &str {
+        self._content_type
+    }
+
+    /// TODO: Implement according to spec:
+    /// The document base URL of a Document document is the URL record obtained by running these steps:
+    /// 1. If document has no descendant base element that has an href attribute, then return document's fallback base URL.
+    /// 2. Otherwise, return the frozen base URL of the first base element in document that has an href attribute, in tree order.
+    ///
+    /// NOTE: For simplicity, this implementation always returns the document's URL.
+    pub fn document_base_url(&self) -> &http::url::URL {
+        &self._url
+    }
+
+    pub fn doctype(&self) -> Option<&Box<Node>> {
+        for child in self._node.child_nodes().iter() {
+            if child._node_type == NodeType::DocumentType {
+                return Some(child);
+            }
+        }
+        None
     }
 }

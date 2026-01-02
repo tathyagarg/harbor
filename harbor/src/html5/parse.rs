@@ -1,3 +1,5 @@
+use crate::html5;
+
 /// This is likely a temporary file and will be merged with some other code when I understand what
 /// it is intended to integrate with. Until then, this is an independent implementation of an HTML5
 /// parser.
@@ -420,11 +422,43 @@ pub enum TokenizerState {
     NumericCharacterReferenceEnd = 80,
 }
 
+#[derive(Debug)]
+pub enum InsertMode {
+    Initial,
+    BeforeHTML,
+    BeforeHead,
+    InHead,
+    InHeadNoScript,
+    AfterHead,
+    InBody,
+    Text,
+    InTable,
+    InTableText,
+    InCaption,
+    InColumnGroup,
+    InTableBody,
+    InRow,
+    InCell,
+    InTemplate,
+    AfterBody,
+    InFrameset,
+    AfterFrameset,
+    AfterAfterBody,
+    AfterAfterFrameset,
+}
+
+impl InsertMode {
+    pub fn handle_initial(&self, tok: &mut Tokenizer) {}
+}
+
 pub struct Tokenizer<'a> {
     stream: &'a mut InputStream,
 
     state: TokenizerState,
     prev_state: TokenizerState,
+
+    insertion_mode: InsertMode,
+    original_insertion_mode: Option<InsertMode>,
 
     leave_callback: Option<Box<dyn Fn(&mut Tokenizer)>>,
 
@@ -437,6 +471,8 @@ pub struct Tokenizer<'a> {
     temporary_buffer: String,
     character_reference_code: u32,
 
+    document: html5::Document,
+
     pub emitted_tokens: Vec<Token>,
 }
 
@@ -446,6 +482,8 @@ impl<'a> Tokenizer<'a> {
             stream,
             state: TokenizerState::Data,
             prev_state: TokenizerState::Data,
+            insertion_mode: InsertMode::Initial,
+            original_insertion_mode: None,
             leave_callback: None,
             return_state: None,
             tag_token: None,
@@ -453,6 +491,8 @@ impl<'a> Tokenizer<'a> {
             doctype_token: None,
             temporary_buffer: String::new(),
             character_reference_code: 0,
+            // Initialize an empty document
+            document: html5::Document::new(html5::Origin::Opaque),
             emitted_tokens: vec![],
         }
     }

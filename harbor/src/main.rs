@@ -236,14 +236,17 @@ impl ApplicationHandler<State> for App {
 fn main() {
     env_logger::init();
 
-    let html_text = "<!DOCTYPE html><html><head><title>Test</title></head><body><h1>Hello, world!</h1></body></html>";
-    let mut stream = html5::tokenize::InputStream::new(String::from(html_text));
+    let html_text = "<!DOCTYPE html>\n<html>\n<head>\n<title>Test</title>\n</head>\n<body>\n<h1>Hello, world!</h1>\n<!-- line -->\n<hr/>\n</body>\n</html>";
+    let mut stream = html5::parse::InputStream::new(String::from(html_text));
 
-    let mut tokenizer = html5::tokenize::Tokenizer::new(&mut stream);
+    let mut tokenizer = html5::parse::Tokenizer::new(&mut stream);
 
     tokenizer.tokenize();
 
-    println!("Tokens: {:?}", tokenizer.emitted_tokens);
+    println!("Tokenizing:\n\n{}\n\n", html_text);
+    for (i, token) in tokenizer.emitted_tokens.iter().enumerate() {
+        println!("{}) {:?}", i + 1, token);
+    }
 
     // let url_target = String::from("https://arson.dev/");
     // println!("Parsing target: {}", url_target);
