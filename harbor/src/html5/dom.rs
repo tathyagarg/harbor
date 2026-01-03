@@ -1,5 +1,5 @@
 use crate::{
-    html5::parse::Token,
+    html5::{self, parse::Token},
     http::{self, url::Serializable},
 };
 
@@ -370,7 +370,7 @@ impl DocumentType {
 }
 
 #[derive(Clone)]
-struct CustomElementDefinition {
+pub struct CustomElementDefinition {
     // Placeholder for custom element definition properties
     name: String,
     local_name: String,
@@ -440,8 +440,85 @@ pub enum CustomElementRegistryOrDefault {
 }
 
 #[derive(Clone)]
+pub struct Attr {
+    _node: Box<Node>,
+
+    _namespace: Option<DOMString>,
+    _namespace_prefix: Option<DOMString>,
+    _local_name: DOMString,
+    _value: DOMString,
+
+    _element: Option<ElementID>,
+}
+
+impl Attr {
+    pub fn new(
+        namespace: Option<String>,
+        prefix: Option<String>,
+        local_name: String,
+        value: String,
+        element: Option<&Element>,
+        document: &Document,
+    ) -> Self {
+        Self {
+            _node: Box::new(Node {
+                _node_type: NodeType::Attribute,
+                _node_name: local_name.clone(),
+                _base_uri: document.document_base_url().serialize(),
+                node_document: Some(document.clone()),
+                _parent_node: None,
+                _child_nodes: NodeList::new(),
+            }),
+            _namespace: namespace,
+            _namespace_prefix: prefix,
+            _local_name: local_name,
+            _value: value,
+            _element: element.map(|e| e.id.clone()),
+        }
+    }
+
+    pub fn namespace_uri(&self) -> Option<&str> {
+        self._namespace.as_deref()
+    }
+
+    pub fn prefix(&self) -> Option<&str> {
+        self._namespace_prefix.as_deref()
+    }
+
+    pub fn local_name(&self) -> &str {
+        &self._local_name
+    }
+
+    pub fn value(&self) -> &str {
+        &self._value
+    }
+
+    /// Sets the value of the attribute.
+    /// The specification regarding this is SHIT, so I'm ignoring it
+    pub fn set_value(&mut self, value: &str) {
+        self._value = value.to_string();
+    }
+
+    pub fn owner_element(&self) -> &Option<ElementID> {
+        &self._element
+    }
+
+    pub fn specified(&self) -> bool {
+        true
+    }
+}
+
+pub type ElementID = String;
+
+pub enum ElementKind {
+    Element,
+}
+
+#[derive(Clone)]
 pub struct Element {
     _node: Box<Node>,
+
+    pub id: ElementID,
 
     pub namespace: Option<DOMString>,
     pub namespace_prefix: Option<DOMString>,
@@ -451,6 +528,8 @@ pub struct Element {
     pub custom_element_state: DOMString,
     // custom element definition
     pub is_value: Option<DOMString>,
+
+    attribute_list: Vec<Attr>,
 }
 
 impl Element {
@@ -548,12 +627,14 @@ impl INode for Element {
                 _parent_node: None,
                 _child_nodes: NodeList::new(),
             }),
+            id: "".to_string(),
             namespace: None,
             namespace_prefix: None,
             local_name: "".to_string(),
             custom_element_state: "".to_string(),
             custom_element_registry: None,
             is_value: None,
+            attribute_list: vec![],
         }
     }
 
@@ -567,7 +648,7 @@ impl INode for Element {
     }
 }
 
-trait IElement {
+pub trait IElement {
     fn new() -> Self
     where
         Self: Sized;
@@ -593,6 +674,10 @@ trait IElement {
         Self: Sized;
 
     fn with_is_value(self, is: &Option<String>) -> Self
+    where
+        Self: Sized;
+
+    fn with_id(self, id: &str) -> Self
     where
         Self: Sized;
 
@@ -660,6 +745,14 @@ impl IElement for Element {
         Self: Sized,
     {
         self.is_value = is.clone();
+        self
+    }
+
+    fn with_id(mut self, id: &str) -> Self
+    where
+        Self: Sized,
+    {
+        self.id = id.to_string();
         self
     }
 
@@ -887,8 +980,15 @@ pub fn create_element_given_token(
         },
     );
 
-    for attr in tag.attributes.iter() {
-        // TODO: Set attributes on the element
+    for (name, value) in tag.attributes.iter() {
+        element.attribute_list.push(Attr::new(
+            None,
+            None,
+            name.clone(),
+            value.clone(),
+            Some(&element),
+            document,
+        ));
     }
 
     // TODO: other random bullshit
