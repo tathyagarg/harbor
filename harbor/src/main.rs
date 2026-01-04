@@ -248,6 +248,9 @@ fn main() {
         println!("{}) {:?}", i + 1, token);
     }
 
+    println!("\nDocument Tree:\n");
+    println!("{:#?}", tokenizer.document.document()._node);
+
     // let url_target = String::from("https://arson.dev/");
     // println!("Parsing target: {}", url_target);
 

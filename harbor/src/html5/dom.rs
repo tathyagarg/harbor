@@ -1,3 +1,8 @@
+use std::fmt::Debug;
+use std::ops::Deref;
+use std::rc::Weak;
+use std::{cell::RefCell, rc::Rc};
+
 use crate::{
     html5::{HTML_NAMESPACE, parse::Token},
     http::{self, url::Serializable},
@@ -7,52 +12,45 @@ type DOMString = String;
 type USVString = String;
 
 pub struct InsertLocation {
-    parent: NodeKind,
+    parent: Rc<RefCell<NodeKind>>,
     pos: usize,
 }
 
 impl InsertLocation {
-    pub fn new(parent: NodeKind, pos: usize) -> InsertLocation {
-        InsertLocation { parent, pos }
+    pub fn new(parent: Rc<RefCell<NodeKind>>, pos: usize) -> Self {
+        Self { parent, pos }
     }
 
-    pub fn parent(&self) -> &NodeKind {
+    pub fn parent(&self) -> &Rc<RefCell<NodeKind>> {
         &self.parent
     }
 
-    pub fn node(&self) -> &Node {
-        self.parent.node()
-    }
-
-    pub fn preceding(&self) -> Option<&NodeKind> {
-        if self.pos == 0 {
-            None
-        } else {
-            self.parent.node().child_nodes().item(self.pos - 1)
-        }
-    }
-
-    pub fn preceding_mut(&mut self) -> Option<&mut NodeKind> {
+    pub fn preceding(&self) -> Option<Rc<RefCell<NodeKind>>> {
         if self.pos == 0 {
             None
         } else {
             self.parent
-                .node_mut()
-                .child_nodes_mut()
-                .item_mut(self.pos - 1)
+                .borrow()
+                .node()
+                .borrow()
+                .child_nodes()
+                .item(self.pos - 1)
+                .cloned()
         }
     }
 
     pub fn insert(&mut self, node: &NodeKind) {
         self.parent
-            .node_mut()
+            .borrow_mut()
+            .node()
+            .borrow_mut()
             .child_nodes_mut()
             .insert(self.pos, node);
         self.pos += 1;
     }
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NodeKind {
     Node(Node),
     Element(Element),
@@ -63,9 +61,9 @@ pub enum NodeKind {
 }
 
 impl NodeKind {
-    pub fn node(&self) -> &Node {
+    pub fn node(&self) -> &Rc<RefCell<Node>> {
         match self {
-            NodeKind::Node(n) => n,
+            NodeKind::Node(n) => panic!("NodeKind::Node does not contain a Rc<RefCell<Node>>"),
             NodeKind::Element(e) => &e._node,
             NodeKind::Text(t) => &t._character_data._node,
             NodeKind::Comment(c) => &c._character_data._node,
@@ -74,31 +72,37 @@ impl NodeKind {
         }
     }
 
-    pub fn node_mut(&mut self) -> &mut Node {
-        match self {
-            NodeKind::Node(n) => n,
-            NodeKind::Element(e) => &mut e._node,
-            NodeKind::Text(t) => &mut t._character_data._node,
-            NodeKind::Comment(c) => &mut c._character_data._node,
-            NodeKind::DocumentType(dt) => &mut dt._node,
-            NodeKind::Document(d) => &mut d._node,
-        }
-    }
+    // pub fn node_mut(&mut self) -> &mut Node {
+    //     match self {
+    //         NodeKind::Node(n) => n,
+    //         NodeKind::Element(e) => &mut e._node,
+    //         NodeKind::Text(t) => &mut t._character_data._node,
+    //         NodeKind::Comment(c) => &mut c._character_data._node,
+    //         NodeKind::DocumentType(dt) => &mut dt._node,
+    //         NodeKind::Document(_) => panic!("MUTABLE FUCK"),
+    //     }
+    // }
 
-    pub fn set_parent(&mut self, parent: Option<Box<Node>>) {
-        self.node_mut()._parent_node = parent;
+    pub fn set_parent(&mut self, parent: Option<Rc<RefCell<Node>>>) {
+        if parent.is_none() {
+            let mut node = self.node().borrow_mut();
+            node._parent_node = None;
+            return;
+        }
+        let mut node = self.node().borrow_mut();
+        node._parent_node = Some(Rc::downgrade(&parent.unwrap()));
     }
 
     pub fn custom_element_registry(&self) -> Option<&CustomElementRegistry> {
         match self {
             NodeKind::Document(d) => d._custom_element_registry.as_ref(),
-            NodeKind::Element(_) => todo!("custom element registry for Element"),
+            NodeKind::Element(e) => e.custom_element_registry.as_ref(),
             _ => None,
         }
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NodeType {
     Element = 1,
     Attribute = 2,
@@ -114,9 +118,9 @@ pub enum NodeType {
     Notation = 12,
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NodeList {
-    _nodes: Vec<NodeKind>,
+    _nodes: Vec<Rc<RefCell<NodeKind>>>,
 }
 
 impl NodeList {
@@ -128,24 +132,25 @@ impl NodeList {
         self._nodes.len()
     }
 
-    pub fn item(&self, index: usize) -> Option<&NodeKind> {
+    pub fn item(&self, index: usize) -> Option<&Rc<RefCell<NodeKind>>> {
         self._nodes.get(index)
     }
 
-    pub fn item_mut(&mut self, index: usize) -> Option<&mut NodeKind> {
+    pub fn item_mut(&mut self, index: usize) -> Option<&mut Rc<RefCell<NodeKind>>> {
         self._nodes.get_mut(index)
     }
 
     pub fn insert(&mut self, index: usize, node: &NodeKind) {
-        self._nodes.insert(index, node.clone());
+        self._nodes
+            .insert(index, Rc::new(RefCell::new(node.clone())));
     }
 
-    pub fn iter(&self) -> std::slice::Iter<'_, NodeKind> {
+    pub fn iter(&self) -> std::slice::Iter<'_, Rc<RefCell<NodeKind>>> {
         self._nodes.iter()
     }
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone)]
 pub struct Node {
     pub _node_type: NodeType,
     pub _node_name: DOMString,
@@ -155,10 +160,35 @@ pub struct Node {
     /// The Document this Node belongs to
     /// Although ideally this would be a weak reference to avoid circular references,
     /// for simplicity we use an Option<Document> here.
-    pub node_document: Option<Document>,
+    pub node_document: Option<Weak<RefCell<Document>>>,
 
-    _parent_node: Option<Box<Node>>,
+    _parent_node: Option<Weak<RefCell<Node>>>,
     _child_nodes: NodeList,
+}
+
+impl PartialEq for Node {
+    fn eq(&self, other: &Self) -> bool {
+        self._node_type == other._node_type
+            && self._node_name == other._node_name
+            && self._base_uri == other._base_uri
+            && self._child_nodes == other._child_nodes
+    }
+}
+
+impl Eq for Node {}
+
+impl Debug for Node {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Node")
+            .field("_node_type", &self._node_type)
+            // .field("_node_name", &self._node_name)
+            // .field("_base_uri", &self._base_uri)
+            .field("_parent_node", &self._parent_node)
+            .field("_child_nodes", &self._child_nodes)
+            .finish()?;
+
+        Ok(())
+    }
 }
 
 trait INode {
@@ -172,12 +202,20 @@ trait INode {
 
 impl Node {
     pub fn base_uri(&self) -> String {
-        let url = self.node_document.as_ref().unwrap().document_base_url();
-        url.serialize()
+        if let Some(document) = &self.node_document
+            && let Some(url) = document.upgrade()
+        {
+            return url.borrow().document_base_url().serialize();
+        }
+        self._base_uri.clone()
     }
 
-    pub fn parent_node(&self) -> Option<&Box<Node>> {
+    pub fn parent_node(&self) -> Option<&Weak<RefCell<Node>>> {
         self._parent_node.as_ref()
+    }
+
+    pub fn parent_node_mut(&mut self) -> Option<&mut Weak<RefCell<Node>>> {
+        self._parent_node.as_mut()
     }
 
     pub fn has_child_nodes(&self) -> bool {
@@ -192,11 +230,11 @@ impl Node {
         &mut self._child_nodes
     }
 
-    pub fn first_child(&self) -> Option<&NodeKind> {
+    pub fn first_child(&self) -> Option<&Rc<RefCell<NodeKind>>> {
         self._child_nodes.item(0)
     }
 
-    pub fn last_child(&self) -> Option<&NodeKind> {
+    pub fn last_child(&self) -> Option<&Rc<RefCell<NodeKind>>> {
         let len = self._child_nodes.length();
         if len == 0 {
             None
@@ -205,32 +243,69 @@ impl Node {
         }
     }
 
-    pub fn append_node_child(&mut self, child: Box<&mut Node>) {
-        child._parent_node = Some(Box::new(self.clone()));
+    pub fn append_child(parent: &Rc<RefCell<Node>>, child: Rc<RefCell<NodeKind>>) {
+        {
+            let mut child_borrow = child.borrow_mut();
+            child_borrow.set_parent(Some(Rc::clone(parent)));
+        }
 
-        self._child_nodes
-            ._nodes
-            .push(NodeKind::Node((*child).clone()));
+        let mut parent_borrow = parent.borrow_mut();
+        parent_borrow._child_nodes._nodes.push(child);
     }
 
-    pub fn append_child(&mut self, child: &NodeKind) {
-        let mut new_child = match child {
-            NodeKind::Node(n) => NodeKind::Node(n.clone()),
-            NodeKind::Element(e) => NodeKind::Element(e.clone()),
-            NodeKind::Text(t) => NodeKind::Text(t.clone()),
-            NodeKind::Comment(c) => NodeKind::Comment(c.clone()),
-            NodeKind::DocumentType(dt) => NodeKind::DocumentType(dt.clone()),
-            NodeKind::Document(d) => NodeKind::Document(d.clone()),
-        };
+    pub fn position_of_child(&self, child: &NodeKind) -> Option<usize> {
+        self._child_nodes
+            ._nodes
+            .iter()
+            .position(|n| n.borrow().deref() == child)
+    }
 
-        new_child.set_parent(Some(Box::new(self.clone())));
-        self._child_nodes._nodes.push(new_child);
+    pub fn remove_child(&mut self, child: &NodeKind) {
+        if let Some(pos) = self
+            ._child_nodes
+            ._nodes
+            .iter()
+            .position(|n| n.borrow().deref() == child)
+        {
+            {
+                let mut child = self._child_nodes._nodes[pos].borrow_mut();
+                child.set_parent(None);
+            }
+
+            self._child_nodes._nodes.remove(pos);
+        }
+    }
+
+    pub fn pop_child(&mut self, nth: Option<usize>) -> Option<Rc<RefCell<NodeKind>>> {
+        if let Some(index) = nth {
+            if index < self._child_nodes.length() {
+                {
+                    let mut child = self._child_nodes._nodes[index].borrow_mut();
+                    child.set_parent(None);
+                }
+
+                Some(self._child_nodes._nodes.remove(index))
+            } else {
+                None
+            }
+        } else {
+            self._child_nodes._nodes.pop()
+        }
+    }
+
+    pub fn node_document(&self) -> Option<Document> {
+        if let Some(weak_doc) = &self.node_document {
+            if let Some(strong_doc) = weak_doc.upgrade() {
+                return Some(strong_doc.borrow().clone());
+            }
+        }
+        None
     }
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CharacterData {
-    _node: Box<Node>,
+    _node: Rc<RefCell<Node>>,
 
     pub data: DOMString,
 }
@@ -274,23 +349,25 @@ impl CharacterData {
     }
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Text {
     _character_data: CharacterData,
 }
 
 impl Text {
-    pub fn new(data: &str, document: &Document) -> Self {
+    pub fn new(data: &str, _document: Rc<RefCell<Document>>) -> Self {
+        let document = _document.borrow();
+
         Self {
             _character_data: CharacterData {
-                _node: Box::new(Node {
+                _node: Rc::new(RefCell::new(Node {
                     _node_type: NodeType::Text,
                     _node_name: "#text".to_string(),
                     _base_uri: document.document_base_url().serialize(),
-                    node_document: Some(document.clone()),
+                    node_document: Some(Rc::downgrade(&_document)),
                     _parent_node: None,
                     _child_nodes: NodeList::new(),
-                }),
+                })),
                 data: data.to_string(),
             },
         }
@@ -303,7 +380,14 @@ impl Text {
 
         Text::new(
             &split_data,
-            self._character_data._node.node_document.as_ref().unwrap(),
+            self._character_data
+                ._node
+                .borrow()
+                .node_document
+                .as_ref()
+                .unwrap()
+                .upgrade()
+                .unwrap(),
         )
     }
 
@@ -317,7 +401,7 @@ impl INode for Text {
     where
         Self: Sized,
     {
-        Self::new("", &Document::default())
+        Self::new("", Rc::new(RefCell::new(Document::default())))
     }
 
     fn node_type(&self) -> u16 {
@@ -329,23 +413,25 @@ impl INode for Text {
     }
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Comment {
     _character_data: CharacterData,
 }
 
 impl Comment {
-    pub fn new(data: &str, document: &Document) -> Self {
+    pub fn new(data: &str, _document: Rc<RefCell<Document>>) -> Self {
+        let document = _document.borrow();
+
         Self {
             _character_data: CharacterData {
-                _node: Box::new(Node {
+                _node: Rc::new(RefCell::new(Node {
                     _node_type: NodeType::Comment,
                     _node_name: "#comment".to_string(),
                     _base_uri: document.document_base_url().serialize(),
-                    node_document: Some(document.clone()),
+                    node_document: Some(Rc::downgrade(&_document)),
                     _parent_node: None,
                     _child_nodes: NodeList::new(),
-                }),
+                })),
                 data: data.to_string(),
             },
         }
@@ -357,7 +443,7 @@ impl INode for Comment {
     where
         Self: Sized,
     {
-        Self::new("", &Document::default())
+        Self::new("", Rc::new(RefCell::new(Document::default())))
     }
 
     fn node_type(&self) -> u16 {
@@ -369,9 +455,9 @@ impl INode for Comment {
     }
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DocumentType {
-    _node: Box<Node>,
+    _node: Rc<RefCell<Node>>,
 
     _name: DOMString,
     _public_id: DOMString,
@@ -383,7 +469,7 @@ impl INode for DocumentType {
     where
         Self: Sized,
     {
-        Self::new("", &Document::default())
+        Self::new("", Some(Rc::new(RefCell::new(Document::default()))))
     }
 
     fn node_type(&self) -> u16 {
@@ -396,19 +482,42 @@ impl INode for DocumentType {
 }
 
 impl DocumentType {
-    pub fn new(name: &str, document: &Document) -> Self {
-        Self {
-            _node: Box::new(Node {
-                _node_type: NodeType::DocumentType,
-                _node_name: name.to_string(),
-                _base_uri: document.document_base_url().serialize(),
-                node_document: Some(document.clone()),
-                _parent_node: None,
-                _child_nodes: NodeList::new(),
-            }),
-            _name: name.to_string(),
-            _public_id: String::new(),
-            _system_id: String::new(),
+    pub fn new(name: &str, _document: Option<Rc<RefCell<Document>>>) -> Self {
+        if _document.is_none() {
+            Self {
+                _node: Rc::new(RefCell::new(Node {
+                    _node_type: NodeType::DocumentType,
+                    _node_name: name.to_string(),
+                    _base_uri: "".to_string(),
+                    node_document: None,
+                    _parent_node: None,
+                    _child_nodes: NodeList::new(),
+                })),
+                _name: name.to_string(),
+                _public_id: String::new(),
+                _system_id: String::new(),
+            }
+        } else {
+            let base_uri = _document
+                .as_ref()
+                .unwrap()
+                .borrow()
+                .document_base_url()
+                .serialize();
+
+            Self {
+                _node: Rc::new(RefCell::new(Node {
+                    _node_type: NodeType::DocumentType,
+                    _node_name: name.to_string(),
+                    _base_uri: base_uri,
+                    node_document: Some(Rc::downgrade(&_document.unwrap())),
+                    _parent_node: None,
+                    _child_nodes: NodeList::new(),
+                })),
+                _name: name.to_string(),
+                _public_id: String::new(),
+                _system_id: String::new(),
+            }
         }
     }
 
@@ -435,7 +544,7 @@ impl DocumentType {
     }
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CustomElementDefinition {
     // Placeholder for custom element definition properties
     name: String,
@@ -444,7 +553,7 @@ pub struct CustomElementDefinition {
     // https://html.spec.whatwg.org/multipage/custom-elements.html#custom-element-definition
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CustomElementRegistry {
     pub is_scoped: bool,
 
@@ -505,7 +614,7 @@ pub enum CustomElementRegistryOrDefault {
     Registry(CustomElementRegistry),
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Attr {
     _node: Box<Node>,
 
@@ -524,14 +633,16 @@ impl Attr {
         local_name: String,
         value: String,
         element: Option<&Element>,
-        document: &Document,
+        _document: Rc<RefCell<Document>>,
     ) -> Self {
+        let document = _document.borrow();
+
         Self {
             _node: Box::new(Node {
                 _node_type: NodeType::Attribute,
                 _node_name: local_name.clone(),
                 _base_uri: document.document_base_url().serialize(),
-                node_document: Some(document.clone()),
+                node_document: Some(Rc::downgrade(&_document)),
                 _parent_node: None,
                 _child_nodes: NodeList::new(),
             }),
@@ -580,9 +691,9 @@ pub enum ElementKind {
     Element,
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Element {
-    _node: Box<Node>,
+    _node: Rc<RefCell<Node>>,
 
     pub id: ElementID,
 
@@ -602,7 +713,7 @@ pub struct Element {
 
 impl Element {
     pub fn new(
-        document: &Document,
+        _document: Rc<RefCell<Document>>,
         local_name: String,
         namespace: Option<String>,
         prefix: Option<String>,
@@ -610,6 +721,8 @@ impl Element {
         _synchronous_custom_elements: Option<bool>,
         _registry: Option<CustomElementRegistryOrDefault>,
     ) -> Element {
+        let document = _document.borrow();
+
         let registry = match _registry {
             Some(CustomElementRegistryOrDefault::Registry(reg)) => Some(reg),
             Some(CustomElementRegistryOrDefault::Default) => {
@@ -625,7 +738,7 @@ impl Element {
             .is_some_and(|def| def.name != local_name)
         {
             let result = Element::create_element_internal::<Element>(
-                document,
+                Rc::clone(&_document),
                 namespace,
                 prefix,
                 &local_name,
@@ -645,7 +758,7 @@ impl Element {
             todo!("handle the case where the definition exists");
         } else {
             return Element::create_element_internal::<Element>(
-                document,
+                Rc::clone(&_document),
                 namespace,
                 prefix,
                 &local_name,
@@ -666,15 +779,16 @@ impl Element {
     }
 
     pub fn from_token(token: &Token, namespace: &str, intended_parent: &NodeKind) -> Element {
-        let intended_parent_node = intended_parent.node();
+        let intended_parent_node = intended_parent.node().borrow();
 
         let tag = match &token {
             Token::StartTag(t) => t,
             Token::EndTag(t) => t,
-            _ => panic!("Token must be a StartTag or EndTag"),
+            _ => panic!("Token must be a StartTag or EndTag, got: {:?}", token),
         };
 
         let document = intended_parent_node.node_document.as_ref().unwrap();
+
         let local_name = tag.name.clone();
 
         let registry = intended_parent.custom_element_registry();
@@ -688,7 +802,7 @@ impl Element {
         }
 
         let mut element = Element::new(
-            document,
+            Rc::clone(&document.upgrade().unwrap()),
             local_name,
             Some(namespace.to_string()),
             None,
@@ -708,7 +822,7 @@ impl Element {
                 name.clone(),
                 value.clone(),
                 Some(&element),
-                document,
+                Rc::clone(&document.upgrade().unwrap()),
             ));
         }
 
@@ -718,7 +832,7 @@ impl Element {
     }
 
     fn create_element_internal<T: IElement>(
-        document: &Document,
+        _document: Rc<RefCell<Document>>,
         namespace: Option<String>,
         prefix: Option<String>,
         local_name: &String,
@@ -726,7 +840,7 @@ impl Element {
         is: &Option<String>,
         _registry: Option<&CustomElementRegistry>,
     ) -> T {
-        let mut element = T::new()
+        let element = T::empty()
             .with_namespace(&namespace)
             .with_prefix(&prefix)
             .with_local_name(local_name)
@@ -734,7 +848,7 @@ impl Element {
             .with_is_value(is)
             .with_custom_element_registry(&_registry.cloned());
 
-        element.node_mut().node_document = Some(document.clone());
+        element.node().borrow_mut().node_document = Some(Rc::downgrade(&_document));
 
         // assert!(element attribute list is empty)
 
@@ -755,7 +869,13 @@ impl Element {
             .namespace
             .as_ref()
             .is_some_and(|n| n.as_str() == HTML_NAMESPACE)
-            && self.node().node_document.as_ref().unwrap().is_html()
+            && self
+                .node()
+                .borrow()
+                .node_document()
+                .as_ref()
+                .unwrap()
+                .is_html()
         {
             qualified_name.to_uppercase()
         } else {
@@ -765,6 +885,32 @@ impl Element {
 
     pub fn attributes(&self) -> &Vec<Attr> {
         &self.attribute_list
+    }
+
+    pub fn push_attr_raw(&mut self, name: &str, value: &str) {
+        let attr = Attr::new(
+            None,
+            None,
+            name.to_string(),
+            value.to_string(),
+            Some(self),
+            Rc::clone(
+                &self
+                    .node()
+                    .borrow()
+                    .node_document
+                    .as_ref()
+                    .unwrap()
+                    .upgrade()
+                    .unwrap(),
+            ),
+        );
+
+        self.attribute_list.push(attr);
+    }
+
+    pub fn push_attribute(&mut self, attr: Attr) {
+        self.attribute_list.push(attr);
     }
 
     pub fn get_attribute(&self, name: &str) -> Option<&str> {
@@ -787,14 +933,14 @@ impl INode for Element {
         Self: Sized,
     {
         Self {
-            _node: Box::new(Node {
+            _node: Rc::new(RefCell::new(Node {
                 _node_type: NodeType::Element,
                 _node_name: "".to_string(),
                 _base_uri: "".to_string(),
                 node_document: None,
                 _parent_node: None,
                 _child_nodes: NodeList::new(),
-            }),
+            })),
             id: "".to_string(),
             namespace: None,
             namespace_prefix: None,
@@ -818,7 +964,7 @@ impl INode for Element {
 }
 
 pub trait IElement {
-    fn new() -> Self
+    fn empty() -> Self
     where
         Self: Sized;
 
@@ -850,24 +996,33 @@ pub trait IElement {
     where
         Self: Sized;
 
-    fn node_mut(&mut self) -> &mut Node;
-    fn node(&self) -> &Node;
+    fn node(&self) -> &Rc<RefCell<Node>>;
 }
 
 impl IElement for Element {
-    fn new() -> Self
+    fn empty() -> Self
     where
         Self: Sized,
     {
-        Element::new(
-            &Document::default(),
-            "".to_string(),
-            None,
-            None,
-            None,
-            None,
-            None,
-        )
+        Self {
+            _node: Rc::new(RefCell::new(Node {
+                _node_type: NodeType::Element,
+                _node_name: "".to_string(),
+                _base_uri: "".to_string(),
+                node_document: None,
+                _parent_node: None,
+                _child_nodes: NodeList::new(),
+            })),
+            id: "".to_string(),
+            namespace: None,
+            namespace_prefix: None,
+            local_name: "".to_string(),
+            custom_element_state: "".to_string(),
+            custom_element_registry: None,
+            is_value: None,
+            attribute_list: vec![],
+            _token: None,
+        }
     }
 
     fn with_namespace(mut self, namespace: &Option<String>) -> Self
@@ -926,16 +1081,16 @@ impl IElement for Element {
         self
     }
 
-    fn node_mut(&mut self) -> &mut Node {
-        &mut self._node
-    }
+    // fn node_mut(&mut self) -> &mut Node {
+    //     &mut self._node
+    // }
 
-    fn node(&self) -> &Node {
+    fn node(&self) -> &Rc<RefCell<Node>> {
         &self._node
     }
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Origin {
     Opaque,
     Tuple(
@@ -946,14 +1101,14 @@ pub enum Origin {
     ),
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DOMImplementation {
     // Placeholder for DOMImplementation properties and methods
 }
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct Document {
-    pub _node: Box<Node>,
+    pub _node: Rc<RefCell<Node>>,
 
     _encoding: &'static encoding_rs::Encoding,
 
@@ -973,20 +1128,28 @@ pub struct Document {
     parser_cannot_change_mode: bool,
 }
 
+impl Debug for Document {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Document")
+            .field("_node", &self._node)
+            .finish()
+    }
+}
+
 impl Default for Document {
     /// Creates a new Document with default values.
     /// According to the HTML5 specification:
     /// > Unless stated otherwise, a document’s encoding is the utf-8 encoding, content type is "application/xml", URL is "about:blank", origin is an opaque origin, type is "xml", mode is "no-quirks", allow declarative shadow roots is false, and custom element registry is null.
     fn default() -> Self {
-        let mut document = Self {
-            _node: Box::new(Node {
+        let document = Self {
+            _node: Rc::new(RefCell::new(Node {
                 _node_type: NodeType::Document,
                 _node_name: "#document".to_string(),
                 _base_uri: "".to_string(),
                 node_document: None,
                 _parent_node: None,
                 _child_nodes: NodeList::new(),
-            }),
+            })),
             _encoding: encoding_rs::Encoding::for_label(b"utf-8").unwrap(),
 
             _content_type: "application/xml",
@@ -1005,7 +1168,8 @@ impl Default for Document {
             parser_cannot_change_mode: false,
         };
 
-        document._node.node_document = Some(document.clone());
+        document._node.borrow_mut().node_document =
+            Some(Rc::downgrade(&Rc::new(RefCell::new(document.clone()))));
         document.ensure_maintains_integrity();
 
         document
@@ -1020,11 +1184,14 @@ impl Document {
     ///
     /// TODO: Implement according to spec:
     /// > ... set this’s origin to the origin of current global object’s associated Document.
-    pub fn new(origin: Origin) -> Self {
-        Self {
+    pub fn new(origin: Origin) -> Rc<RefCell<Self>> {
+        let doc = Rc::new(RefCell::new(Self {
             _origin: origin,
             ..Self::default()
-        }
+        }));
+
+        doc.borrow_mut()._node.borrow_mut().node_document = Some(Rc::downgrade(&doc));
+        doc
     }
 
     fn ensure_maintains_integrity(&self) {
@@ -1101,10 +1268,10 @@ impl Document {
         &self._url
     }
 
-    pub fn doctype(&self) -> Option<&NodeKind> {
-        for child in self._node.child_nodes().iter() {
-            if let NodeKind::DocumentType(_) = child {
-                return Some(child);
+    pub fn doctype(&self) -> Option<Rc<RefCell<NodeKind>>> {
+        for child in self._node.borrow().child_nodes().iter() {
+            if let NodeKind::DocumentType(_) = child.borrow().deref() {
+                return Some(Rc::clone(child));
             }
         }
         None
