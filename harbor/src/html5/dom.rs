@@ -1,30 +1,34 @@
 use crate::{
-    html5::parse::Token,
+    html5::{HTML_NAMESPACE, parse::Token},
     http::{self, url::Serializable},
 };
 
 type DOMString = String;
 type USVString = String;
 
-pub struct InsertLocation<'a> {
-    parent: &'a mut Node,
+pub struct InsertLocation {
+    parent: NodeKind,
     pos: usize,
 }
 
-impl InsertLocation<'_> {
-    pub fn new(parent: &mut Node, pos: usize) -> InsertLocation {
+impl InsertLocation {
+    pub fn new(parent: NodeKind, pos: usize) -> InsertLocation {
         InsertLocation { parent, pos }
     }
 
+    pub fn parent(&self) -> &NodeKind {
+        &self.parent
+    }
+
     pub fn node(&self) -> &Node {
-        self.parent
+        self.parent.node()
     }
 
     pub fn preceding(&self) -> Option<&NodeKind> {
         if self.pos == 0 {
             None
         } else {
-            self.parent.child_nodes().item(self.pos - 1)
+            self.parent.node().child_nodes().item(self.pos - 1)
         }
     }
 
@@ -32,17 +36,23 @@ impl InsertLocation<'_> {
         if self.pos == 0 {
             None
         } else {
-            self.parent.child_nodes_mut().item_mut(self.pos - 1)
+            self.parent
+                .node_mut()
+                .child_nodes_mut()
+                .item_mut(self.pos - 1)
         }
     }
 
     pub fn insert(&mut self, node: &NodeKind) {
-        self.parent.child_nodes_mut().insert(self.pos, node);
+        self.parent
+            .node_mut()
+            .child_nodes_mut()
+            .insert(self.pos, node);
         self.pos += 1;
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum NodeKind {
     Node(Node),
     Element(Element),
@@ -82,13 +92,13 @@ impl NodeKind {
     pub fn custom_element_registry(&self) -> Option<&CustomElementRegistry> {
         match self {
             NodeKind::Document(d) => d._custom_element_registry.as_ref(),
-            NodeKind::Element(e) => todo!("custom element registry for Element"),
+            NodeKind::Element(_) => todo!("custom element registry for Element"),
             _ => None,
         }
     }
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum NodeType {
     Element = 1,
     Attribute = 2,
@@ -104,7 +114,7 @@ pub enum NodeType {
     Notation = 12,
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct NodeList {
     _nodes: Vec<NodeKind>,
 }
@@ -135,7 +145,7 @@ impl NodeList {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Node {
     pub _node_type: NodeType,
     pub _node_name: DOMString,
@@ -218,7 +228,7 @@ impl Node {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct CharacterData {
     _node: Box<Node>,
 
@@ -264,7 +274,7 @@ impl CharacterData {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Text {
     _character_data: CharacterData,
 }
@@ -319,7 +329,7 @@ impl INode for Text {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Comment {
     _character_data: CharacterData,
 }
@@ -359,7 +369,7 @@ impl INode for Comment {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct DocumentType {
     _node: Box<Node>,
 
@@ -425,7 +435,7 @@ impl DocumentType {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct CustomElementDefinition {
     // Placeholder for custom element definition properties
     name: String,
@@ -434,7 +444,7 @@ pub struct CustomElementDefinition {
     // https://html.spec.whatwg.org/multipage/custom-elements.html#custom-element-definition
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct CustomElementRegistry {
     pub is_scoped: bool,
 
@@ -456,7 +466,7 @@ fn lookup_definition<'a>(
     _registry: Option<&'a CustomElementRegistry>,
     _local_name: &str,
     _namespace: &Option<String>,
-    is: &Option<String>,
+    _is: &Option<String>,
 ) -> Option<&'a CustomElementDefinition> {
     if _registry.is_none() {
         return None;
@@ -471,14 +481,14 @@ fn lookup_definition<'a>(
     }
 
     let registry = _registry.unwrap();
-    for definition in &registry.definitions {
+    for _definition in &registry.definitions {
         // Placeholder for matching logic
         // if definition.matches(local_name) {
         //     return Some(definition);
         // }
     }
 
-    for definition in &registry.definitions {
+    for _definition in &registry.definitions {
         // Placeholder for matching logic with 'is' attribute
         // if let Some(is_value) = is {
         //     if definition.matches_is(is_value, local_name) {
@@ -495,7 +505,7 @@ pub enum CustomElementRegistryOrDefault {
     Registry(CustomElementRegistry),
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Attr {
     _node: Box<Node>,
 
@@ -570,7 +580,7 @@ pub enum ElementKind {
     Element,
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Element {
     _node: Box<Node>,
 
@@ -586,6 +596,8 @@ pub struct Element {
     pub is_value: Option<DOMString>,
 
     attribute_list: Vec<Attr>,
+
+    _token: Option<Token>,
 }
 
 impl Element {
@@ -595,7 +607,7 @@ impl Element {
         namespace: Option<String>,
         prefix: Option<String>,
         is: Option<String>,
-        synchronous_custom_elements: Option<bool>,
+        _synchronous_custom_elements: Option<bool>,
         _registry: Option<CustomElementRegistryOrDefault>,
     ) -> Element {
         let registry = match _registry {
@@ -622,11 +634,11 @@ impl Element {
                 registry.as_ref(),
             );
 
-            if synchronous_custom_elements.unwrap_or(false) {
-                todo!("upgrade the element to a custom element immediately");
-            } else {
-                todo!("enqueue the element for upgrade");
-            }
+            // if synchronous_custom_elements.unwrap_or(false) {
+            //     todo!("upgrade the element to a custom element immediately");
+            // } else {
+            //     todo!("enqueue the element for upgrade");
+            // }
 
             return result;
         } else if definition.is_some() {
@@ -642,6 +654,67 @@ impl Element {
                 registry.as_ref(),
             );
         }
+    }
+
+    pub fn token(&self) -> Option<&Token> {
+        self._token.as_ref()
+    }
+
+    pub fn with_token(mut self, token: Token) -> Self {
+        self._token = Some(token);
+        self
+    }
+
+    pub fn from_token(token: &Token, namespace: &str, intended_parent: &NodeKind) -> Element {
+        let intended_parent_node = intended_parent.node();
+
+        let tag = match &token {
+            Token::StartTag(t) => t,
+            Token::EndTag(t) => t,
+            _ => panic!("Token must be a StartTag or EndTag"),
+        };
+
+        let document = intended_parent_node.node_document.as_ref().unwrap();
+        let local_name = tag.name.clone();
+
+        let registry = intended_parent.custom_element_registry();
+        let defintion =
+            lookup_definition(registry, &local_name, &Some(namespace.to_string()), &None);
+
+        let will_execute_script = defintion.is_some();
+
+        if will_execute_script {
+            todo!("handle custom element creation with script execution");
+        }
+
+        let mut element = Element::new(
+            document,
+            local_name,
+            Some(namespace.to_string()),
+            None,
+            None,
+            Some(will_execute_script),
+            match registry {
+                Some(r) => Some(CustomElementRegistryOrDefault::Registry(r.clone())),
+                None => None,
+            },
+        )
+        .with_token(token.clone());
+
+        for (name, value) in tag.attributes.iter() {
+            element.attribute_list.push(Attr::new(
+                None,
+                None,
+                name.clone(),
+                value.clone(),
+                Some(&element),
+                document,
+            ));
+        }
+
+        // TODO: other random bullshit
+
+        element
     }
 
     fn create_element_internal<T: IElement>(
@@ -667,6 +740,45 @@ impl Element {
 
         element
     }
+
+    pub fn qualified_name(&self) -> DOMString {
+        match &self.namespace_prefix {
+            Some(prefix) => format!("{}:{}", prefix, self.local_name),
+            None => self.local_name.clone(),
+        }
+    }
+
+    fn uppercase_qualified_name(&self) -> DOMString {
+        let qualified_name = self.qualified_name();
+
+        if self
+            .namespace
+            .as_ref()
+            .is_some_and(|n| n.as_str() == HTML_NAMESPACE)
+            && self.node().node_document.as_ref().unwrap().is_html()
+        {
+            qualified_name.to_uppercase()
+        } else {
+            qualified_name
+        }
+    }
+
+    pub fn attributes(&self) -> &Vec<Attr> {
+        &self.attribute_list
+    }
+
+    pub fn get_attribute(&self, name: &str) -> Option<&str> {
+        for attr in &self.attribute_list {
+            if attr.local_name() == name {
+                return Some(attr.value());
+            }
+        }
+        None
+    }
+
+    pub fn namespace_uri(&self) -> Option<&str> {
+        self.namespace.as_deref()
+    }
 }
 
 impl INode for Element {
@@ -691,6 +803,7 @@ impl INode for Element {
             custom_element_registry: None,
             is_value: None,
             attribute_list: vec![],
+            _token: None,
         }
     }
 
@@ -822,7 +935,7 @@ impl IElement for Element {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum Origin {
     Opaque,
     Tuple(
@@ -833,12 +946,12 @@ pub enum Origin {
     ),
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct DOMImplementation {
     // Placeholder for DOMImplementation properties and methods
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Document {
     pub _node: Box<Node>,
 
@@ -996,58 +1109,4 @@ impl Document {
         }
         None
     }
-}
-
-pub fn create_element_given_token(
-    token: &Token,
-    namespace: &str,
-    intended_parent: &NodeKind,
-) -> Element {
-    let intended_parent_node = intended_parent.node();
-
-    let tag = match &token {
-        Token::StartTag(t) => t,
-        Token::EndTag(t) => t,
-        _ => panic!("Token must be a StartTag or EndTag"),
-    };
-
-    let document = intended_parent_node.node_document.as_ref().unwrap();
-    let local_name = tag.name.clone();
-
-    let registry = intended_parent.custom_element_registry();
-    let defintion = lookup_definition(registry, &local_name, &Some(namespace.to_string()), &None);
-
-    let will_execute_script = defintion.is_some();
-
-    if will_execute_script {
-        todo!("handle custom element creation with script execution");
-    }
-
-    let mut element = Element::new(
-        document,
-        local_name,
-        Some(namespace.to_string()),
-        None,
-        None,
-        Some(will_execute_script),
-        match registry {
-            Some(r) => Some(CustomElementRegistryOrDefault::Registry(r.clone())),
-            None => None,
-        },
-    );
-
-    for (name, value) in tag.attributes.iter() {
-        element.attribute_list.push(Attr::new(
-            None,
-            None,
-            name.clone(),
-            value.clone(),
-            Some(&element),
-            document,
-        ));
-    }
-
-    // TODO: other random bullshit
-
-    element
 }

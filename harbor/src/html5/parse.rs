@@ -1,8 +1,12 @@
+use core::panic;
+
 use crate::html5::{self, dom::*};
 
 /// This is likely a temporary file and will be merged with some other code when I understand what
 /// it is intended to integrate with. Until then, this is an independent implementation of an HTML5
 /// parser.
+///
+/// Future tattu: I doubt this will be temporary
 
 struct _Document {
     document: Document,
@@ -188,7 +192,7 @@ impl InputStream {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Tag {
     pub name: String,
     pub is_self_closing: bool,
@@ -261,7 +265,7 @@ impl TagToken {
     }
 }
 
-#[derive(Default, Clone, Debug)]
+#[derive(Default, Clone, Debug, PartialEq, Eq)]
 pub struct DOCTYPE {
     name: Option<String>,
     public_identifier: Option<String>,
@@ -287,7 +291,7 @@ impl DOCTYPE {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Token {
     DOCTYPE(DOCTYPE),
     StartTag(Tag),
@@ -513,7 +517,7 @@ impl InsertMode {
             }
             Token::Character('\u{0009}' | '\u{000A}' | '\u{000C}' | '\u{000D}' | '\u{0020}') => {}
             Token::StartTag(ref tag) if tag.name.as_str() == "html" => {
-                let element = create_element_given_token(
+                let element = Element::from_token(
                     &token,
                     "html",
                     &NodeKind::Document(tokenizer.document.document.clone()),
@@ -537,7 +541,7 @@ impl InsertMode {
                 ));
             }
             _ => {
-                let element = create_element_given_token(
+                let element = Element::from_token(
                     &Token::StartTag(Tag::new(&String::from("html"))),
                     "html",
                     &NodeKind::Document(tokenizer.document.document.clone()),
@@ -642,7 +646,7 @@ impl InsertMode {
                 tokenizer.insertion_mode = InsertMode::InHeadNoScript;
             }
             Token::StartTag(ref tag) if tag.name.as_str() == "script" => {
-                let element = create_element_given_token(
+                let element = Element::from_token(
                     &token,
                     html5::HTML_NAMESPACE,
                     &NodeKind::Element(tokenizer.adjusted_current_node().unwrap().clone()),
@@ -755,7 +759,7 @@ impl InsertMode {
                 InsertMode::handle_in_body(tokenizer, token);
             }
             Token::StartTag(ref tag) if tag.name.as_str() == "body" => {
-                let body = tokenizer.insert_html_element(&token);
+                tokenizer.insert_html_element(&token);
                 tokenizer.flag_frameset_ok = false;
 
                 tokenizer.insertion_mode = InsertMode::InBody;
@@ -810,7 +814,105 @@ impl InsertMode {
     }
 
     fn handle_in_body(tokenizer: &mut Tokenizer, token: Token) -> bool {
-        todo!("In body insertion mode not implemented yet");
+        // NOTE: Oh boy - this is a chonker
+        match token {
+            Token::Character('\u{0000}') => {
+                tokenizer.error(ParseError::UnexpectedNullCharacter);
+            }
+            Token::Character(ch)
+                if matches!(
+                    ch,
+                    '\u{0009}' | '\u{000A}' | '\u{000C}' | '\u{000D}' | '\u{0020}'
+                ) =>
+            {
+                tokenizer._reconstruct_active_formatting_elements();
+                tokenizer._insert_character(ch);
+            }
+            Token::Character(ch) => {
+                tokenizer._reconstruct_active_formatting_elements();
+                tokenizer._insert_character(ch);
+                tokenizer.flag_frameset_ok = false;
+            }
+            Token::Comment(data) => {
+                tokenizer._insert_comment(data.as_str(), None);
+            }
+            _ => {}
+        }
+
+        return true;
+    }
+}
+
+#[derive(Clone)]
+pub enum ElementOrMarker {
+    Element(Element),
+    Marker,
+}
+
+pub struct ActiveFormattingElements {
+    elements: Vec<ElementOrMarker>,
+}
+
+impl ActiveFormattingElements {
+    pub fn new() -> ActiveFormattingElements {
+        ActiveFormattingElements { elements: vec![] }
+    }
+
+    pub fn last_marker(&self) -> Option<usize> {
+        for (i, element) in self.elements.iter().enumerate().rev() {
+            if matches!(element, ElementOrMarker::Marker) {
+                return Some(i);
+            }
+        }
+        None
+    }
+
+    pub fn push(&mut self, element: Element) {
+        let last_marker = self.last_marker().unwrap_or(0);
+
+        if self.elements[last_marker + 1..]
+            .iter()
+            .map(|el| match el {
+                ElementOrMarker::Element(e) => e.clone(),
+                ElementOrMarker::Marker => panic!("Should not encounter marker here"),
+            })
+            .filter(|el| {
+                el.qualified_name() == element.qualified_name()
+                    && element.attributes().len() == el.attributes().len()
+                    && element.attributes().iter().all(|attr| {
+                        el.get_attribute(attr.local_name())
+                            .is_some_and(|v| v == attr.value())
+                    })
+                    && el.namespace_uri() == element.namespace_uri()
+            })
+            .count()
+            >= 3
+        {
+            let first_matching_index = self
+                .elements
+                .iter()
+                .position(|el| match el {
+                    ElementOrMarker::Element(e) => {
+                        e.qualified_name() == element.qualified_name()
+                            && element.attributes().len() == e.attributes().len()
+                            && element.attributes().iter().all(|attr| {
+                                e.get_attribute(attr.local_name())
+                                    .is_some_and(|v| v == attr.value())
+                            })
+                            && e.namespace_uri() == element.namespace_uri()
+                    }
+                    ElementOrMarker::Marker => false,
+                })
+                .unwrap();
+
+            self.elements.remove(first_matching_index);
+        }
+
+        self.elements.push(ElementOrMarker::Element(element));
+    }
+
+    pub fn reconstruct(&mut self, tokenizer: &mut Tokenizer) {
+        tokenizer._reconstruct_active_formatting_elements();
     }
 }
 
@@ -836,6 +938,7 @@ pub struct Tokenizer<'a> {
 
     document: _Document,
 
+    active_formatting_elements: ActiveFormattingElements,
     open_elements_stack: Vec<Element>,
 
     head_element_id: Option<ElementID>,
@@ -873,6 +976,7 @@ impl<'a> Tokenizer<'a> {
                 document: Document::new(Origin::Opaque),
             },
 
+            active_formatting_elements: ActiveFormattingElements::new(),
             open_elements_stack: vec![],
 
             head_element_id: None,
@@ -881,6 +985,77 @@ impl<'a> Tokenizer<'a> {
 
             flag_scripting: false,
             flag_frameset_ok: true,
+        }
+    }
+
+    fn _reconstruct_active_formatting_elements(&mut self) {
+        if self.active_formatting_elements.elements.is_empty() {
+            return;
+        }
+
+        if let Some(ElementOrMarker::Element(element)) =
+            self.active_formatting_elements.elements.last()
+            && self.open_elements_stack.contains(element)
+        {
+            return;
+        }
+
+        if let Some(ElementOrMarker::Marker) = self.active_formatting_elements.elements.last() {
+            return;
+        }
+
+        let mut entry_pos = self.active_formatting_elements.elements.len() - 1;
+        let mut entry = self.active_formatting_elements.elements[entry_pos].clone();
+
+        let mut jump_to_create = false;
+
+        loop {
+            // Rewind:
+            if entry_pos == 0 {
+                jump_to_create = true;
+                break;
+            }
+
+            entry_pos -= 1;
+            entry = self.active_formatting_elements.elements[entry_pos].clone();
+
+            if matches!(entry, ElementOrMarker::Marker)
+                || self.open_elements_stack.contains(match &entry {
+                    ElementOrMarker::Element(e) => e,
+                    ElementOrMarker::Marker => panic!("Should not encounter marker here"),
+                })
+            {
+                break;
+            }
+        }
+
+        loop {
+            // Advance:
+            if !jump_to_create {
+                entry_pos += 1;
+                entry = self.active_formatting_elements.elements[entry_pos].clone();
+            }
+
+            // Create:
+            let element = match &entry {
+                ElementOrMarker::Element(e) => e,
+                ElementOrMarker::Marker => panic!("Should not encounter marker here"),
+            };
+
+            let new_element = self.insert_html_element(
+                &element
+                    .token()
+                    .expect("Element has no token - how the hell was it created?"),
+            );
+
+            self.active_formatting_elements.elements[entry_pos] =
+                ElementOrMarker::Element(new_element);
+
+            jump_to_create = false;
+
+            if entry_pos + 1 >= self.active_formatting_elements.elements.len() {
+                break;
+            }
         }
     }
 
@@ -910,18 +1085,20 @@ impl<'a> Tokenizer<'a> {
         location.insert(&NodeKind::Comment(comment));
     }
 
-    fn _appropriate_insertion_place<'b>(
-        &'b mut self,
-        override_target: Option<&'b mut Element>,
-    ) -> InsertLocation<'b> {
-        let target = override_target.unwrap_or_else(|| {
-            self.adjusted_current_node_mut()
-                .expect("No current node for appropriate insertion place")
-        });
+    fn _appropriate_insertion_place(
+        &mut self,
+        override_target: Option<&Element>,
+    ) -> InsertLocation {
+        let target = override_target
+            .unwrap_or_else(|| {
+                self.adjusted_current_node()
+                    .expect("No current node for appropriate insertion place")
+            })
+            .to_owned();
 
         let adjusted_insertion_position = target.node().child_nodes().length();
 
-        InsertLocation::new(target.node_mut(), adjusted_insertion_position)
+        InsertLocation::new(NodeKind::Element(target), adjusted_insertion_position)
     }
 
     fn _generic_text_parsing_algorithm(&mut self, token: &Token) {
@@ -950,19 +1127,12 @@ impl<'a> Tokenizer<'a> {
         namespace: &str,
         only_add_to_element_stack: bool,
     ) -> Element {
-        let element = create_element_given_token(
-            token,
-            namespace,
-            &NodeKind::Element(
-                self.adjusted_current_node()
-                    .expect("No current node to insert foreign element into")
-                    .clone(),
-            ),
-        );
+        let mut adjusted_insertion_location = self._appropriate_insertion_place(None);
+
+        let element = Element::from_token(token, namespace, adjusted_insertion_location.parent());
 
         if !only_add_to_element_stack {
-            self._appropriate_insertion_place(None)
-                .insert(&NodeKind::Element(element.clone()));
+            adjusted_insertion_location.insert(&NodeKind::Element(element.clone()));
         }
 
         self.open_elements_stack.push(element.clone());

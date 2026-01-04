@@ -757,7 +757,7 @@ impl Opaque {
 
 type URLPathSegment = String;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum URLPath {
     Segment(URLPathSegment),
     List(Vec<URLPathSegment>),
@@ -930,7 +930,7 @@ pub enum ParseURLState {
     Fragment,
 }
 
-#[derive(Default, Clone, Debug)]
+#[derive(Default, Clone, Debug, PartialEq, Eq)]
 pub struct URL {
     pub scheme: String,
     pub username: String,
