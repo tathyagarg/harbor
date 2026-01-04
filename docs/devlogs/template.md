@@ -2,7 +2,7 @@
 (*Pre-emptive notes*) [Optional]
 # Changes
 ---
-- [abbr](https://github.com/tathyagarg/commit/hash): Description
+- [abbr](https://github.com/tathyagarg/harbor/commit/hash): Description
 
 ---
 # Next Steps
