@@ -457,7 +457,7 @@ impl InsertMode {
         match token {
             Token::Character('\u{0009}' | '\u{000A}' | '\u{000C}' | '\u{000D}' | '\u{0020}') => {}
             Token::Comment(data) => {
-                tokenizer.document.document._insert_comment(data.as_str());
+                tokenizer._insert_comment(data.as_str(), None);
             }
             Token::DOCTYPE(doctype) => {
                 if doctype.name.as_ref().unwrap().to_ascii_lowercase() != "html"
@@ -509,7 +509,7 @@ impl InsertMode {
                 ));
             }
             Token::Comment(data) => {
-                tokenizer.document.document._insert_comment(data.as_str());
+                tokenizer._insert_comment(data.as_str(), None);
             }
             Token::Character('\u{0009}' | '\u{000A}' | '\u{000C}' | '\u{000D}' | '\u{0020}') => {}
             Token::StartTag(ref tag) if tag.name.as_str() == "html" => {
@@ -564,7 +564,7 @@ impl InsertMode {
         match token {
             Token::Character('\u{0009}' | '\u{000A}' | '\u{000C}' | '\u{000D}' | '\u{0020}') => {}
             Token::Comment(data) => {
-                tokenizer.document.document._insert_comment(data.as_str());
+                tokenizer._insert_comment(data.as_str(), None);
             }
             Token::DOCTYPE(_) => {
                 tokenizer.error(ParseError::Custom(
@@ -606,7 +606,7 @@ impl InsertMode {
                 tokenizer.insert_html_element(&token);
             }
             Token::Comment(data) => {
-                tokenizer.document.document._insert_comment(data.as_str());
+                tokenizer._insert_comment(data.as_str(), None);
             }
             Token::DOCTYPE(_) => {
                 tokenizer.error(ParseError::Custom(
@@ -651,10 +651,8 @@ impl InsertMode {
                 // TODO: Handle script element parsing correctly
 
                 tokenizer
-                    .adjusted_current_node_mut()
-                    .unwrap()
-                    .node_mut()
-                    .append_child(&NodeKind::Element(element.clone()));
+                    ._appropriate_insertion_place(None)
+                    .insert(&NodeKind::Element(element.clone()));
 
                 tokenizer.open_elements_stack.push(element);
                 tokenizer.state = TokenizerState::ScriptData;
@@ -681,6 +679,129 @@ impl InsertMode {
             _ => {
                 tokenizer.open_elements_stack.pop();
                 tokenizer.insertion_mode = InsertMode::AfterHead;
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    fn handle_in_head_noscript(tokenizer: &mut Tokenizer, token: Token) -> bool {
+        match token {
+            Token::DOCTYPE(_) => {
+                tokenizer.error(ParseError::Custom(
+                    "Unexpected DOCTYPE token in in head noscript insertion mode",
+                ));
+            }
+            Token::StartTag(ref tag) if tag.name.as_str() == "html" => {
+                InsertMode::handle_in_body(tokenizer, token);
+            }
+            Token::EndTag(ref tag) if tag.name.as_str() == "noscript" => {
+                tokenizer.open_elements_stack.pop();
+                tokenizer.insertion_mode = InsertMode::InHead;
+            }
+            Token::Character('\u{0009}' | '\u{000A}' | '\u{000C}' | '\u{000D}' | '\u{0020}')
+            | Token::Comment(_) => {
+                InsertMode::handle_in_head(tokenizer, token);
+            }
+            Token::StartTag(ref tag)
+                if matches!(tag.name.as_str(), "base" | "basefont" | "bgsound" | "link") =>
+            {
+                InsertMode::handle_in_head(tokenizer, token);
+            }
+            Token::StartTag(ref tag) if matches!(tag.name.as_str(), "head" | "noscript") => {
+                tokenizer.error(ParseError::Custom(
+                    "Unexpected start tag token in in head noscript insertion mode",
+                ));
+            }
+            Token::EndTag(ref tag) if tag.name.as_str() != "br" => {
+                tokenizer.error(ParseError::Custom(
+                    "Unexpected end tag token in in head noscript insertion mode",
+                ));
+            }
+            _ => {
+                tokenizer.error(ParseError::Custom(
+                    "Anything else token in in head noscript insertion mode",
+                ));
+
+                tokenizer.open_elements_stack.pop();
+                tokenizer.insertion_mode = InsertMode::InHead;
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    fn handle_after_head(tokenizer: &mut Tokenizer, token: Token) -> bool {
+        match token {
+            Token::Character(ch)
+                if matches!(
+                    ch,
+                    '\u{0009}' | '\u{000A}' | '\u{000C}' | '\u{000D}' | '\u{0020}'
+                ) =>
+            {
+                tokenizer._insert_character(ch);
+            }
+            Token::Comment(data) => {
+                tokenizer._insert_comment(data.as_str(), None);
+            }
+            Token::DOCTYPE(_) => {
+                tokenizer.error(ParseError::Custom(
+                    "Unexpected DOCTYPE token in after head insertion mode",
+                ));
+            }
+            Token::StartTag(ref tag) if tag.name.as_str() == "html" => {
+                InsertMode::handle_in_body(tokenizer, token);
+            }
+            Token::StartTag(ref tag) if tag.name.as_str() == "body" => {
+                let body = tokenizer.insert_html_element(&token);
+                tokenizer.flag_frameset_ok = false;
+
+                tokenizer.insertion_mode = InsertMode::InBody;
+            }
+            Token::StartTag(ref tag) if tag.name.as_str() == "frameset" => {
+                tokenizer.insert_html_element(&token);
+                tokenizer.insertion_mode = InsertMode::InFrameset;
+            }
+            Token::StartTag(ref tag)
+                if matches!(
+                    tag.name.as_str(),
+                    "base"
+                        | "basefont"
+                        | "bgsound"
+                        | "link"
+                        | "meta"
+                        | "noframes"
+                        | "script"
+                        | "style"
+                        | "template"
+                        | "title"
+                ) =>
+            {
+                tokenizer.error(ParseError::Custom(
+                    "Unexpected start tag token in after head insertion mode",
+                ));
+
+                // TODO: Process the token using the rules for the "in head" insertion mode
+            }
+            Token::EndTag(ref tag) if tag.name.as_str() == "template" => {
+                InsertMode::handle_in_head(tokenizer, token);
+            }
+            Token::StartTag(ref tag) if tag.name.as_str() == "head" => {
+                tokenizer.error(ParseError::Custom(
+                    "Unexpected start tag token in after head insertion mode",
+                ));
+            }
+            Token::EndTag(ref tag) if !matches!(tag.name.as_str(), "body" | "html" | "br") => {
+                tokenizer.error(ParseError::Custom(
+                    "Unexpected end tag token in after head insertion mode",
+                ));
+            }
+            _ => {
+                tokenizer.insert_html_element(&Token::StartTag(Tag::new(&String::from("body"))));
+                tokenizer.insertion_mode = InsertMode::InBody;
+
                 return false;
             }
         }
@@ -722,6 +843,7 @@ pub struct Tokenizer<'a> {
     pub emitted_tokens: Vec<Token>,
 
     flag_scripting: bool,
+    flag_frameset_ok: bool,
 }
 
 impl<'a> Tokenizer<'a> {
@@ -758,7 +880,48 @@ impl<'a> Tokenizer<'a> {
             emitted_tokens: vec![],
 
             flag_scripting: false,
+            flag_frameset_ok: true,
         }
+    }
+
+    fn _insert_character(&mut self, ch: char) {
+        let mut location = self._appropriate_insertion_place(None);
+        if matches!(location.node()._node_type, NodeType::Document) {
+            return;
+        }
+
+        if let Some(text) = location.preceding_mut()
+            && let NodeKind::Text(text_node) = text
+        {
+            text_node.push(ch);
+            return;
+        } else {
+            location.insert(&NodeKind::Text(Text::new(
+                ch.to_string().as_str(),
+                location.node().node_document.as_ref().unwrap(),
+            )));
+        }
+    }
+
+    pub fn _insert_comment(&mut self, data: &str, position: Option<InsertLocation>) {
+        let mut location = position.unwrap_or_else(|| self._appropriate_insertion_place(None));
+        let comment = Comment::new(data, location.node().node_document.as_ref().unwrap());
+
+        location.insert(&NodeKind::Comment(comment));
+    }
+
+    fn _appropriate_insertion_place<'b>(
+        &'b mut self,
+        override_target: Option<&'b mut Element>,
+    ) -> InsertLocation<'b> {
+        let target = override_target.unwrap_or_else(|| {
+            self.adjusted_current_node_mut()
+                .expect("No current node for appropriate insertion place")
+        });
+
+        let adjusted_insertion_position = target.node().child_nodes().length();
+
+        InsertLocation::new(target.node_mut(), adjusted_insertion_position)
     }
 
     fn _generic_text_parsing_algorithm(&mut self, token: &Token) {
@@ -798,10 +961,8 @@ impl<'a> Tokenizer<'a> {
         );
 
         if !only_add_to_element_stack {
-            self.adjusted_current_node_mut()
-                .unwrap()
-                .node_mut()
-                .append_child(&NodeKind::Element(element.clone()));
+            self._appropriate_insertion_place(None)
+                .insert(&NodeKind::Element(element.clone()));
         }
 
         self.open_elements_stack.push(element.clone());

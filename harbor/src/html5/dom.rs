@@ -1,10 +1,46 @@
 use crate::{
-    html5::{self, parse::Token},
+    html5::parse::Token,
     http::{self, url::Serializable},
 };
 
 type DOMString = String;
 type USVString = String;
+
+pub struct InsertLocation<'a> {
+    parent: &'a mut Node,
+    pos: usize,
+}
+
+impl InsertLocation<'_> {
+    pub fn new(parent: &mut Node, pos: usize) -> InsertLocation {
+        InsertLocation { parent, pos }
+    }
+
+    pub fn node(&self) -> &Node {
+        self.parent
+    }
+
+    pub fn preceding(&self) -> Option<&NodeKind> {
+        if self.pos == 0 {
+            None
+        } else {
+            self.parent.child_nodes().item(self.pos - 1)
+        }
+    }
+
+    pub fn preceding_mut(&mut self) -> Option<&mut NodeKind> {
+        if self.pos == 0 {
+            None
+        } else {
+            self.parent.child_nodes_mut().item_mut(self.pos - 1)
+        }
+    }
+
+    pub fn insert(&mut self, node: &NodeKind) {
+        self.parent.child_nodes_mut().insert(self.pos, node);
+        self.pos += 1;
+    }
+}
 
 #[derive(Clone)]
 pub enum NodeKind {
@@ -86,6 +122,14 @@ impl NodeList {
         self._nodes.get(index)
     }
 
+    pub fn item_mut(&mut self, index: usize) -> Option<&mut NodeKind> {
+        self._nodes.get_mut(index)
+    }
+
+    pub fn insert(&mut self, index: usize, node: &NodeKind) {
+        self._nodes.insert(index, node.clone());
+    }
+
     pub fn iter(&self) -> std::slice::Iter<'_, NodeKind> {
         self._nodes.iter()
     }
@@ -132,6 +176,10 @@ impl Node {
 
     pub fn child_nodes(&self) -> &NodeList {
         &self._child_nodes
+    }
+
+    pub fn child_nodes_mut(&mut self) -> &mut NodeList {
+        &mut self._child_nodes
     }
 
     pub fn first_child(&self) -> Option<&NodeKind> {
@@ -185,6 +233,10 @@ impl CharacterData {
     pub fn substring_data(&self, offset: usize, count: usize) -> DOMString {
         let end = std::cmp::min(offset + count, self.data.len());
         self.data[offset..end].to_string()
+    }
+
+    pub fn append_ch(&mut self, ch: char) {
+        self.data.push(ch);
     }
 
     pub fn append_data(&mut self, data: &str) {
@@ -243,6 +295,10 @@ impl Text {
             &split_data,
             self._character_data._node.node_document.as_ref().unwrap(),
         )
+    }
+
+    pub fn push(&mut self, ch: char) {
+        self._character_data.append_ch(ch);
     }
 }
 
@@ -682,6 +738,7 @@ pub trait IElement {
         Self: Sized;
 
     fn node_mut(&mut self) -> &mut Node;
+    fn node(&self) -> &Node;
 }
 
 impl IElement for Element {
@@ -758,6 +815,10 @@ impl IElement for Element {
 
     fn node_mut(&mut self) -> &mut Node {
         &mut self._node
+    }
+
+    fn node(&self) -> &Node {
+        &self._node
     }
 }
 
@@ -934,11 +995,6 @@ impl Document {
             }
         }
         None
-    }
-
-    pub fn _insert_comment(&mut self, data: &str) {
-        self._node
-            .append_child(&NodeKind::Comment(Comment::new(data, self)));
     }
 }
 
