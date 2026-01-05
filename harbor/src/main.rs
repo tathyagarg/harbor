@@ -236,7 +236,7 @@ impl ApplicationHandler<State> for App {
 fn main() {
     env_logger::init();
 
-    let html_text = "<!DOCTYPE html>\n<html>\n<head>\n<title>Test</title>\n</head>\n<body>\n<h1>Hello, world!</h1>\n<!-- line -->\n<hr/>\n</body>\n</html>";
+    let html_text = "<!DOCTYPE html>\n<html>\n<head>\n<title>Test</title>\n</head>\n<body>\n<h1 style=\"color: red\">Hello, world!</h1>\n<!-- line -->\n<hr/>\n</body>\n</html>";
     let mut stream = html5::parse::InputStream::new(String::from(html_text));
 
     let mut tokenizer = html5::parse::Tokenizer::new(&mut stream);

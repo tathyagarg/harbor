@@ -56,7 +56,7 @@ impl InsertLocation {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NodeKind {
     Node(Node),
-    Element(Element),
+    Element(Rc<RefCell<Element>>),
     Text(Text),
     Comment(Comment),
     DocumentType(DocumentType),
@@ -64,14 +64,14 @@ pub enum NodeKind {
 }
 
 impl NodeKind {
-    pub fn node(&self) -> &Rc<RefCell<Node>> {
+    pub fn node(&self) -> Rc<RefCell<Node>> {
         match self {
             NodeKind::Node(n) => panic!("NodeKind::Node does not contain a Rc<RefCell<Node>>"),
-            NodeKind::Element(e) => &e._node,
-            NodeKind::Text(t) => &t._character_data._node,
-            NodeKind::Comment(c) => &c._character_data._node,
-            NodeKind::DocumentType(dt) => &dt._node,
-            NodeKind::Document(d) => &d._node,
+            NodeKind::Element(e) => Rc::clone(&e.borrow()._node),
+            NodeKind::Text(t) => Rc::clone(&t._character_data._node),
+            NodeKind::Comment(c) => Rc::clone(&c._character_data._node),
+            NodeKind::DocumentType(dt) => Rc::clone(&dt._node),
+            NodeKind::Document(d) => Rc::clone(&d._node),
         }
     }
 
@@ -87,19 +87,21 @@ impl NodeKind {
     // }
 
     pub fn set_parent(&mut self, parent: Option<Rc<RefCell<Node>>>) {
+        let self_node = self.node();
+        let mut node = self_node.borrow_mut();
+
         if parent.is_none() {
-            let mut node = self.node().borrow_mut();
             node._parent_node = None;
             return;
         }
-        let mut node = self.node().borrow_mut();
+
         node._parent_node = Some(Rc::downgrade(&parent.unwrap()));
     }
 
-    pub fn custom_element_registry(&self) -> Option<&CustomElementRegistry> {
+    pub fn custom_element_registry(&self) -> Option<CustomElementRegistry> {
         match self {
-            NodeKind::Document(d) => d._custom_element_registry.as_ref(),
-            NodeKind::Element(e) => e.custom_element_registry.as_ref(),
+            NodeKind::Document(d) => d._custom_element_registry.as_ref().cloned(),
+            NodeKind::Element(e) => e.borrow().custom_element_registry.as_ref().cloned(),
             _ => None,
         }
     }
@@ -575,12 +577,12 @@ impl CustomElementRegistry {
     }
 }
 
-fn lookup_definition<'a>(
-    _registry: Option<&'a CustomElementRegistry>,
+fn lookup_definition(
+    _registry: &Option<CustomElementRegistry>,
     _local_name: &str,
     _namespace: &Option<String>,
     _is: &Option<String>,
-) -> Option<&'a CustomElementDefinition> {
+) -> Option<CustomElementDefinition> {
     if _registry.is_none() {
         return None;
     }
@@ -593,7 +595,7 @@ fn lookup_definition<'a>(
         return None;
     }
 
-    let registry = _registry.unwrap();
+    let registry = _registry.as_ref().unwrap();
     for _definition in &registry.definitions {
         // Placeholder for matching logic
         // if definition.matches(local_name) {
@@ -618,7 +620,7 @@ pub enum CustomElementRegistryOrDefault {
     Registry(CustomElementRegistry),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct Attr {
     _node: Box<Node>,
 
@@ -627,8 +629,19 @@ pub struct Attr {
     _local_name: DOMString,
     _value: DOMString,
 
-    _element: Option<ElementID>,
+    _element: Option<Weak<RefCell<Element>>>,
 }
+
+impl PartialEq for Attr {
+    fn eq(&self, other: &Self) -> bool {
+        self._namespace == other._namespace
+            && self._namespace_prefix == other._namespace_prefix
+            && self._local_name == other._local_name
+            && self._value == other._value
+    }
+}
+
+impl Eq for Attr {}
 
 impl Attr {
     pub fn new(
@@ -636,7 +649,7 @@ impl Attr {
         prefix: Option<String>,
         local_name: String,
         value: String,
-        element: Option<&Element>,
+        element: Option<Weak<RefCell<Element>>>,
         _document: Rc<RefCell<Document>>,
     ) -> Self {
         let document = _document.borrow();
@@ -654,7 +667,7 @@ impl Attr {
             _namespace_prefix: prefix,
             _local_name: local_name,
             _value: value,
-            _element: element.map(|e| e.id.clone()),
+            _element: element,
         }
     }
 
@@ -680,7 +693,7 @@ impl Attr {
         self._value = value.to_string();
     }
 
-    pub fn owner_element(&self) -> &Option<ElementID> {
+    pub fn owner_element(&self) -> &Option<Weak<RefCell<Element>>> {
         &self._element
     }
 
@@ -735,7 +748,7 @@ impl Element {
             None => None,
         };
 
-        let definition = lookup_definition(registry.as_ref(), &local_name, &namespace, &is);
+        let definition = lookup_definition(&registry, &local_name, &namespace, &is);
 
         if definition
             .as_ref()
@@ -782,8 +795,13 @@ impl Element {
         self
     }
 
-    pub fn from_token(token: &Token, namespace: &str, intended_parent: &NodeKind) -> Element {
-        let intended_parent_node = intended_parent.node().borrow();
+    pub fn from_token(
+        token: &Token,
+        namespace: &str,
+        intended_parent: &NodeKind,
+    ) -> Rc<RefCell<Element>> {
+        let parent_node = intended_parent.node();
+        let intended_parent_node = parent_node.borrow();
 
         let tag = match &token {
             Token::StartTag(t) => t,
@@ -791,13 +809,18 @@ impl Element {
             _ => panic!("Token must be a StartTag or EndTag, got: {:?}", token),
         };
 
-        let document = intended_parent_node.node_document.as_ref().unwrap();
+        let document = intended_parent_node
+            .node_document
+            .as_ref()
+            .expect("Intended parent must have a document")
+            .upgrade()
+            .expect("Document must be valid");
 
         let local_name = tag.name.clone();
 
         let registry = intended_parent.custom_element_registry();
         let defintion =
-            lookup_definition(registry, &local_name, &Some(namespace.to_string()), &None);
+            lookup_definition(&registry, &local_name, &Some(namespace.to_string()), &None);
 
         let will_execute_script = defintion.is_some();
 
@@ -805,29 +828,34 @@ impl Element {
             todo!("handle custom element creation with script execution");
         }
 
-        let mut element = Element::new(
-            Rc::clone(&document.upgrade().unwrap()),
-            local_name,
-            Some(namespace.to_string()),
-            None,
-            None,
-            Some(will_execute_script),
-            match registry {
-                Some(r) => Some(CustomElementRegistryOrDefault::Registry(r.clone())),
-                None => None,
-            },
-        )
-        .with_token(token.clone());
+        let element = Rc::new(RefCell::new(
+            Element::new(
+                Rc::clone(&document),
+                local_name,
+                Some(namespace.to_string()),
+                None,
+                None,
+                Some(will_execute_script),
+                registry.map(|r| CustomElementRegistryOrDefault::Registry(r.clone())),
+            )
+            .with_token(token.clone()),
+        ));
 
-        for (name, value) in tag.attributes.iter() {
-            element.attribute_list.push(Attr::new(
-                None,
-                None,
-                name.clone(),
-                value.clone(),
-                Some(&element),
-                Rc::clone(&document.upgrade().unwrap()),
-            ));
+        let element_weak = Rc::downgrade(&element);
+
+        {
+            let mut element_mut = element.borrow_mut();
+
+            for (name, value) in tag.attributes.iter() {
+                element_mut.attribute_list.push(Attr::new(
+                    None,
+                    None,
+                    name.clone(),
+                    value.clone(),
+                    Some(Weak::clone(&element_weak)),
+                    Rc::clone(&document),
+                ));
+            }
         }
 
         // TODO: other random bullshit
@@ -891,15 +919,16 @@ impl Element {
         &self.attribute_list
     }
 
-    pub fn push_attr_raw(&mut self, name: &str, value: &str) {
+    pub fn push_attr_raw_rc(element: &Rc<RefCell<Element>>, name: &str, value: &str) {
         let attr = Attr::new(
             None,
             None,
             name.to_string(),
             value.to_string(),
-            Some(self),
+            Some(Rc::downgrade(element)),
             Rc::clone(
-                &self
+                &element
+                    .borrow()
                     .node()
                     .borrow()
                     .node_document
@@ -910,8 +939,30 @@ impl Element {
             ),
         );
 
-        self.attribute_list.push(attr);
+        element.borrow_mut().attribute_list.push(attr);
     }
+
+    // pub fn push_attr_raw(&mut self, name: &str, value: &str) {
+    //     let attr = Attr::new(
+    //         None,
+    //         None,
+    //         name.to_string(),
+    //         value.to_string(),
+    //         Some(self),
+    //         Rc::clone(
+    //             &self
+    //                 .node()
+    //                 .borrow()
+    //                 .node_document
+    //                 .as_ref()
+    //                 .unwrap()
+    //                 .upgrade()
+    //                 .unwrap(),
+    //         ),
+    //     );
+
+    //     self.attribute_list.push(attr);
+    // }
 
     pub fn push_attribute(&mut self, attr: Attr) {
         self.attribute_list.push(attr);

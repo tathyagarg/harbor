@@ -1,6 +1,7 @@
 use core::panic;
 // use std::borrow::Borrow;
 use std::cell::Ref;
+use std::rc::Weak;
 use std::{cell::RefCell, rc::Rc};
 
 use crate::html5::{self, dom::*};
@@ -569,11 +570,9 @@ impl InsertMode {
                     &NodeKind::Document(tokenizer.document.document().clone()),
                 );
                 let document = tokenizer.document.document_mut();
+                let element_node = Rc::new(RefCell::new(NodeKind::Element(Rc::clone(&element))));
 
-                Node::append_child(
-                    &Rc::clone(&document._node),
-                    Rc::new(RefCell::new(NodeKind::Element(element.clone()))),
-                );
+                Node::append_child(&Rc::clone(&document._node), element_node);
 
                 tokenizer.open_elements_stack.push(element);
 
@@ -626,11 +625,9 @@ impl InsertMode {
                 InsertMode::handle_in_body(tokenizer, token);
             }
             Token::StartTag(ref tag) if tag.name.as_str() == "head" => {
-                let head = tokenizer
-                    .open_elements_stack
-                    .insert_html_element(&token)
-                    .with_id("head");
-                tokenizer.head_element_id = Some(head.id.clone());
+                let head = tokenizer.open_elements_stack.insert_html_element(&token);
+
+                tokenizer.head_element_id = Some(head.borrow().id.clone());
                 tokenizer.insertion_mode = InsertMode::InHead;
             }
             Token::EndTag(Tag { name, .. })
@@ -643,9 +640,8 @@ impl InsertMode {
             _ => {
                 let head = tokenizer
                     .open_elements_stack
-                    .insert_html_element(&Token::StartTag(Tag::new(&String::from("head"))))
-                    .with_id("head");
-                tokenizer.head_element_id = Some(head.id.clone());
+                    .insert_html_element(&Token::StartTag(Tag::new(&String::from("head"))));
+                tokenizer.head_element_id = Some(head.borrow().id.clone());
                 tokenizer.insertion_mode = InsertMode::InHead;
 
                 return false;
@@ -943,7 +939,10 @@ impl InsertMode {
                 ));
 
                 if tokenizer.open_elements_stack.elements.len() == 1
-                    || tokenizer.open_elements_stack.elements[1].qualified_name() != "body"
+                    || tokenizer.open_elements_stack.elements[1]
+                        .borrow()
+                        .qualified_name()
+                        != "body"
                     || tokenizer._is_element_on_open_elements("template")
                 {
                     // ignore
@@ -951,15 +950,21 @@ impl InsertMode {
                 } else {
                     tokenizer.flag_frameset_ok = false;
 
-                    let body_element = &mut tokenizer.open_elements_stack.elements[1];
+                    let body_element = &tokenizer.open_elements_stack.elements[1];
 
                     for (attr_name, attr_value) in &tag.attributes {
                         if !body_element
+                            .borrow()
                             .attributes()
                             .iter()
                             .any(|attr| attr.local_name() == attr_name.as_str())
                         {
-                            body_element.push_attr_raw(attr_name.as_str(), attr_value.as_str());
+                            Element::push_attr_raw_rc(
+                                &body_element,
+                                attr_name.as_str(),
+                                attr_value.as_str(),
+                            );
+                            // body_element.push_attr_raw(attr_name.as_str(), attr_value.as_str());
                         }
                     }
                 }
@@ -970,14 +975,18 @@ impl InsertMode {
                 ));
 
                 if tokenizer.open_elements_stack.elements.len() == 1
-                    || tokenizer.open_elements_stack.elements[1].qualified_name() != "body"
+                    || tokenizer.open_elements_stack.elements[1]
+                        .borrow()
+                        .qualified_name()
+                        != "body"
                     || !tokenizer.flag_frameset_ok
                 {
                     return true;
                 } else {
-                    let second = &mut tokenizer.open_elements_stack.elements[1];
+                    let second = &tokenizer.open_elements_stack.elements[1];
 
                     let position = second
+                        .borrow()
                         .node()
                         .borrow()
                         .parent_node()
@@ -988,6 +997,7 @@ impl InsertMode {
                         .position_of_child(&NodeKind::Element(second.clone()));
 
                     second
+                        .borrow()
                         .node()
                         .borrow_mut()
                         .parent_node_mut()
@@ -1098,7 +1108,7 @@ impl InsertMode {
                     .adjusted_current_node()
                     .is_some_and(|el| {
                         matches!(
-                            el.qualified_name().as_str(),
+                            el.borrow().qualified_name().as_str(),
                             "h1" | "h2" | "h3" | "h4" | "h5" | "h6"
                         )
                     })
@@ -1135,10 +1145,7 @@ impl InsertMode {
             Token::StartTag(ref tag) if tag.name.as_str() == "li" => {
                 tokenizer.flag_frameset_ok = false;
 
-                let mut node = tokenizer
-                    .open_elements_stack
-                    .adjusted_current_node()
-                    .cloned();
+                let node = tokenizer.open_elements_stack.adjusted_current_node();
             }
             _ => {}
         }
@@ -1202,7 +1209,7 @@ impl InsertMode {
 
 #[derive(Clone)]
 pub enum ElementOrMarker {
-    Element(Element),
+    Element(Rc<RefCell<Element>>),
     Marker,
 }
 
@@ -1224,8 +1231,9 @@ impl ActiveFormattingElements {
         None
     }
 
-    pub fn push(&mut self, element: Element) {
+    pub fn push(&mut self, element: Rc<RefCell<Element>>) {
         let last_marker = self.last_marker().unwrap_or(0);
+        let target_borrow = element.borrow().clone();
 
         if self.elements[last_marker + 1..]
             .iter()
@@ -1234,13 +1242,17 @@ impl ActiveFormattingElements {
                 ElementOrMarker::Marker => panic!("Should not encounter marker here"),
             })
             .filter(|el| {
-                el.qualified_name() == element.qualified_name()
-                    && element.attributes().len() == el.attributes().len()
-                    && element.attributes().iter().all(|attr| {
-                        el.get_attribute(attr.local_name())
-                            .is_some_and(|v| v == attr.value())
-                    })
-                    && el.namespace_uri() == element.namespace_uri()
+                let borrowed_el = el.borrow();
+                borrowed_el.clone() == target_borrow
+
+                // borrowed_el.qualified_name() == element.qualified_name()
+                //     && element.attributes().len() == borrowed_el.attributes().len()
+                //     && element.attributes().iter().all(|attr| {
+                //         borrowed_el
+                //             .get_attribute(attr.local_name())
+                //             .is_some_and(|v| v == attr.value())
+                //     })
+                //     && borrowed_el.namespace_uri() == element.namespace_uri()
             })
             .count()
             >= 3
@@ -1250,13 +1262,14 @@ impl ActiveFormattingElements {
                 .iter()
                 .position(|el| match el {
                     ElementOrMarker::Element(e) => {
-                        e.qualified_name() == element.qualified_name()
-                            && element.attributes().len() == e.attributes().len()
-                            && element.attributes().iter().all(|attr| {
-                                e.get_attribute(attr.local_name())
-                                    .is_some_and(|v| v == attr.value())
-                            })
-                            && e.namespace_uri() == element.namespace_uri()
+                        e.borrow().clone() == target_borrow
+                        // e.qualified_name() == element.qualified_name()
+                        //     && element.attributes().len() == e.attributes().len()
+                        //     && element.attributes().iter().all(|attr| {
+                        //         e.get_attribute(attr.local_name())
+                        //             .is_some_and(|v| v == attr.value())
+                        //     })
+                        //     && e.namespace_uri() == element.namespace_uri()
                     }
                     ElementOrMarker::Marker => false,
                 })
@@ -1274,7 +1287,7 @@ impl ActiveFormattingElements {
 }
 
 struct OpenElementsStack {
-    elements: Vec<Element>,
+    elements: Vec<Rc<RefCell<Element>>>,
 }
 
 impl OpenElementsStack {
@@ -1282,49 +1295,61 @@ impl OpenElementsStack {
         OpenElementsStack { elements: vec![] }
     }
 
-    pub fn push(&mut self, element: Element) {
+    pub fn push(&mut self, element: Rc<RefCell<Element>>) {
         self.elements.push(element);
     }
 
-    pub fn pop(&mut self) -> Option<Element> {
+    pub fn pop(&mut self) -> Option<Rc<RefCell<Element>>> {
         self.elements.pop()
     }
 
     pub fn pop_until(&mut self, target_name: &str) {
         while let Some(element) = self.pop() {
-            if element.qualified_name() == target_name {
+            if element.borrow().qualified_name() == target_name {
                 break;
             }
         }
     }
 
     pub fn contains(&self, element: &Element) -> bool {
-        self.elements.iter().any(|el| el.id == element.id)
+        let element_name = element.qualified_name();
+
+        self.elements
+            .iter()
+            .any(|el| el.borrow().qualified_name() == element_name)
     }
 
+    pub fn contains_rc(&self, element: &Rc<RefCell<Element>>) -> bool {
+        let element_name = element.borrow().qualified_name();
+
+        self.elements
+            .iter()
+            .any(|el| el.borrow().qualified_name() == element_name)
+    }
     pub fn contains_tag(&self, tag_name: &str) -> bool {
         self.elements
             .iter()
-            .any(|el| el.qualified_name() == tag_name)
+            .any(|el| el.borrow().qualified_name() == tag_name)
     }
 
-    fn adjusted_current_node(&self) -> Option<&Element> {
-        self.elements.last()
+    fn adjusted_current_node(&self) -> Option<Rc<RefCell<Element>>> {
+        self.elements.last().map(Rc::clone)
     }
 
-    fn adjusted_current_node_mut(&mut self) -> Option<&mut Element> {
-        self.elements.last_mut()
-    }
+    // fn adjusted_current_node_mut(&mut self) -> Option<&mut Weak<RefCell<Element>>> {
+    //     self.elements.last_mut()
+    // }
 
-    fn appropriate_insertion_place(&mut self, override_target: Option<&Element>) -> InsertLocation {
-        let target = override_target
-            .unwrap_or_else(|| {
-                self.adjusted_current_node()
-                    .expect("No current node for appropriate insertion place")
-            })
-            .to_owned();
+    fn appropriate_insertion_place(
+        &mut self,
+        override_target: Option<Rc<RefCell<Element>>>,
+    ) -> InsertLocation {
+        let target = override_target.unwrap_or_else(|| {
+            self.adjusted_current_node()
+                .expect("No current node for appropriate insertion place")
+        });
 
-        let adjusted_insertion_position = target.node().borrow().child_nodes().length();
+        let adjusted_insertion_position = target.borrow().node().borrow().child_nodes().length();
 
         InsertLocation::new(
             Rc::new(RefCell::new(NodeKind::Element(target))),
@@ -1337,7 +1362,7 @@ impl OpenElementsStack {
         token: &Token,
         namespace: &str,
         only_add_to_element_stack: bool,
-    ) -> Element {
+    ) -> Rc<RefCell<Element>> {
         let mut adjusted_insertion_location = self.appropriate_insertion_place(None);
 
         let element = Element::from_token(
@@ -1354,17 +1379,20 @@ impl OpenElementsStack {
         element
     }
 
-    fn insert_html_element(&mut self, token: &Token) -> Element {
+    fn insert_html_element(&mut self, token: &Token) -> Rc<RefCell<Element>> {
         self.insert_foreign_element(token, html5::HTML_NAMESPACE, false)
     }
 
     pub fn has_element_in_specific_scope(&self, target_name: &str, scope_names: &[&str]) -> bool {
         for element in self.elements.iter().rev() {
-            if element.qualified_name() == target_name {
+            // Starnger Things ending was shit
+            let el = element.borrow();
+
+            if el.qualified_name() == target_name {
                 return true;
             }
 
-            if scope_names.contains(&element.qualified_name().as_str()) {
+            if scope_names.contains(&el.qualified_name().as_str()) {
                 return false;
             }
         }
@@ -1384,7 +1412,7 @@ impl OpenElementsStack {
         ];
 
         for element in self.elements.iter().rev() {
-            if !special_elements.contains(&element.qualified_name().as_str()) {
+            if !special_elements.contains(&element.borrow().qualified_name().as_str()) {
                 return true;
             }
         }
@@ -1398,10 +1426,12 @@ impl OpenElementsStack {
 
     pub fn generate_implied_end_tags(&mut self, exclude: Option<&str>) {
         loop {
-            let current_node = match self.adjusted_current_node() {
+            let _current_node = match self.adjusted_current_node() {
                 Some(node) => node,
                 None => break,
             };
+
+            let current_node = _current_node.borrow();
 
             if IMPLIED_END_TAGS.contains(&current_node.qualified_name().as_str())
                 && Some(current_node.qualified_name().as_str()) != exclude
@@ -1495,7 +1525,7 @@ impl<'a> Tokenizer<'a> {
         self.open_elements_stack
             .elements
             .iter()
-            .any(|el| el.qualified_name() == name)
+            .any(|el| el.borrow().qualified_name() == name)
     }
 
     fn _reconstruct_active_formatting_elements(&mut self) {
@@ -1505,7 +1535,7 @@ impl<'a> Tokenizer<'a> {
 
         if let Some(ElementOrMarker::Element(element)) =
             self.active_formatting_elements.elements.last()
-            && self.open_elements_stack.contains(element)
+            && self.open_elements_stack.contains_rc(element)
         {
             return;
         }
@@ -1530,7 +1560,7 @@ impl<'a> Tokenizer<'a> {
             entry = self.active_formatting_elements.elements[entry_pos].clone();
 
             if matches!(entry, ElementOrMarker::Marker)
-                || self.open_elements_stack.contains(match &entry {
+                || self.open_elements_stack.contains_rc(match &entry {
                     ElementOrMarker::Element(e) => e,
                     ElementOrMarker::Marker => panic!("Should not encounter marker here"),
                 })
@@ -1554,6 +1584,7 @@ impl<'a> Tokenizer<'a> {
 
             let new_element = self.open_elements_stack.insert_html_element(
                 &element
+                    .borrow()
                     .token()
                     .expect("Element has no token - how the hell was it created?"),
             );
@@ -2566,9 +2597,11 @@ impl<'a> Tokenizer<'a> {
 
                 self.leave_callback = Some(Box::new(|_self: &mut Tokenizer| {
                     let curr_tag_name = _self.curr_tag_attr_name();
+                    let attr_names = _self.tag_attribute_names();
 
-                    for name in _self.tag_attribute_names() {
-                        if curr_tag_name == name {
+                    for name in attr_names.iter().take(attr_names.len() - 1) {
+                        if curr_tag_name == name.clone() {
+                            println!("names: {:?}", _self.tag_attribute_names());
                             _self.error(ParseError::DuplicateAttribute);
                             _self
                                 .tag_token
@@ -2665,7 +2698,10 @@ impl<'a> Tokenizer<'a> {
                             self.error(ParseError::UnexpectedNullCharacter);
                             self.push_to_attr_name('\u{FFFD}');
                         }
-                        _ => self.push_to_attr_val(ch),
+                        _ => {
+                            println!("pushing char {} to attr val", ch);
+                            self.push_to_attr_val(ch);
+                        }
                     }
                 } else {
                     self.error(ParseError::EOFInTag);
