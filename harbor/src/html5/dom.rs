@@ -39,13 +39,16 @@ impl InsertLocation {
         }
     }
 
-    pub fn insert(&mut self, node: &NodeKind) {
+    pub fn insert(&mut self, node: &mut NodeKind) {
         self.parent
             .borrow_mut()
             .node()
             .borrow_mut()
             .child_nodes_mut()
             .insert(self.pos, node);
+
+        node.set_parent(Some(Rc::clone(&self.parent.borrow().node())));
+
         self.pos += 1;
     }
 }
@@ -181,6 +184,7 @@ impl Debug for Node {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Node")
             .field("_node_type", &self._node_type)
+            .field("node_document", &self.node_document)
             // .field("_node_name", &self._node_name)
             // .field("_base_uri", &self._base_uri)
             .field("_parent_node", &self._parent_node)

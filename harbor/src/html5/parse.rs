@@ -11,6 +11,39 @@ use crate::html5::{self, dom::*};
 ///
 /// Future tattu: I doubt this will be temporary
 
+macro_rules! concat_arrays {
+    ( $ty:ty, $default:expr => $($arr:expr),* $(,)? ) => {{
+        const __CONCAT_ARRAYS_LEN: usize = 0 $( + $arr.len() )*;
+        const __CONCAT_ARRAYS_RESULT: [$ty; __CONCAT_ARRAYS_LEN] = {
+            let mut result = [$default; __CONCAT_ARRAYS_LEN];
+            let mut result_idx = 0;
+            $(
+                let arr = $arr;
+                let mut src_idx = 0;
+                while src_idx < arr.len() {
+                    result[result_idx] = arr[src_idx];
+                    src_idx += 1;
+                    result_idx += 1;
+                }
+            )*
+            result
+        };
+        __CONCAT_ARRAYS_RESULT
+    }};
+}
+
+const DEFAULT_SCOPE_NAMES: [&str; 14] = [
+    "applet", "caption", "html", "table", "td", "th", "marquee", "object", "template", "mi", "mo",
+    "mn", "ms", "mtext",
+];
+
+const BUTTON_SCOPE_NAMES: [&str; 15] =
+    concat_arrays!(&str, "" => &DEFAULT_SCOPE_NAMES, &["button"]);
+
+const IMPLIED_END_TAGS: [&str; 10] = [
+    "dd", "dt", "li", "option", "optgroup", "p", "rb", "rp", "rt", "rtc",
+];
+
 #[derive(Debug)]
 pub struct _Document {
     pub document: Rc<RefCell<Document>>,
@@ -488,22 +521,18 @@ impl InsertMode {
                     tokenizer.error(ParseError::UnexpectedCharacterAfterDOCTYPESystemIdentifier);
                 }
 
-                let document = tokenizer.document.document_mut();
+                let doctype = DocumentType::new(
+                    doctype.name.unwrap_or(String::new()).as_str(),
+                    // NOTE: this will be overwritten by append child anyway, so clone is
+                    // fine
+                    Some(Rc::clone(&tokenizer.document.document)),
+                )
+                .with_public_id(doctype.public_identifier.unwrap_or(String::new()).as_str())
+                .with_system_id(doctype.system_identifier.unwrap_or(String::new()).as_str());
 
                 Node::append_child(
-                    &Rc::clone(&document._node),
-                    Rc::new(RefCell::new(NodeKind::DocumentType(
-                        DocumentType::new(
-                            doctype.name.unwrap_or(String::new()).as_str(),
-                            // NOTE: this will be overwritten by append child anyway, so clone is
-                            // fine
-                            None,
-                        )
-                        .with_public_id(doctype.public_identifier.unwrap_or(String::new()).as_str())
-                        .with_system_id(
-                            doctype.system_identifier.unwrap_or(String::new()).as_str(),
-                        ),
-                    ))),
+                    &Rc::clone(&tokenizer.document.document_mut()._node),
+                    Rc::new(RefCell::new(NodeKind::DocumentType(doctype))),
                 );
 
                 // TODO: Set quirks mode if needed:
@@ -597,7 +626,10 @@ impl InsertMode {
                 InsertMode::handle_in_body(tokenizer, token);
             }
             Token::StartTag(ref tag) if tag.name.as_str() == "head" => {
-                let head = tokenizer.insert_html_element(&token).with_id("head");
+                let head = tokenizer
+                    .open_elements_stack
+                    .insert_html_element(&token)
+                    .with_id("head");
                 tokenizer.head_element_id = Some(head.id.clone());
                 tokenizer.insertion_mode = InsertMode::InHead;
             }
@@ -610,6 +642,7 @@ impl InsertMode {
             }
             _ => {
                 let head = tokenizer
+                    .open_elements_stack
                     .insert_html_element(&Token::StartTag(Tag::new(&String::from("head"))))
                     .with_id("head");
                 tokenizer.head_element_id = Some(head.id.clone());
@@ -646,11 +679,11 @@ impl InsertMode {
             Token::StartTag(ref tag)
                 if matches!(tag.name.as_str(), "base" | "basefont" | "bgsound" | "link") =>
             {
-                tokenizer.insert_html_element(&token);
+                tokenizer.open_elements_stack.insert_html_element(&token);
                 tokenizer.open_elements_stack.pop();
             }
             Token::StartTag(ref tag) if tag.name.as_str() == "meta" => {
-                tokenizer.insert_html_element(&token);
+                tokenizer.open_elements_stack.insert_html_element(&token);
                 tokenizer.open_elements_stack.pop();
             }
             Token::StartTag(ref tag) if tag.name.as_str() == "title" => {
@@ -665,21 +698,28 @@ impl InsertMode {
             Token::StartTag(ref tag)
                 if (tag.name.as_str() == "noscript" && !tokenizer.flag_scripting) =>
             {
-                tokenizer.insert_html_element(&token);
+                tokenizer.open_elements_stack.insert_html_element(&token);
                 tokenizer.insertion_mode = InsertMode::InHeadNoScript;
             }
             Token::StartTag(ref tag) if tag.name.as_str() == "script" => {
                 let element = Element::from_token(
                     &token,
                     html5::HTML_NAMESPACE,
-                    &NodeKind::Element(tokenizer.adjusted_current_node().unwrap().clone()),
+                    &NodeKind::Element(
+                        tokenizer
+                            .open_elements_stack
+                            .adjusted_current_node()
+                            .unwrap()
+                            .clone(),
+                    ),
                 );
 
                 // TODO: Handle script element parsing correctly
 
                 tokenizer
-                    ._appropriate_insertion_place(None)
-                    .insert(&NodeKind::Element(element.clone()));
+                    .open_elements_stack
+                    .appropriate_insertion_place(None)
+                    .insert(&mut NodeKind::Element(element.clone()));
 
                 tokenizer.open_elements_stack.push(element);
                 tokenizer.state = TokenizerState::ScriptData;
@@ -782,13 +822,13 @@ impl InsertMode {
                 InsertMode::handle_in_body(tokenizer, token);
             }
             Token::StartTag(ref tag) if tag.name.as_str() == "body" => {
-                tokenizer.insert_html_element(&token);
+                tokenizer.open_elements_stack.insert_html_element(&token);
                 tokenizer.flag_frameset_ok = false;
 
                 tokenizer.insertion_mode = InsertMode::InBody;
             }
             Token::StartTag(ref tag) if tag.name.as_str() == "frameset" => {
-                tokenizer.insert_html_element(&token);
+                tokenizer.open_elements_stack.insert_html_element(&token);
                 tokenizer.insertion_mode = InsertMode::InFrameset;
             }
             Token::StartTag(ref tag)
@@ -826,7 +866,9 @@ impl InsertMode {
                 ));
             }
             _ => {
-                tokenizer.insert_html_element(&Token::StartTag(Tag::new(&String::from("body"))));
+                tokenizer
+                    .open_elements_stack
+                    .insert_html_element(&Token::StartTag(Tag::new(&String::from("body"))));
                 tokenizer.insertion_mode = InsertMode::InBody;
 
                 return false;
@@ -900,8 +942,8 @@ impl InsertMode {
                     "Unexpected body start tag token in in body insertion mode",
                 ));
 
-                if tokenizer.open_elements_stack.len() == 1
-                    || tokenizer.open_elements_stack[1].qualified_name() != "body"
+                if tokenizer.open_elements_stack.elements.len() == 1
+                    || tokenizer.open_elements_stack.elements[1].qualified_name() != "body"
                     || tokenizer._is_element_on_open_elements("template")
                 {
                     // ignore
@@ -909,7 +951,7 @@ impl InsertMode {
                 } else {
                     tokenizer.flag_frameset_ok = false;
 
-                    let body_element = &mut tokenizer.open_elements_stack[1];
+                    let body_element = &mut tokenizer.open_elements_stack.elements[1];
 
                     for (attr_name, attr_value) in &tag.attributes {
                         if !body_element
@@ -927,13 +969,13 @@ impl InsertMode {
                     "Unexpected frameset start tag token in in body insertion mode",
                 ));
 
-                if tokenizer.open_elements_stack.len() == 1
-                    || tokenizer.open_elements_stack[1].qualified_name() != "body"
+                if tokenizer.open_elements_stack.elements.len() == 1
+                    || tokenizer.open_elements_stack.elements[1].qualified_name() != "body"
                     || !tokenizer.flag_frameset_ok
                 {
                     return true;
                 } else {
-                    let second = &mut tokenizer.open_elements_stack[1];
+                    let second = &mut tokenizer.open_elements_stack.elements[1];
 
                     let position = second
                         .node()
@@ -955,11 +997,91 @@ impl InsertMode {
                         .borrow_mut()
                         .pop_child(position);
 
-                    tokenizer.open_elements_stack.drain(1..);
-                    tokenizer.insert_html_element(&token);
+                    tokenizer.open_elements_stack.elements.drain(1..);
+                    tokenizer.open_elements_stack.insert_html_element(&token);
 
                     tokenizer.insertion_mode = InsertMode::InFrameset;
                 }
+            }
+            Token::EOF => {
+                if !tokenizer.open_elements_stack.elements.is_empty() {
+                    InsertMode::handle_in_template(tokenizer, token);
+                } else {
+                    if tokenizer
+                        .open_elements_stack
+                        .has_non_special_element_in_scope()
+                    {
+                        tokenizer.error(ParseError::Custom(
+                            "Unexpected EOF token in in body insertion mode",
+                        ));
+                    }
+
+                    return true;
+                }
+            }
+            Token::EndTag(ref tag) if tag.name.as_str() == "body" => {
+                if tokenizer
+                    .open_elements_stack
+                    .has_non_special_element_in_scope()
+                {
+                    tokenizer.error(ParseError::Custom(
+                        "Unexpected end tag token in in body insertion mode",
+                    ));
+                }
+
+                tokenizer.insertion_mode = InsertMode::AfterBody;
+            }
+            Token::EndTag(ref tag) if tag.name.as_str() == "html" => {
+                if tokenizer
+                    .open_elements_stack
+                    .has_non_special_element_in_scope()
+                {
+                    tokenizer.error(ParseError::Custom(
+                        "Unexpected end tag token in in body insertion mode",
+                    ));
+                }
+
+                tokenizer.insertion_mode = InsertMode::AfterBody;
+
+                return false;
+            }
+            Token::StartTag(ref tag)
+                if matches!(
+                    tag.name.as_str(),
+                    "address"
+                        | "article"
+                        | "aside"
+                        | "blockquote"
+                        | "center"
+                        | "details"
+                        | "dialog"
+                        | "dir"
+                        | "div"
+                        | "dl"
+                        | "fieldset"
+                        | "figcaption"
+                        | "figure"
+                        | "footer"
+                        | "header"
+                        | "hgroup"
+                        | "main"
+                        | "nav"
+                        | "ol"
+                        | "p"
+                        | "search"
+                        | "section"
+                        | "summary"
+                        | "ul"
+                ) =>
+            {
+                if tokenizer
+                    .open_elements_stack
+                    .has_element_in_button_scope("p")
+                {
+                    tokenizer.open_elements_stack.close_p_tag();
+                }
+
+                tokenizer.open_elements_stack.insert_html_element(&token);
             }
             _ => {}
         }
@@ -991,6 +1113,14 @@ impl InsertMode {
             _ => {
                 unreachable!("Unexpected token in text insertion mode");
             }
+        }
+
+        return true;
+    }
+
+    fn handle_in_template(tokenizer: &mut Tokenizer, token: Token) -> bool {
+        match token {
+            _ => {}
         }
 
         return true;
@@ -1086,6 +1216,147 @@ impl ActiveFormattingElements {
     }
 }
 
+struct OpenElementsStack {
+    elements: Vec<Element>,
+}
+
+impl OpenElementsStack {
+    pub fn new() -> OpenElementsStack {
+        OpenElementsStack { elements: vec![] }
+    }
+
+    pub fn push(&mut self, element: Element) {
+        self.elements.push(element);
+    }
+
+    pub fn pop(&mut self) -> Option<Element> {
+        self.elements.pop()
+    }
+
+    pub fn contains(&self, element: &Element) -> bool {
+        self.elements.iter().any(|el| el.id == element.id)
+    }
+
+    pub fn contains_tag(&self, tag_name: &str) -> bool {
+        self.elements
+            .iter()
+            .any(|el| el.qualified_name() == tag_name)
+    }
+
+    fn adjusted_current_node(&self) -> Option<&Element> {
+        self.elements.last()
+    }
+
+    fn adjusted_current_node_mut(&mut self) -> Option<&mut Element> {
+        self.elements.last_mut()
+    }
+
+    fn appropriate_insertion_place(&mut self, override_target: Option<&Element>) -> InsertLocation {
+        let target = override_target
+            .unwrap_or_else(|| {
+                self.adjusted_current_node()
+                    .expect("No current node for appropriate insertion place")
+            })
+            .to_owned();
+
+        let adjusted_insertion_position = target.node().borrow().child_nodes().length();
+
+        InsertLocation::new(
+            Rc::new(RefCell::new(NodeKind::Element(target))),
+            adjusted_insertion_position,
+        )
+    }
+
+    fn insert_foreign_element(
+        &mut self,
+        token: &Token,
+        namespace: &str,
+        only_add_to_element_stack: bool,
+    ) -> Element {
+        let mut adjusted_insertion_location = self.appropriate_insertion_place(None);
+
+        let element = Element::from_token(
+            token,
+            namespace,
+            &*adjusted_insertion_location.parent().borrow(),
+        );
+
+        if !only_add_to_element_stack {
+            adjusted_insertion_location.insert(&mut NodeKind::Element(element.clone()));
+        }
+
+        self.push(element.clone());
+        element
+    }
+
+    fn insert_html_element(&mut self, token: &Token) -> Element {
+        self.insert_foreign_element(token, html5::HTML_NAMESPACE, false)
+    }
+
+    pub fn has_element_in_specific_scope(&self, target_name: &str, scope_names: &[&str]) -> bool {
+        for element in self.elements.iter().rev() {
+            if element.qualified_name() == target_name {
+                return true;
+            }
+
+            if scope_names.contains(&element.qualified_name().as_str()) {
+                return false;
+            }
+        }
+
+        false
+    }
+
+    pub fn has_element_in_default_scope(&self, target_name: &str) -> bool {
+        // TODO: Fact check list
+        self.has_element_in_specific_scope(target_name, &DEFAULT_SCOPE_NAMES)
+    }
+
+    pub fn has_non_special_element_in_scope(&self) -> bool {
+        let special_elements = [
+            "dd", "dt", "li", "optgroup", "option", "p", "rb", "rp", "rt", "rtc", "tbody", "td",
+            "tfoot", "th", "thead", "tr", "body", "html",
+        ];
+
+        for element in self.elements.iter().rev() {
+            if !special_elements.contains(&element.qualified_name().as_str()) {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    pub fn has_element_in_button_scope(&self, target_name: &str) -> bool {
+        self.has_element_in_specific_scope(target_name, &BUTTON_SCOPE_NAMES)
+    }
+
+    pub fn generate_implied_end_tags(&mut self, exclude: Option<&str>) {
+        loop {
+            let current_node = match self.adjusted_current_node() {
+                Some(node) => node,
+                None => break,
+            };
+
+            if IMPLIED_END_TAGS.contains(&current_node.qualified_name().as_str())
+                && Some(current_node.qualified_name().as_str()) != exclude
+            {
+                self.pop();
+            } else {
+                break;
+            }
+        }
+    }
+
+    pub fn close_p_tag(&mut self) {
+        self.generate_implied_end_tags(Some("p"));
+
+        while self.pop().unwrap().qualified_name() != "p" {
+            // Keep popping until a "p" element is popped
+        }
+    }
+}
+
 pub struct Tokenizer<'a> {
     stream: &'a mut InputStream,
 
@@ -1109,7 +1380,7 @@ pub struct Tokenizer<'a> {
     pub document: _Document,
 
     active_formatting_elements: ActiveFormattingElements,
-    open_elements_stack: Vec<Element>,
+    open_elements_stack: OpenElementsStack,
 
     head_element_id: Option<ElementID>,
 
@@ -1147,7 +1418,7 @@ impl<'a> Tokenizer<'a> {
             },
 
             active_formatting_elements: ActiveFormattingElements::new(),
-            open_elements_stack: vec![],
+            open_elements_stack: OpenElementsStack::new(),
 
             head_element_id: None,
 
@@ -1160,6 +1431,7 @@ impl<'a> Tokenizer<'a> {
 
     fn _is_element_on_open_elements(&self, name: &str) -> bool {
         self.open_elements_stack
+            .elements
             .iter()
             .any(|el| el.qualified_name() == name)
     }
@@ -1218,7 +1490,7 @@ impl<'a> Tokenizer<'a> {
                 ElementOrMarker::Marker => panic!("Should not encounter marker here"),
             };
 
-            let new_element = self.insert_html_element(
+            let new_element = self.open_elements_stack.insert_html_element(
                 &element
                     .token()
                     .expect("Element has no token - how the hell was it created?"),
@@ -1236,7 +1508,7 @@ impl<'a> Tokenizer<'a> {
     }
 
     fn _insert_character(&mut self, ch: char) {
-        let mut location = self._appropriate_insertion_place(None);
+        let mut location = self.open_elements_stack.appropriate_insertion_place(None);
         if matches!(
             location.parent().borrow().node().borrow()._node_type,
             NodeType::Document
@@ -1262,7 +1534,7 @@ impl<'a> Tokenizer<'a> {
                     .unwrap(),
             );
 
-            location.insert(&NodeKind::Text(Text::new(
+            location.insert(&mut NodeKind::Text(Text::new(
                 ch.to_string().as_str(),
                 node_doc,
             )));
@@ -1270,7 +1542,8 @@ impl<'a> Tokenizer<'a> {
     }
 
     pub fn _insert_comment(&mut self, data: &str, position: Option<InsertLocation>) {
-        let mut location = position.unwrap_or_else(|| self._appropriate_insertion_place(None));
+        let mut location =
+            position.unwrap_or_else(|| self.open_elements_stack.appropriate_insertion_place(None));
 
         let comment = Comment::new(
             data,
@@ -1287,30 +1560,11 @@ impl<'a> Tokenizer<'a> {
             ),
         );
 
-        location.insert(&NodeKind::Comment(comment));
-    }
-
-    fn _appropriate_insertion_place(
-        &mut self,
-        override_target: Option<&Element>,
-    ) -> InsertLocation {
-        let target = override_target
-            .unwrap_or_else(|| {
-                self.adjusted_current_node()
-                    .expect("No current node for appropriate insertion place")
-            })
-            .to_owned();
-
-        let adjusted_insertion_position = target.node().borrow().child_nodes().length();
-
-        InsertLocation::new(
-            Rc::new(RefCell::new(NodeKind::Element(target))),
-            adjusted_insertion_position,
-        )
+        location.insert(&mut NodeKind::Comment(comment));
     }
 
     fn _generic_text_parsing_algorithm(&mut self, token: &Token) {
-        self.insert_html_element(token);
+        self.open_elements_stack.insert_html_element(token);
         self.state = TokenizerState::RAWTEXT;
 
         self.original_insertion_mode = Some(self.insertion_mode.clone());
@@ -1318,37 +1572,11 @@ impl<'a> Tokenizer<'a> {
     }
 
     fn _generic_rcdata_parsing_algorithm(&mut self, token: &Token) {
-        self.insert_html_element(token);
+        self.open_elements_stack.insert_html_element(token);
         self.state = TokenizerState::RCDATA;
 
         self.original_insertion_mode = Some(self.insertion_mode.clone());
         self.insertion_mode = InsertMode::Text;
-    }
-
-    fn insert_html_element(&mut self, token: &Token) -> Element {
-        self.insert_foreign_element(token, html5::HTML_NAMESPACE, false)
-    }
-
-    fn insert_foreign_element(
-        &mut self,
-        token: &Token,
-        namespace: &str,
-        only_add_to_element_stack: bool,
-    ) -> Element {
-        let mut adjusted_insertion_location = self._appropriate_insertion_place(None);
-
-        let element = Element::from_token(
-            token,
-            namespace,
-            &*adjusted_insertion_location.parent().borrow(),
-        );
-
-        if !only_add_to_element_stack {
-            adjusted_insertion_location.insert(&NodeKind::Element(element.clone()));
-        }
-
-        self.open_elements_stack.push(element.clone());
-        element
     }
 
     fn is_current_appropriate_end_tag(&self) -> bool {
@@ -1375,14 +1603,6 @@ impl<'a> Tokenizer<'a> {
             }
             None => false,
         }
-    }
-
-    fn adjusted_current_node(&self) -> Option<&Element> {
-        self.open_elements_stack.last()
-    }
-
-    fn adjusted_current_node_mut(&mut self) -> Option<&mut Element> {
-        self.open_elements_stack.last_mut()
     }
 
     fn emit(&mut self, token: Token) {
