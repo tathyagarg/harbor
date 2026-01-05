@@ -1,49 +1,14 @@
 use core::panic;
-// use std::borrow::Borrow;
 use std::cell::Ref;
-use std::rc::Weak;
 use std::{cell::RefCell, rc::Rc};
 
-use crate::html5::{self, dom::*};
+use crate::html5::{self, dom::*, tag_groups::*};
 
 /// This is likely a temporary file and will be merged with some other code when I understand what
 /// it is intended to integrate with. Until then, this is an independent implementation of an HTML5
 /// parser.
 ///
 /// Future tattu: I doubt this will be temporary
-
-macro_rules! concat_arrays {
-    ( $ty:ty, $default:expr => $($arr:expr),* $(,)? ) => {{
-        const __CONCAT_ARRAYS_LEN: usize = 0 $( + $arr.len() )*;
-        const __CONCAT_ARRAYS_RESULT: [$ty; __CONCAT_ARRAYS_LEN] = {
-            let mut result = [$default; __CONCAT_ARRAYS_LEN];
-            let mut result_idx = 0;
-            $(
-                let arr = $arr;
-                let mut src_idx = 0;
-                while src_idx < arr.len() {
-                    result[result_idx] = arr[src_idx];
-                    src_idx += 1;
-                    result_idx += 1;
-                }
-            )*
-            result
-        };
-        __CONCAT_ARRAYS_RESULT
-    }};
-}
-
-const DEFAULT_SCOPE_NAMES: [&str; 14] = [
-    "applet", "caption", "html", "table", "td", "th", "marquee", "object", "template", "mi", "mo",
-    "mn", "ms", "mtext",
-];
-
-const BUTTON_SCOPE_NAMES: [&str; 15] =
-    concat_arrays!(&str, "" => &DEFAULT_SCOPE_NAMES, &["button"]);
-
-const IMPLIED_END_TAGS: [&str; 10] = [
-    "dd", "dt", "li", "option", "optgroup", "p", "rb", "rp", "rt", "rtc",
-];
 
 #[derive(Debug)]
 pub struct _Document {
@@ -1055,35 +1020,7 @@ impl InsertMode {
 
                 return false;
             }
-            Token::StartTag(ref tag)
-                if matches!(
-                    tag.name.as_str(),
-                    "address"
-                        | "article"
-                        | "aside"
-                        | "blockquote"
-                        | "center"
-                        | "details"
-                        | "dialog"
-                        | "dir"
-                        | "div"
-                        | "dl"
-                        | "fieldset"
-                        | "figcaption"
-                        | "figure"
-                        | "footer"
-                        | "header"
-                        | "hgroup"
-                        | "main"
-                        | "nav"
-                        | "ol"
-                        | "p"
-                        | "search"
-                        | "section"
-                        | "summary"
-                        | "ul"
-                ) =>
-            {
+            Token::StartTag(ref tag) if ARBITRARY_SPECIAL_GROUP.contains(&tag.name.as_str()) => {
                 if tokenizer
                     .open_elements_stack
                     .has_element_in_button_scope("p")
@@ -1145,7 +1082,284 @@ impl InsertMode {
             Token::StartTag(ref tag) if tag.name.as_str() == "li" => {
                 tokenizer.flag_frameset_ok = false;
 
-                let node = tokenizer.open_elements_stack.adjusted_current_node();
+                let mut node_index = tokenizer.open_elements_stack.elements.len();
+                let mut node = tokenizer.open_elements_stack.nth(node_index);
+
+                loop {
+                    if node
+                        .as_ref()
+                        .is_some_and(|el| el.borrow().qualified_name() == "li")
+                    {
+                        tokenizer
+                            .open_elements_stack
+                            .generate_implied_end_tags(Some("li"));
+
+                        if tokenizer
+                            .open_elements_stack
+                            .adjusted_current_node()
+                            .is_some_and(|el| el.borrow().qualified_name() != "li")
+                        {
+                            tokenizer.error(ParseError::Custom(
+                                "Unexpected current node after generating implied end tags for li",
+                            ));
+                        }
+
+                        tokenizer.open_elements_stack.pop_until("li");
+                        break;
+                    }
+
+                    if node.as_ref().is_some_and(|el| {
+                        el.borrow().is_special_excluding(&["address", "div", "p"])
+                    }) {
+                        break;
+                    } else {
+                        node_index -= 1;
+                        node = tokenizer.open_elements_stack.nth(node_index);
+                    }
+                }
+
+                if tokenizer
+                    .open_elements_stack
+                    .has_element_in_button_scope("p")
+                {
+                    tokenizer.open_elements_stack.close_p_tag();
+                }
+
+                tokenizer.open_elements_stack.insert_html_element(&token);
+            }
+            Token::StartTag(ref tag) if matches!(tag.name.as_str(), "dd" | "dt") => {
+                tokenizer.flag_frameset_ok = false;
+
+                let mut node_index = tokenizer.open_elements_stack.elements.len();
+                let mut node = tokenizer.open_elements_stack.nth(node_index);
+
+                loop {
+                    if node
+                        .as_ref()
+                        .is_some_and(|el| el.borrow().qualified_name() == "dd")
+                    {
+                        tokenizer
+                            .open_elements_stack
+                            .generate_implied_end_tags(Some("dd"));
+
+                        if tokenizer
+                            .open_elements_stack
+                            .adjusted_current_node()
+                            .is_some_and(|el| el.borrow().qualified_name() != "dd")
+                        {
+                            tokenizer.error(ParseError::Custom(
+                                "Unexpected current node after generating implied end tags for dd",
+                            ));
+                        }
+
+                        tokenizer.open_elements_stack.pop_until("dd");
+                        break;
+                    }
+
+                    if node
+                        .as_ref()
+                        .is_some_and(|el| el.borrow().qualified_name() == "dt")
+                    {
+                        tokenizer
+                            .open_elements_stack
+                            .generate_implied_end_tags(Some("dt"));
+
+                        if tokenizer
+                            .open_elements_stack
+                            .adjusted_current_node()
+                            .is_some_and(|el| el.borrow().qualified_name() != "dt")
+                        {
+                            tokenizer.error(ParseError::Custom(
+                                "Unexpected current node after generating implied end tags for dt",
+                            ));
+                        }
+
+                        tokenizer.open_elements_stack.pop_until("dt");
+                        break;
+                    }
+
+                    if node.as_ref().is_some_and(|el| {
+                        el.borrow().is_special_excluding(&["address", "div", "p"])
+                    }) {
+                        break;
+                    } else {
+                        node_index -= 1;
+                        node = tokenizer.open_elements_stack.nth(node_index);
+                    }
+                }
+
+                if tokenizer
+                    .open_elements_stack
+                    .has_element_in_button_scope("p")
+                {
+                    tokenizer.open_elements_stack.close_p_tag();
+                }
+
+                tokenizer.open_elements_stack.insert_html_element(&token);
+            }
+            Token::StartTag(ref tag) if tag.name.as_str() == "plaintext" => {
+                if tokenizer
+                    .open_elements_stack
+                    .has_element_in_button_scope("p")
+                {
+                    tokenizer.open_elements_stack.close_p_tag();
+                }
+
+                tokenizer.open_elements_stack.insert_html_element(&token);
+
+                tokenizer.state = TokenizerState::PLAINTEXT;
+            }
+            Token::StartTag(ref tag) if tag.name.as_str() == "button" => {
+                if tokenizer
+                    .open_elements_stack
+                    .has_element_in_default_scope("button")
+                {
+                    tokenizer.error(ParseError::Custom(
+                        "Unexpected button start tag token in in body insertion mode",
+                    ));
+
+                    tokenizer
+                        .open_elements_stack
+                        .generate_implied_end_tags(None);
+                    tokenizer.open_elements_stack.pop_until("button");
+                }
+
+                tokenizer._reconstruct_active_formatting_elements();
+                tokenizer.open_elements_stack.insert_html_element(&token);
+                tokenizer.flag_frameset_ok = false;
+            }
+            Token::EndTag(ref tag) if ARBITRARY_SPECIAL_GROUP.contains(&tag.name.as_str()) => {
+                if !tokenizer
+                    .open_elements_stack
+                    .has_element_in_default_scope(&tag.name)
+                {
+                    tokenizer.error(ParseError::Custom(
+                        "Unexpected special end tag token in in body insertion mode",
+                    ));
+
+                    return true;
+                }
+
+                tokenizer
+                    .open_elements_stack
+                    .generate_implied_end_tags(None);
+
+                if tokenizer
+                    .open_elements_stack
+                    .adjusted_current_node()
+                    .is_some_and(|el| el.borrow().qualified_name() != tag.name)
+                {
+                    tokenizer.error(ParseError::Custom(
+                        "Unexpected current node after generating implied end tags for special end tag",
+                    ));
+                }
+
+                tokenizer.open_elements_stack.pop_until(&tag.name);
+            }
+            Token::EndTag(ref tag) if tag.name.as_str() == "form" => {
+                todo!("Handle form end tag in in body insertion mode");
+            }
+            Token::EndTag(ref tag) if tag.name.as_str() == "p" => {
+                if !tokenizer
+                    .open_elements_stack
+                    .has_element_in_button_scope("p")
+                {
+                    tokenizer.error(ParseError::Custom(
+                        "Unexpected p end tag token in in body insertion mode",
+                    ));
+
+                    tokenizer
+                        .open_elements_stack
+                        .insert_html_element(&Token::StartTag(Tag::new(&String::from("p"))));
+                }
+
+                tokenizer.open_elements_stack.close_p_tag();
+            }
+            Token::EndTag(ref tag) if tag.name.as_str() == "li" => {
+                if !tokenizer
+                    .open_elements_stack
+                    .has_element_in_list_item_scope("li")
+                {
+                    tokenizer.error(ParseError::Custom(
+                        "Unexpected li end tag token in in body insertion mode",
+                    ));
+
+                    return true;
+                }
+
+                tokenizer
+                    .open_elements_stack
+                    .generate_implied_end_tags(Some("li"));
+
+                if tokenizer
+                    .open_elements_stack
+                    .adjusted_current_node()
+                    .is_some_and(|el| el.borrow().qualified_name() != "li")
+                {
+                    tokenizer.error(ParseError::Custom(
+                        "Unexpected current node after generating implied end tags for li end tag",
+                    ));
+                }
+
+                tokenizer.open_elements_stack.pop_until("li");
+            }
+            Token::EndTag(ref tag) if matches!(tag.name.as_str(), "dd" | "dt") => {
+                if !tokenizer
+                    .open_elements_stack
+                    .has_element_in_default_scope(&tag.name)
+                {
+                    tokenizer.error(ParseError::Custom(
+                        "Unexpected dd/dt end tag token in in body insertion mode",
+                    ));
+
+                    return true;
+                }
+
+                tokenizer
+                    .open_elements_stack
+                    .generate_implied_end_tags(Some(&tag.name));
+
+                if tokenizer
+                    .open_elements_stack
+                    .adjusted_current_node()
+                    .is_some_and(|el| el.borrow().qualified_name() != tag.name)
+                {
+                    tokenizer.error(ParseError::Custom(
+                        "Unexpected current node after generating implied end tags for dd/dt end tag",
+                    ));
+                }
+
+                tokenizer.open_elements_stack.pop_until(&tag.name);
+            }
+            Token::EndTag(ref tag)
+                if matches!(tag.name.as_str(), "h1" | "h2" | "h3" | "h4" | "h5" | "h6") =>
+            {
+                if !tokenizer
+                    .open_elements_stack
+                    .has_element_in_default_scope(&tag.name)
+                {
+                    tokenizer.error(ParseError::Custom(
+                        "Unexpected heading end tag token in in body insertion mode",
+                    ));
+
+                    return true;
+                }
+
+                tokenizer
+                    .open_elements_stack
+                    .generate_implied_end_tags(None);
+
+                if tokenizer
+                    .open_elements_stack
+                    .adjusted_current_node()
+                    .is_some_and(|el| el.borrow().qualified_name() != tag.name)
+                {
+                    tokenizer.error(ParseError::Custom(
+                        "Unexpected current node after generating implied end tags for heading end tag",
+                    ));
+                }
+
+                tokenizer.open_elements_stack.pop_until(&tag.name);
             }
             _ => {}
         }
@@ -1311,6 +1525,10 @@ impl OpenElementsStack {
         }
     }
 
+    pub fn nth(&self, index: usize) -> Option<Rc<RefCell<Element>>> {
+        self.elements.get(index).map(Rc::clone)
+    }
+
     pub fn contains(&self, element: &Element) -> bool {
         let element_name = element.qualified_name();
 
@@ -1403,6 +1621,10 @@ impl OpenElementsStack {
     pub fn has_element_in_default_scope(&self, target_name: &str) -> bool {
         // TODO: Fact check list
         self.has_element_in_specific_scope(target_name, &DEFAULT_SCOPE_NAMES)
+    }
+
+    pub fn has_element_in_list_item_scope(&self, target_name: &str) -> bool {
+        self.has_element_in_specific_scope(target_name, &LIST_ITEM_SCOPE_NAMES)
     }
 
     pub fn has_non_special_element_in_scope(&self) -> bool {

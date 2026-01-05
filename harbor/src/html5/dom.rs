@@ -4,7 +4,7 @@ use std::rc::Weak;
 use std::{cell::RefCell, rc::Rc};
 
 use crate::{
-    html5::{HTML_NAMESPACE, parse::Token},
+    html5::{HTML_NAMESPACE, parse::Token, tag_groups::*},
     http::{self, url::Serializable},
 };
 
@@ -708,7 +708,7 @@ pub enum ElementKind {
     Element,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Element {
     _node: Rc<RefCell<Node>>,
 
@@ -726,6 +726,17 @@ pub struct Element {
     attribute_list: Vec<Attr>,
 
     _token: Option<Token>,
+}
+
+impl Debug for Element {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Element")
+            .field("local_name", &self.local_name)
+            .field("attribute_list", &self.attribute_list)
+            .field("_node", &self._node)
+            .field("_token", &self._token)
+            .finish()
+    }
 }
 
 impl Element {
@@ -793,6 +804,17 @@ impl Element {
     pub fn with_token(mut self, token: Token) -> Self {
         self._token = Some(token);
         self
+    }
+
+    pub fn is_special(&self) -> bool {
+        SPECIAL_CATEGORY_NAMES.contains(&self.local_name.as_str())
+    }
+
+    pub fn is_special_excluding(&self, excluding: &[&str]) -> bool {
+        SPECIAL_CATEGORY_NAMES
+            .iter()
+            .filter(|name| !excluding.contains(name))
+            .any(|name| *name == self.local_name.as_str())
     }
 
     pub fn from_token(
