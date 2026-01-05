@@ -1083,6 +1083,63 @@ impl InsertMode {
 
                 tokenizer.open_elements_stack.insert_html_element(&token);
             }
+            Token::StartTag(ref tag)
+                if matches!(tag.name.as_str(), "h1" | "h2" | "h3" | "h4" | "h5" | "h6") =>
+            {
+                if tokenizer
+                    .open_elements_stack
+                    .has_element_in_button_scope("p")
+                {
+                    tokenizer.open_elements_stack.close_p_tag();
+                }
+
+                if tokenizer
+                    .open_elements_stack
+                    .adjusted_current_node()
+                    .is_some_and(|el| {
+                        matches!(
+                            el.qualified_name().as_str(),
+                            "h1" | "h2" | "h3" | "h4" | "h5" | "h6"
+                        )
+                    })
+                {
+                    tokenizer.error(ParseError::Custom(
+                        "Unexpected heading start tag token in in body insertion mode",
+                    ));
+
+                    tokenizer.open_elements_stack.pop();
+                }
+
+                tokenizer.open_elements_stack.insert_html_element(&token);
+            }
+            Token::StartTag(ref tag) if matches!(tag.name.as_str(), "pre" | "listing") => {
+                if tokenizer
+                    .open_elements_stack
+                    .has_element_in_button_scope("p")
+                {
+                    tokenizer.open_elements_stack.close_p_tag();
+                }
+
+                tokenizer.open_elements_stack.insert_html_element(&token);
+
+                // TODO:
+                // If the next token is a U+000A LINE FEED (LF) character token,
+                // then ignore that token and move on to the next one.
+                // (Newlines at the start of `pre` blocks are ignored as an authoring convenience.)
+
+                tokenizer.flag_frameset_ok = false;
+            }
+            Token::StartTag(ref tag) if tag.name.as_str() == "form" => {
+                todo!("Handle form start tag in in body insertion mode");
+            }
+            Token::StartTag(ref tag) if tag.name.as_str() == "li" => {
+                tokenizer.flag_frameset_ok = false;
+
+                let mut node = tokenizer
+                    .open_elements_stack
+                    .adjusted_current_node()
+                    .cloned();
+            }
             _ => {}
         }
 
@@ -1233,6 +1290,14 @@ impl OpenElementsStack {
         self.elements.pop()
     }
 
+    pub fn pop_until(&mut self, target_name: &str) {
+        while let Some(element) = self.pop() {
+            if element.qualified_name() == target_name {
+                break;
+            }
+        }
+    }
+
     pub fn contains(&self, element: &Element) -> bool {
         self.elements.iter().any(|el| el.id == element.id)
     }
@@ -1350,10 +1415,7 @@ impl OpenElementsStack {
 
     pub fn close_p_tag(&mut self) {
         self.generate_implied_end_tags(Some("p"));
-
-        while self.pop().unwrap().qualified_name() != "p" {
-            // Keep popping until a "p" element is popped
-        }
+        self.pop_until("p")
     }
 }
 
