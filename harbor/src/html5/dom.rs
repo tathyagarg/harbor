@@ -153,6 +153,21 @@ impl NodeList {
     pub fn iter(&self) -> std::slice::Iter<'_, Rc<RefCell<NodeKind>>> {
         self._nodes.iter()
     }
+
+    pub fn push(&mut self, node: &Rc<RefCell<NodeKind>>) {
+        self._nodes.push(Rc::clone(node));
+    }
+
+    pub fn pop(&mut self) -> Option<Rc<RefCell<NodeKind>>> {
+        self._nodes.pop()
+    }
+
+    pub fn map<F, T>(&self, mut f: F) -> Vec<T>
+    where
+        F: FnMut(&Rc<RefCell<NodeKind>>) -> T,
+    {
+        self._nodes.iter().map(|n| f(n)).collect()
+    }
 }
 
 #[derive(Clone)]
@@ -309,11 +324,19 @@ impl Node {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct CharacterData {
     _node: Rc<RefCell<Node>>,
 
     pub data: DOMString,
+}
+
+impl Debug for CharacterData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CharacterData")
+            .field("data", &self.data)
+            .finish()
+    }
 }
 
 impl CharacterData {

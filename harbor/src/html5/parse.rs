@@ -1020,7 +1020,9 @@ impl InsertMode {
 
                 return false;
             }
-            Token::StartTag(ref tag) if ARBITRARY_SPECIAL_GROUP.contains(&tag.name.as_str()) => {
+            Token::StartTag(ref tag)
+                if ARBITRARY_SPECIAL_GROUP_START.contains(&tag.name.as_str()) =>
+            {
                 if tokenizer
                     .open_elements_stack
                     .has_element_in_button_scope("p")
@@ -1228,7 +1230,7 @@ impl InsertMode {
                 tokenizer.open_elements_stack.insert_html_element(&token);
                 tokenizer.flag_frameset_ok = false;
             }
-            Token::EndTag(ref tag) if ARBITRARY_SPECIAL_GROUP.contains(&tag.name.as_str()) => {
+            Token::EndTag(ref tag) if ARBITRARY_SPECIAL_GROUP_END.contains(&tag.name.as_str()) => {
                 if !tokenizer
                     .open_elements_stack
                     .has_element_in_default_scope(&tag.name)
@@ -1249,6 +1251,11 @@ impl InsertMode {
                     .adjusted_current_node()
                     .is_some_and(|el| el.borrow().qualified_name() != tag.name)
                 {
+                    // println!(
+                    //     "Current node: {:#?}",
+                    //     tokenizer.open_elements_stack.adjusted_current_node()
+                    // );
+                    // println!("Expected node: {}", tag.name);
                     tokenizer.error(ParseError::Custom(
                         "Unexpected current node after generating implied end tags for special end tag",
                     ));
@@ -1296,6 +1303,11 @@ impl InsertMode {
                     .adjusted_current_node()
                     .is_some_and(|el| el.borrow().qualified_name() != "li")
                 {
+                    println!(
+                        "Current node: {:#?}",
+                        tokenizer.open_elements_stack.adjusted_current_node()
+                    );
+
                     tokenizer.error(ParseError::Custom(
                         "Unexpected current node after generating implied end tags for li end tag",
                     ));
@@ -1361,7 +1373,42 @@ impl InsertMode {
 
                 tokenizer.open_elements_stack.pop_until(&tag.name);
             }
-            _ => {}
+            Token::StartTag(ref tag) if tag.name.as_str() == "a" => {
+                let last_marker_pos = tokenizer.active_formatting_elements.last_marker();
+                let relevant_slice = tokenizer.active_formatting_elements.elements
+                    [last_marker_pos.unwrap_or(0)..]
+                    .to_vec();
+
+                if relevant_slice.iter().any(|el| match el {
+                    ElementOrMarker::Element(e) => e.borrow().qualified_name() == "a",
+                    ElementOrMarker::Marker => false,
+                }) {
+                    tokenizer.error(ParseError::Custom(
+                        "Unexpected a start tag token in in body insertion mode",
+                    ));
+
+                    InsertMode::_adoption_agency(tokenizer, tag);
+                }
+
+                tokenizer._reconstruct_active_formatting_elements();
+                let element = tokenizer.open_elements_stack.insert_html_element(&token);
+                println!("Pushed A tag");
+                tokenizer.active_formatting_elements.push(element);
+            }
+            Token::StartTag(ref tag) if FORMATTING_ELEMENT_NAMES.contains(&tag.name.as_str()) => {
+                tokenizer._reconstruct_active_formatting_elements();
+                let element = tokenizer.open_elements_stack.insert_html_element(&token);
+                tokenizer.active_formatting_elements.push(element);
+            }
+            Token::EndTag(ref tag)
+                if FORMATTING_ELEMENT_NAMES.contains(&tag.name.as_str())
+                    || tag.name.as_str() == "a" =>
+            {
+                InsertMode::_adoption_agency(tokenizer, tag);
+            }
+            _ => {
+                todo!("Handle other tokens in in body insertion mode: {:?}", token);
+            }
         }
 
         return true;
@@ -1397,11 +1444,300 @@ impl InsertMode {
     }
 
     fn handle_in_template(tokenizer: &mut Tokenizer, token: Token) -> bool {
+        todo!("Implement in template insertion mode");
+
         match token {
             _ => {}
         }
 
         return true;
+    }
+
+    /// Let subject be token's tag name.
+    /// If the current node is an HTML element whose tag name is subject, and the current node is
+    /// not in the list of active formatting elements, then pop the current node off the stack of
+    /// open elements and return.
+    /// Let outerLoopCounter be 0.
+    /// While true:
+    ///     If outerLoopCounter is greater than or equal to 8, then return.
+    ///     Increment outerLoopCounter by 1.
+    ///     Let formattingElement be the last element in the list of active formatting elements that:
+    ///         is between the end of the list and the last marker in the list, if any, or the start of the list otherwise, and
+    ///         has the tag name subject.
+    ///     If there is no such element, then return and instead act as described in the "any other end tag" entry above.
+    ///     If formattingElement is not in the stack of open elements, then this is a parse error; remove the element from the list, and return.
+    ///     If formattingElement is in the stack of open elements, but the element is not in scope, then this is a parse error; return.
+    ///     If formattingElement is not the current node, this is a parse error. (But do not return.)
+    ///     Let furthestBlock be the topmost node in the stack of open elements that is lower in the stack than formattingElement, and is an element in the special category. There might not be one.
+    ///     If there is no furthestBlock, then the UA must first pop all the nodes from the bottom of the stack of open elements, from the current node up to and including formattingElement, then remove formattingElement from the list of active formatting elements, and finally return.
+    ///     Let commonAncestor be the element immediately above formattingElement in the stack of open elements.
+    ///     Let a bookmark note the position of formattingElement in the list of active formatting elements relative to the elements on either side of it in the list.
+    ///     Let node and lastNode be furthestBlock.
+    ///     Let innerLoopCounter be 0.
+    ///     While true:
+    ///         Increment innerLoopCounter by 1.
+    ///         Let node be the element immediately above node in the stack of open elements, or if node is no longer in the stack of open elements (e.g. because it got removed by this algorithm), the element that was immediately above node in the stack of open elements before node was removed.
+    ///         Append lastNode to node.
+    ///         Set lastNode to node.
+    ///     Insert whatever lastNode ended up being in the previous step at the appropriate place for inserting a node, but using commonAncestor as the override target.
+    ///     Create an element for the token for which formattingElement was created, in the HTML namespace, with furthestBlock as the intended parent.
+    ///     Take all of the child nodes of furthestBlock and append them to the element created in the last step.
+    ///     Append that new element to furthestBlock.
+    ///     Remove formattingElement from the list of active formatting elements, and insert the new element into the list of active formatting elements at the position of the aforementioned bookmark.
+    ///     Remove formattingElement from the stack of open elements, and insert the new element into the stack of open elements immediately below the position of furthestBlock in that stack.
+    fn _adoption_agency(tokenizer: &mut Tokenizer, tag: &Tag) {
+        let subject = tag.name.as_str();
+
+        if tokenizer
+            .open_elements_stack
+            .current_node()
+            .is_some_and(|el| {
+                el.borrow().qualified_name() == subject
+                    && !tokenizer.active_formatting_elements.contains(&el)
+            })
+        {
+            tokenizer.open_elements_stack.pop();
+            return;
+        }
+
+        let mut outer_loop_counter = 0;
+
+        loop {
+            if outer_loop_counter >= 8 {
+                return;
+            }
+
+            outer_loop_counter += 1;
+
+            let last_marker_pos = tokenizer.active_formatting_elements.last_marker();
+            let relevant_slice = tokenizer.active_formatting_elements.elements
+                [last_marker_pos.unwrap_or(0)..]
+                .to_vec();
+
+            let formatting_element_pos = relevant_slice.iter().rposition(|el| match el {
+                ElementOrMarker::Element(e) => e.borrow().qualified_name() == subject,
+                ElementOrMarker::Marker => false,
+            });
+            let adjusted_formatting_element_pos =
+                formatting_element_pos.map(|pos| pos + last_marker_pos.unwrap_or(0));
+
+            let _formatting_element = formatting_element_pos.map(|pos| relevant_slice[pos].clone());
+
+            if _formatting_element.is_none() {
+                // TODO: Come up with a way to singal "any other end tag" handling
+                return;
+            }
+
+            let formatting_element = match _formatting_element.unwrap() {
+                ElementOrMarker::Element(e) => e,
+                ElementOrMarker::Marker => {
+                    panic!("Formatting element cannot be a marker");
+                }
+            };
+
+            if !tokenizer
+                .open_elements_stack
+                .contains_rc(&formatting_element)
+            {
+                tokenizer.error(ParseError::Custom(
+                    "Formatting element not in open elements stack during adoption agency algorithm",
+                ));
+
+                // Remove the element from the list
+                tokenizer
+                    .active_formatting_elements
+                    .elements
+                    .retain(|el| match el {
+                        ElementOrMarker::Element(e) => !Rc::ptr_eq(e, &formatting_element),
+                        ElementOrMarker::Marker => true,
+                    });
+
+                return;
+            }
+
+            if !tokenizer
+                .open_elements_stack
+                .has_element_in_default_scope(&subject)
+            {
+                tokenizer.error(ParseError::Custom(
+                    "Formatting element not in scope during adoption agency algorithm",
+                ));
+
+                return;
+            }
+
+            if !tokenizer
+                .open_elements_stack
+                .current_node()
+                .is_some_and(|el| Rc::ptr_eq(&el, &formatting_element))
+            {
+                tokenizer.error(ParseError::Custom(
+                    "Formatting element not current node during adoption agency algorithm",
+                ));
+            }
+
+            let furthest_block_pos = relevant_slice[formatting_element_pos.unwrap() + 1..]
+                .iter()
+                .position(|el| match el {
+                    ElementOrMarker::Element(e) => e.borrow().is_special(),
+                    ElementOrMarker::Marker => false,
+                });
+            let adjusted_furthest_block_pos =
+                furthest_block_pos.map(|pos| pos + adjusted_formatting_element_pos.unwrap() + 1);
+
+            let _furthest_block = furthest_block_pos.map(|el_idx| {
+                match &relevant_slice[el_idx + formatting_element_pos.unwrap() + 1] {
+                    ElementOrMarker::Element(e) => Rc::clone(&e),
+                    ElementOrMarker::Marker => {
+                        panic!("Furthest block cannot be a marker");
+                    }
+                }
+            });
+
+            if _furthest_block.is_none() {
+                tokenizer.open_elements_stack.pop_until(&subject);
+
+                tokenizer
+                    .active_formatting_elements
+                    .elements
+                    .retain(|el| match el {
+                        ElementOrMarker::Element(e) => !Rc::ptr_eq(e, &formatting_element),
+                        ElementOrMarker::Marker => true,
+                    });
+
+                return;
+            }
+
+            let furthest_block = _furthest_block.unwrap();
+
+            let common_ancestor = tokenizer
+                .open_elements_stack
+                .nth(adjusted_formatting_element_pos.unwrap() - 1)
+                .unwrap();
+
+            let mut bookmark = adjusted_formatting_element_pos.unwrap();
+
+            let mut node_index = adjusted_furthest_block_pos.unwrap();
+            let mut last_node_index = adjusted_furthest_block_pos.unwrap();
+
+            let mut node = Rc::clone(
+                tokenizer
+                    .open_elements_stack
+                    .nth(node_index)
+                    .as_ref()
+                    .unwrap(),
+            );
+            let mut last_node = Rc::clone(
+                tokenizer
+                    .open_elements_stack
+                    .nth(last_node_index)
+                    .as_ref()
+                    .unwrap(),
+            );
+
+            let mut inner_loop_counter = 0;
+
+            loop {
+                inner_loop_counter += 1;
+
+                node_index -= 1;
+                node = Rc::clone(
+                    tokenizer
+                        .open_elements_stack
+                        .nth(node_index)
+                        .as_ref()
+                        .unwrap(),
+                );
+
+                if Rc::ptr_eq(&node, &formatting_element) {
+                    break;
+                }
+
+                if inner_loop_counter > 3 && !tokenizer.open_elements_stack.contains_rc(&node) {
+                    tokenizer
+                        .active_formatting_elements
+                        .elements
+                        .retain(|el| match el {
+                            ElementOrMarker::Element(e) => !Rc::ptr_eq(e, &node),
+                            ElementOrMarker::Marker => true,
+                        });
+                }
+
+                let common_ancestor_node_kind = NodeKind::Element(Rc::clone(&common_ancestor));
+
+                let element = Element::from_token(
+                    node.borrow().token().unwrap(),
+                    html5::HTML_NAMESPACE,
+                    &common_ancestor_node_kind,
+                );
+
+                tokenizer.active_formatting_elements.elements[bookmark] =
+                    ElementOrMarker::Element(Rc::clone(&element));
+                tokenizer.open_elements_stack.elements
+                    [adjusted_formatting_element_pos.unwrap() - 1] = Rc::clone(&element);
+
+                node = Rc::clone(&element);
+
+                if Rc::ptr_eq(&last_node, &furthest_block) {
+                    bookmark = node_index + 1;
+                }
+
+                Node::append_child(
+                    &node.borrow().node(),
+                    Rc::new(RefCell::new(NodeKind::Element(Rc::clone(&last_node)))),
+                );
+
+                last_node = Rc::clone(&node);
+            }
+
+            tokenizer
+                .open_elements_stack
+                .appropriate_insertion_place(Some(Rc::clone(&common_ancestor)))
+                .insert(&mut NodeKind::Element(last_node.clone()));
+
+            let new_element = Element::from_token(
+                formatting_element.borrow().token().unwrap(),
+                html5::HTML_NAMESPACE,
+                &NodeKind::Element(Rc::clone(&furthest_block)),
+            );
+
+            furthest_block
+                .borrow()
+                .node()
+                .borrow()
+                .child_nodes()
+                .map(|child| {
+                    Node::append_child(&new_element.borrow().node(), Rc::clone(&child));
+                });
+
+            Node::append_child(
+                &furthest_block.borrow().node(),
+                Rc::new(RefCell::new(NodeKind::Element(Rc::clone(&new_element)))),
+            );
+
+            tokenizer
+                .active_formatting_elements
+                .elements
+                .retain(|el| match el {
+                    ElementOrMarker::Element(e) => !Rc::ptr_eq(e, &formatting_element),
+                    ElementOrMarker::Marker => true,
+                });
+
+            tokenizer
+                .active_formatting_elements
+                .elements
+                .insert(bookmark, ElementOrMarker::Element(Rc::clone(&new_element)));
+
+            tokenizer
+                .open_elements_stack
+                .elements
+                .retain(|el| !Rc::ptr_eq(el, &formatting_element));
+
+            tokenizer.open_elements_stack.elements.insert(
+                adjusted_furthest_block_pos.unwrap() + 1,
+                Rc::clone(&new_element),
+            );
+        }
     }
 
     pub fn handle(&self, tokenizer: &mut Tokenizer, token: &Token) -> bool {
@@ -1416,7 +1752,10 @@ impl InsertMode {
             InsertMode::AfterHead => InsertMode::handle_after_head(tokenizer, token),
             InsertMode::InBody => InsertMode::handle_in_body(tokenizer, token),
             InsertMode::Text => InsertMode::handle_text(tokenizer, token),
-            _ => true,
+            _ => {
+                true
+                // todo!("Handle insertion mode {:?}", self);
+            }
         }
     }
 }
@@ -1449,27 +1788,28 @@ impl ActiveFormattingElements {
         let last_marker = self.last_marker().unwrap_or(0);
         let target_borrow = element.borrow().clone();
 
-        if self.elements[last_marker + 1..]
-            .iter()
-            .map(|el| match el {
-                ElementOrMarker::Element(e) => e.clone(),
-                ElementOrMarker::Marker => panic!("Should not encounter marker here"),
-            })
-            .filter(|el| {
-                let borrowed_el = el.borrow();
-                borrowed_el.clone() == target_borrow
+        if self.elements.len() >= 1
+            && self.elements[last_marker + 1..]
+                .iter()
+                .map(|el| match el {
+                    ElementOrMarker::Element(e) => e.clone(),
+                    ElementOrMarker::Marker => panic!("Should not encounter marker here"),
+                })
+                .filter(|el| {
+                    let borrowed_el = el.borrow();
+                    borrowed_el.clone() == target_borrow
 
-                // borrowed_el.qualified_name() == element.qualified_name()
-                //     && element.attributes().len() == borrowed_el.attributes().len()
-                //     && element.attributes().iter().all(|attr| {
-                //         borrowed_el
-                //             .get_attribute(attr.local_name())
-                //             .is_some_and(|v| v == attr.value())
-                //     })
-                //     && borrowed_el.namespace_uri() == element.namespace_uri()
-            })
-            .count()
-            >= 3
+                    // borrowed_el.qualified_name() == element.qualified_name()
+                    //     && element.attributes().len() == borrowed_el.attributes().len()
+                    //     && element.attributes().iter().all(|attr| {
+                    //         borrowed_el
+                    //             .get_attribute(attr.local_name())
+                    //             .is_some_and(|v| v == attr.value())
+                    //     })
+                    //     && borrowed_el.namespace_uri() == element.namespace_uri()
+                })
+                .count()
+                >= 3
         {
             let first_matching_index = self
                 .elements
@@ -1495,6 +1835,22 @@ impl ActiveFormattingElements {
         self.elements.push(ElementOrMarker::Element(element));
     }
 
+    pub fn contains(&self, element: &Rc<RefCell<Element>>) -> bool {
+        let element_borrow = element.borrow();
+
+        let result = self.elements.iter().any(|el| match el {
+            ElementOrMarker::Element(e) => Rc::ptr_eq(e, element),
+            ElementOrMarker::Marker => false,
+        });
+
+        println!(
+            "AFE contains {}: {}",
+            element_borrow.qualified_name(),
+            result
+        );
+        result
+    }
+
     pub fn reconstruct(&mut self, tokenizer: &mut Tokenizer) {
         tokenizer._reconstruct_active_formatting_elements();
     }
@@ -1510,11 +1866,23 @@ impl OpenElementsStack {
     }
 
     pub fn push(&mut self, element: Rc<RefCell<Element>>) {
+        println!(
+            "Pushing element onto open elements stack: {}",
+            element.borrow().qualified_name()
+        );
         self.elements.push(element);
     }
 
     pub fn pop(&mut self) -> Option<Rc<RefCell<Element>>> {
-        self.elements.pop()
+        let elem = self.elements.pop();
+        if let Some(ref e) = elem {
+            println!(
+                "Popping element from open elements stack: {}",
+                e.borrow().qualified_name()
+            );
+        }
+
+        elem
     }
 
     pub fn pop_until(&mut self, target_name: &str) {
@@ -1550,7 +1918,13 @@ impl OpenElementsStack {
             .any(|el| el.borrow().qualified_name() == tag_name)
     }
 
+    /// TODO: Update to match spec
     fn adjusted_current_node(&self) -> Option<Rc<RefCell<Element>>> {
+        // Subject to change
+        self.elements.last().map(Rc::clone)
+    }
+
+    fn current_node(&self) -> Option<Rc<RefCell<Element>>> {
         self.elements.last().map(Rc::clone)
     }
 
@@ -1647,6 +2021,15 @@ impl OpenElementsStack {
     }
 
     pub fn generate_implied_end_tags(&mut self, exclude: Option<&str>) {
+        println!(
+            "Current stack: {}",
+            self.elements
+                .iter()
+                .map(|el| el.borrow().qualified_name())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+
         loop {
             let _current_node = match self.adjusted_current_node() {
                 Some(node) => node,

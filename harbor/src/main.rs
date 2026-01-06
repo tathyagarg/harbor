@@ -1,3 +1,5 @@
+#![allow(warnings)]
+
 use std::sync::Arc;
 
 use winit::application::ApplicationHandler;
@@ -236,49 +238,57 @@ impl ApplicationHandler<State> for App {
 fn main() {
     env_logger::init();
 
-    let html_text = "<!DOCTYPE html>\n<html>\n<head>\n<title>Test</title>\n</head>\n<body>\n<h1 style=\"color: red\">Hello, world!</h1>\n<!-- line -->\n<hr/>\n</body>\n</html>";
-    let mut stream = html5::parse::InputStream::new(String::from(html_text));
+    // let html_text = "<!DOCTYPE html>\n<html>\n<head>\n<title>Test</title>\n</head>\n<body>\n<h1 style=\"color: red\">Hello, world!</h1>\n<!-- line -->\n<hr/>\n</body>\n</html>";
+    // let mut stream = html5::parse::InputStream::new(String::from(html_text));
 
-    let mut tokenizer = html5::parse::Tokenizer::new(&mut stream);
+    // let mut tokenizer = html5::parse::Tokenizer::new(&mut stream);
 
-    tokenizer.tokenize();
+    // tokenizer.tokenize();
 
-    println!("Tokenizing:\n\n{}\n\n", html_text);
-    for (i, token) in tokenizer.emitted_tokens.iter().enumerate() {
-        println!("{}) {:?}", i + 1, token);
-    }
-
-    println!("\nDocument Tree:\n");
-    println!("{:#?}", tokenizer.document.document()._node);
-
-    // let url_target = String::from("https://arson.dev/");
-    // println!("Parsing target: {}", url_target);
-
-    // let url = http::url::URL::pure_parse(url_target.clone()).unwrap();
-    // println!("Parsed: {:?}", url);
-    // println!("Path serialized: {}", url.path.serialize());
-
-    // // type _T = html5::Location;
-
-    // let mut client = http::Client::new(http::Protocol::HTTP1_1, true);
-    // let url = client.connect_to_url(url_target);
-
-    // println!("Sending request to: {}", url.serialize());
-
-    // let resp = client.send_request(http::Request {
-    //     method: String::from("GET"),
-    //     request_target: url.path.serialize(),
-    //     protocol: http::Protocol::HTTP1_1,
-    //     headers: vec![
-    //         http::Header::new(String::from("User-Agent"), String::from("Harbor Browser")),
-    //         http::Header::new(String::from("Host"), url.host.unwrap().serialize()),
-    //     ],
-    //     body: None,
-    // });
-
-    // if let Some(response) = resp {
-    //     println!("{}", response);
+    // println!("Tokenizing:\n\n{}\n\n", html_text);
+    // for (i, token) in tokenizer.emitted_tokens.iter().enumerate() {
+    //     println!("{}) {:?}", i + 1, token);
     // }
+
+    // println!("\nDocument Tree:\n");
+    // println!("{:#?}", tokenizer.document.document()._node);
+
+    let url_target = String::from("https://old.arson.dev/");
+    println!("Parsing target: {}", url_target);
+
+    let url = http::url::URL::pure_parse(url_target.clone()).unwrap();
+    println!("Parsed: {:?}", url);
+    println!("Path serialized: {}", url.path.serialize());
+
+    // type _T = html5::Location;
+
+    let mut client = http::Client::new(http::Protocol::HTTP1_1, true);
+    let url = client.connect_to_url(url_target);
+
+    println!("Sending request to: {}", url.serialize());
+
+    let resp = client.send_request(http::Request {
+        method: String::from("GET"),
+        request_target: url.path.serialize(),
+        protocol: http::Protocol::HTTP1_1,
+        headers: vec![
+            http::Header::new(String::from("User-Agent"), String::from("Harbor Browser")),
+            http::Header::new(String::from("Host"), url.host.unwrap().serialize()),
+        ],
+        body: None,
+    });
+
+    if let Some(response) = resp {
+        println!("Received response: {}", response.body.clone().unwrap());
+
+        let mut stream = html5::parse::InputStream::new(response.body.unwrap());
+        let mut tokenizer = html5::parse::Tokenizer::new(&mut stream);
+
+        tokenizer.tokenize();
+
+        println!("Document Tree:\n");
+        println!("{:#?}", tokenizer.document.document()._node);
+    }
 
     // let event_loop = EventLoop::with_user_event().build().unwrap();
     // event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);

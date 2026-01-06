@@ -44,6 +44,10 @@ pub mod tag_groups {
         "dd", "dt", "li", "option", "optgroup", "p", "rb", "rp", "rt", "rtc",
     ];
 
+    pub const FORMATTING_ELEMENT_NAMES: [&str; 12] = [
+        "b", "big", "code", "em", "font", "i", "s", "small", "strike", "strong", "tt", "u",
+    ];
+
     pub const SPECIAL_CATEGORY_NAMES: [&str; 83] = [
         "address",
         "applet",
@@ -130,7 +134,38 @@ pub mod tag_groups {
         "xmp",
     ];
 
-    pub const ARBITRARY_SPECIAL_GROUP: [&str; 24] = [
+    pub const ARBITRARY_SPECIAL_GROUP_END: [&str; 28] = [
+        "address",
+        "article",
+        "aside",
+        "blockquote",
+        "button",
+        "center",
+        "details",
+        "dialog",
+        "dir",
+        "div",
+        "dl",
+        "fieldset",
+        "figcaption",
+        "figure",
+        "footer",
+        "header",
+        "hgroup",
+        "listing",
+        "main",
+        "menu",
+        "nav",
+        "ol",
+        "pre",
+        "search",
+        "section",
+        "select",
+        "summary",
+        "ul",
+    ];
+
+    pub const ARBITRARY_SPECIAL_GROUP_START: [&str; 25] = [
         "address",
         "article",
         "aside",
@@ -148,6 +183,7 @@ pub mod tag_groups {
         "header",
         "hgroup",
         "main",
+        "menu",
         "nav",
         "ol",
         "p",
