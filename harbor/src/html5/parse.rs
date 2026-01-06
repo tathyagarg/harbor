@@ -1392,7 +1392,6 @@ impl InsertMode {
 
                 tokenizer._reconstruct_active_formatting_elements();
                 let element = tokenizer.open_elements_stack.insert_html_element(&token);
-                println!("Pushed A tag");
                 tokenizer.active_formatting_elements.push(element);
             }
             Token::StartTag(ref tag) if FORMATTING_ELEMENT_NAMES.contains(&tag.name.as_str()) => {
@@ -1836,19 +1835,10 @@ impl ActiveFormattingElements {
     }
 
     pub fn contains(&self, element: &Rc<RefCell<Element>>) -> bool {
-        let element_borrow = element.borrow();
-
-        let result = self.elements.iter().any(|el| match el {
+        self.elements.iter().any(|el| match el {
             ElementOrMarker::Element(e) => Rc::ptr_eq(e, element),
             ElementOrMarker::Marker => false,
-        });
-
-        println!(
-            "AFE contains {}: {}",
-            element_borrow.qualified_name(),
-            result
-        );
-        result
+        })
     }
 
     pub fn reconstruct(&mut self, tokenizer: &mut Tokenizer) {
@@ -1866,23 +1856,11 @@ impl OpenElementsStack {
     }
 
     pub fn push(&mut self, element: Rc<RefCell<Element>>) {
-        println!(
-            "Pushing element onto open elements stack: {}",
-            element.borrow().qualified_name()
-        );
         self.elements.push(element);
     }
 
     pub fn pop(&mut self) -> Option<Rc<RefCell<Element>>> {
-        let elem = self.elements.pop();
-        if let Some(ref e) = elem {
-            println!(
-                "Popping element from open elements stack: {}",
-                e.borrow().qualified_name()
-            );
-        }
-
-        elem
+        self.elements.pop()
     }
 
     pub fn pop_until(&mut self, target_name: &str) {
@@ -2021,15 +1999,6 @@ impl OpenElementsStack {
     }
 
     pub fn generate_implied_end_tags(&mut self, exclude: Option<&str>) {
-        println!(
-            "Current stack: {}",
-            self.elements
-                .iter()
-                .map(|el| el.borrow().qualified_name())
-                .collect::<Vec<_>>()
-                .join(", ")
-        );
-
         loop {
             let _current_node = match self.adjusted_current_node() {
                 Some(node) => node,
@@ -3304,7 +3273,6 @@ impl<'a> Tokenizer<'a> {
                             self.push_to_attr_name('\u{FFFD}');
                         }
                         _ => {
-                            println!("pushing char {} to attr val", ch);
                             self.push_to_attr_val(ch);
                         }
                     }

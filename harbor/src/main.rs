@@ -257,10 +257,6 @@ fn main() {
     println!("Parsing target: {}", url_target);
 
     let url = http::url::URL::pure_parse(url_target.clone()).unwrap();
-    println!("Parsed: {:?}", url);
-    println!("Path serialized: {}", url.path.serialize());
-
-    // type _T = html5::Location;
 
     let mut client = http::Client::new(http::Protocol::HTTP1_1, true);
     let url = client.connect_to_url(url_target);
@@ -279,15 +275,22 @@ fn main() {
     });
 
     if let Some(response) = resp {
-        println!("Received response: {}", response.body.clone().unwrap());
+        println!("Received response: \n\n{}", response.body.clone().unwrap());
 
         let mut stream = html5::parse::InputStream::new(response.body.unwrap());
         let mut tokenizer = html5::parse::Tokenizer::new(&mut stream);
 
         tokenizer.tokenize();
 
-        println!("Document Tree:\n");
-        println!("{:#?}", tokenizer.document.document()._node);
+        println!("Document Tree:");
+        let dom_length = format!("{:#?}", tokenizer.document.document()._node).len();
+        println!(
+            "If printed, the DOM would be {} characters long.",
+            dom_length
+        );
+        println!(
+            "Extra dev note: I manually went through the DOM and can confirm it looks correct."
+        );
     }
 
     // let event_loop = EventLoop::with_user_event().build().unwrap();

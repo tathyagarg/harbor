@@ -256,8 +256,6 @@ impl Request {
                         eprintln!("Error in writing: {}", e);
                     }
 
-                    println!("Sending: {}", self.encode());
-
                     let mut response_decoder = ResponseDecoder::new();
 
                     let mut content_length: Option<usize> = None;
