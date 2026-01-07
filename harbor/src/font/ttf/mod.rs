@@ -1,6 +1,11 @@
 pub mod ttc;
+pub mod ttf;
+
+use ttf::*;
 
 mod otf_dtypes {
+    #![allow(non_camel_case_types)]
+
     use std::str::Utf8Error;
 
     pub type uint8 = u8;
