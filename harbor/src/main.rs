@@ -278,7 +278,7 @@ fn main() {
         println!("Received response: \n\n{}", response.body.clone().unwrap());
 
         let mut stream = html5::parse::InputStream::new(response.body.unwrap());
-        let mut tokenizer = html5::parse::Tokenizer::new(&mut stream);
+        let mut tokenizer = html5::parse::Parser::new(&mut stream);
 
         tokenizer.tokenize();
 

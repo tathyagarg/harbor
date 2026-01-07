@@ -212,7 +212,7 @@ impl Debug for Node {
     }
 }
 
-trait INode {
+pub trait INode {
     fn new() -> Self
     where
         Self: Sized;
