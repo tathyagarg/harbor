@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
 use crate::font::otf_dtypes::*;
-use crate::font::tables::TableTrait;
+use crate::font::tables::{ParseContext, TableTrait};
 
 fn flags_to_string(flags: uint16) -> String {
     let mut flag_descriptions = Vec::new();
@@ -138,7 +138,7 @@ impl Debug for HeaderTable {
             .field("x_max", &self.x_max)
             .field("y_max", &self.y_max)
             .field("mac_style", &mac_style_to_string(self.mac_style))
-            .field("mac_style_raw", &self.mac_style)
+            .field("mac_style_raw", &format!("0b{:016b}", self.mac_style))
             .field("lowest_rec_ppem", &self.lowest_rec_ppem)
             .field("font_direction_hint", &self.font_direction_hint)
             .field("index_to_loc_format", &self.index_to_loc_format)
@@ -147,7 +147,7 @@ impl Debug for HeaderTable {
 }
 
 impl TableTrait for HeaderTable {
-    fn parse(data: &[u8]) -> HeaderTable {
+    fn parse(data: &[u8], _ctx: Option<ParseContext>) -> HeaderTable {
         HeaderTable {
             major_version: uint16::from_be_bytes(data[0..2].try_into().unwrap()),
             minor_version: uint16::from_be_bytes(data[2..4].try_into().unwrap()),

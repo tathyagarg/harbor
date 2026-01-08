@@ -4,7 +4,7 @@
 use std::fmt::Debug;
 
 use crate::font::otf_dtypes::*;
-use crate::font::tables::{TableTrait, cmap, head, hhea, hmtx, maxp};
+use crate::font::tables::{TableTrait, cmap, head, hhea, hmtx, maxp, name, os2};
 
 #[derive(Clone)]
 pub enum TableRecordData {
@@ -13,6 +13,8 @@ pub enum TableRecordData {
     HHea(hhea::HHeaTable),
     HMtx(hmtx::HMtxTable),
     MaxP(maxp::MaxPTable),
+    Name(name::NameTable),
+    OS2(os2::OS2Table),
     Raw(Vec<u8>),
 }
 
@@ -24,6 +26,8 @@ impl Debug for TableRecordData {
             TableRecordData::HHea(hhea_table) => hhea_table.fmt(f),
             TableRecordData::HMtx(hmtx_table) => hmtx_table.fmt(f),
             TableRecordData::MaxP(maxp_table) => maxp_table.fmt(f),
+            TableRecordData::Name(name_table) => name_table.fmt(f),
+            TableRecordData::OS2(os2_table) => os2_table.fmt(f),
             TableRecordData::Raw(raw_data) => f
                 .debug_struct("TableRecordData::Raw")
                 .field("data_length", &raw_data.len())
@@ -35,9 +39,9 @@ impl Debug for TableRecordData {
 impl TableRecordData {
     pub fn from_tag_data(tag: Tag, data: &[u8], table_dir: &TableDirectory) -> TableRecordData {
         match &tag {
-            b"cmap" => TableRecordData::CMAP(cmap::CMAPTable::parse(data)),
-            b"head" => TableRecordData::Head(head::HeaderTable::parse(data)),
-            b"hhea" => TableRecordData::HHea(hhea::HHeaTable::parse(data)),
+            b"cmap" => TableRecordData::CMAP(cmap::CMAPTable::parse(data, None)),
+            b"head" => TableRecordData::Head(head::HeaderTable::parse(data, None)),
+            b"hhea" => TableRecordData::HHea(hhea::HHeaTable::parse(data, None)),
             b"hmtx" => TableRecordData::HMtx({
                 let mut hmtx_table = hmtx::HMtxTable::default();
 
@@ -56,7 +60,18 @@ impl TableRecordData {
                 hmtx_table.construct(data);
                 hmtx_table
             }),
-            b"maxp" => TableRecordData::MaxP(maxp::MaxPTable::parse(data)),
+            b"maxp" => TableRecordData::MaxP(maxp::MaxPTable::parse(data, None)),
+            b"name" => TableRecordData::Name(name::NameTable::parse(data, None)),
+            b"OS/2" => TableRecordData::OS2({
+                let mut os2_table = os2::OS2Table::Interim(
+                    table_dir
+                        ._mac_style
+                        .expect("macStyle not set in TableDirectory."),
+                );
+
+                os2_table.construct(data);
+                os2_table
+            }),
             _ => TableRecordData::Raw(data.to_vec()),
         }
     }
@@ -86,7 +101,7 @@ impl Debug for TableRecord {
                 "table_tag",
                 &tag_as_str(self.table_tag).unwrap_or(String::from("Invalid Tag")),
             )
-            .field("checksum", &format_args!("{:08X}", self.checksum))
+            .field("checksum", &format_args!("0x{:08X}", self.checksum))
             .field("offset", &self.offset)
             .field("length", &self.length)
             .field("_data", &self._data)
@@ -122,6 +137,9 @@ impl TableRecord {
         match &tag {
             b"hmtx" => Some(Box::new(|table_dir: &TableDirectory| {
                 table_dir._num_h_metrics.is_some() && table_dir._num_glyphs.is_some()
+            })),
+            b"OS/2" => Some(Box::new(|table_dir: &TableDirectory| {
+                table_dir._mac_style.is_some()
             })),
             _ => None,
         }
@@ -193,6 +211,7 @@ pub struct TableDirectory {
 
     _num_glyphs: Option<usize>,
     _num_h_metrics: Option<usize>,
+    _mac_style: Option<uint16>,
 
     _parse_queue: Vec<(Tag, Offset32, uint32, Box<dyn Fn(&TableDirectory) -> bool>)>,
 }
@@ -227,6 +246,7 @@ impl TableDirectory {
             table_records: Vec::with_capacity(num_tables as usize),
             _num_glyphs: None,
             _num_h_metrics: None,
+            _mac_style: None,
             _parse_queue: Vec::new(),
         }
     }
@@ -302,6 +322,13 @@ pub fn parse_table_directory(data: &[u8], offset: Option<usize>) -> TableDirecto
                             table_directory._num_glyphs = Some(table_v1_0.num_glyphs as usize);
                         }
                     }
+                }
+            }
+            b"head" => {
+                if let TableRecordData::Head(head_table) =
+                    &table_directory.table_records.last().unwrap()._data
+                {
+                    table_directory._mac_style = Some(head_table.mac_style);
                 }
             }
             _ => {}

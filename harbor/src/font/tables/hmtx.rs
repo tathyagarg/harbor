@@ -3,7 +3,7 @@
 use std::fmt::Debug;
 
 use crate::font::otf_dtypes::*;
-use crate::font::tables::TableTrait;
+use crate::font::tables::{ParseContext, TableTrait};
 
 #[derive(Clone, Default, Debug)]
 pub struct LongHorMetric {
@@ -55,7 +55,7 @@ impl HMtxTable {
 }
 
 impl TableTrait for HMtxTable {
-    fn parse(_data: &[u8]) -> Self
+    fn parse(_data: &[u8], _ctx: Option<ParseContext>) -> Self
     where
         Self: Sized,
     {

@@ -4,7 +4,7 @@
 use std::fmt::Debug;
 
 use crate::font::otf_dtypes::*;
-use crate::font::tables::TableTrait;
+use crate::font::tables::{ParseContext, TableTrait};
 
 fn interpret_language(platform_id: uint16, language: uint16) -> uint16 {
     if platform_id == (PlatformID::Macintosh as uint16) {
@@ -546,7 +546,7 @@ pub struct CMAPTable {
 }
 
 impl TableTrait for CMAPTable {
-    fn parse(data: &[u8]) -> CMAPTable {
+    fn parse(data: &[u8], _ctx: Option<ParseContext>) -> CMAPTable {
         let version = uint16::from_data(&data[0..2]);
         let num_tables = uint16::from_data(&data[2..4]);
 

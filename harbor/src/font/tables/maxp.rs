@@ -3,7 +3,7 @@
 use std::fmt::Debug;
 
 use crate::font::otf_dtypes::*;
-use crate::font::tables::TableTrait;
+use crate::font::tables::{ParseContext, TableTrait};
 
 #[derive(Clone, Debug)]
 pub struct MaxPTable_v0_5 {
@@ -71,7 +71,7 @@ pub enum MaxPTable {
 }
 
 impl TableTrait for MaxPTable {
-    fn parse(data: &[u8]) -> Self
+    fn parse(data: &[u8], _ctx: Option<ParseContext>) -> Self
     where
         Self: Sized,
     {
