@@ -65,5 +65,5 @@ fn main() {
 
     let ttc_data = include_bytes!("../../assets/fonts/Times.ttc");
 
-    font::ttf::ttc::parse_ttc(ttc_data);
+    println!("{:#?}", font::parse_ttc(ttc_data));
 }
