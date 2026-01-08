@@ -4,6 +4,7 @@
 use std::fmt::Debug;
 
 use crate::font::otf_dtypes::*;
+use crate::font::tables::TableTrait;
 
 fn interpret_language(platform_id: uint16, language: uint16) -> uint16 {
     if platform_id == (PlatformID::Macintosh as uint16) {
@@ -289,10 +290,22 @@ impl Debug for CMAPSubtable4 {
             .field("search_range", &self.search_range)
             .field("entry_selector", &self.entry_selector)
             .field("range_shift", &self.range_shift)
-            .field("end_code", &&self.end_code[..4])
-            .field("start_code", &&self.start_code[..4])
-            .field("id_delta", &&self.id_delta[..4])
-            .field("id_range_offset", &&self.id_range_offset[..4])
+            .field(
+                "end_code",
+                &&self.end_code[..std::cmp::min(4, self.end_code.len())],
+            )
+            .field(
+                "start_code",
+                &&self.start_code[..std::cmp::min(4, self.start_code.len())],
+            )
+            .field(
+                "id_delta",
+                &&self.id_delta[..std::cmp::min(4, self.id_delta.len())],
+            )
+            .field(
+                "id_range_offset",
+                &&self.id_range_offset[..std::cmp::min(4, self.id_range_offset.len())],
+            )
             .field("glyph_id_array_length", &self.glyph_id_array.len())
             .finish()
     }
@@ -519,7 +532,7 @@ impl CMAPSubtable {
     }
 }
 
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default)]
 pub struct CMAPTable {
     /// Table version number (0).
     pub version: uint16,
@@ -532,8 +545,8 @@ pub struct CMAPTable {
     pub subtables: Vec<CMAPSubtable>,
 }
 
-impl CMAPTable {
-    pub fn parse(data: &[u8]) -> CMAPTable {
+impl TableTrait for CMAPTable {
+    fn parse(data: &[u8]) -> CMAPTable {
         let version = uint16::from_data(&data[0..2]);
         let num_tables = uint16::from_data(&data[2..4]);
 
@@ -568,6 +581,14 @@ impl CMAPTable {
         cmap_table
     }
 
+    fn construct(&mut self, _data: &[u8]) {
+        panic!(
+            "CMAPTable does not require construction - simply parse the data instead with CMAPTable::parse()"
+        );
+    }
+}
+
+impl CMAPTable {
     pub fn new(version: uint16, num_tables: uint16) -> CMAPTable {
         CMAPTable {
             version,
@@ -586,5 +607,16 @@ impl CMAPTable {
         }
 
         self.encoding_records.push(record);
+    }
+}
+
+impl Debug for CMAPTable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CMAPTable")
+            .field("version", &self.version)
+            .field("num_tables", &self.num_tables)
+            .field("encoding_records", &self.encoding_records)
+            .field("subtables", &self.subtables)
+            .finish()
     }
 }

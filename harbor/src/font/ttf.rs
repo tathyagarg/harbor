@@ -4,26 +4,26 @@
 use std::fmt::Debug;
 
 use crate::font::otf_dtypes::*;
-use crate::font::tables::{cmap, head};
+use crate::font::tables::{TableTrait, cmap, head, hhea, hmtx, maxp};
 
 #[derive(Clone)]
 pub enum TableRecordData {
     CMAP(cmap::CMAPTable),
     Head(head::HeaderTable),
+    HHea(hhea::HHeaTable),
+    HMtx(hmtx::HMtxTable),
+    MaxP(maxp::MaxPTable),
     Raw(Vec<u8>),
 }
 
 impl Debug for TableRecordData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            TableRecordData::CMAP(cmap_table) => f
-                .debug_struct("TableRecordData::CMAP")
-                .field("version", &cmap_table.version)
-                .field("num_tables", &cmap_table.num_tables)
-                .field("encoding_records", &cmap_table.encoding_records)
-                .field("subtables", &cmap_table.subtables)
-                .finish(),
+            TableRecordData::CMAP(cmap_table) => cmap_table.fmt(f),
             TableRecordData::Head(head_table) => head_table.fmt(f),
+            TableRecordData::HHea(hhea_table) => hhea_table.fmt(f),
+            TableRecordData::HMtx(hmtx_table) => hmtx_table.fmt(f),
+            TableRecordData::MaxP(maxp_table) => maxp_table.fmt(f),
             TableRecordData::Raw(raw_data) => f
                 .debug_struct("TableRecordData::Raw")
                 .field("data_length", &raw_data.len())
@@ -33,18 +33,30 @@ impl Debug for TableRecordData {
 }
 
 impl TableRecordData {
-    pub fn from_tag(tag: Tag) -> TableRecordData {
-        match &tag {
-            b"cmap" => TableRecordData::CMAP(cmap::CMAPTable::default()),
-            b"head" => TableRecordData::Head(head::HeaderTable::default()),
-            _ => TableRecordData::Raw(Vec::new()),
-        }
-    }
-
-    pub fn from_tag_data(tag: Tag, data: &[u8]) -> TableRecordData {
+    pub fn from_tag_data(tag: Tag, data: &[u8], table_dir: &TableDirectory) -> TableRecordData {
         match &tag {
             b"cmap" => TableRecordData::CMAP(cmap::CMAPTable::parse(data)),
             b"head" => TableRecordData::Head(head::HeaderTable::parse(data)),
+            b"hhea" => TableRecordData::HHea(hhea::HHeaTable::parse(data)),
+            b"hmtx" => TableRecordData::HMtx({
+                let mut hmtx_table = hmtx::HMtxTable::default();
+
+                hmtx_table.set_num_h_metrics(
+                    table_dir
+                        ._num_h_metrics
+                        .expect("Number of hMetrics not set in TableDirectory."),
+                );
+
+                hmtx_table.set_num_glyphs(
+                    table_dir
+                        ._num_glyphs
+                        .expect("Number of glyphs not set in TableDirectory."),
+                );
+
+                hmtx_table.construct(data);
+                hmtx_table
+            }),
+            b"maxp" => TableRecordData::MaxP(maxp::MaxPTable::parse(data)),
             _ => TableRecordData::Raw(data.to_vec()),
         }
     }
@@ -83,7 +95,13 @@ impl Debug for TableRecord {
 }
 
 impl TableRecord {
-    pub fn new(table_tag: Tag, offset: Offset32, length: uint32, raw_data: &[u8]) -> TableRecord {
+    pub fn new(
+        table_tag: Tag,
+        offset: Offset32,
+        length: uint32,
+        raw_data: &[u8],
+        table_dir: &TableDirectory,
+    ) -> TableRecord {
         if !is_valid_tag(table_tag) {
             panic!(
                 "Invalid table tag: {:?}",
@@ -96,7 +114,17 @@ impl TableRecord {
             offset,
             length,
             &raw_data[offset as usize..(offset + length) as usize],
+            table_dir,
         )
+    }
+
+    pub fn has_unmet_requirements(tag: Tag) -> Option<Box<dyn Fn(&TableDirectory) -> bool>> {
+        match &tag {
+            b"hmtx" => Some(Box::new(|table_dir: &TableDirectory| {
+                table_dir._num_h_metrics.is_some() && table_dir._num_glyphs.is_some()
+            })),
+            _ => None,
+        }
     }
 
     pub fn new_from_table_data(
@@ -104,13 +132,14 @@ impl TableRecord {
         offset: Offset32,
         length: uint32,
         table_data: &[u8],
+        table_dir: &TableDirectory,
     ) -> TableRecord {
         TableRecord {
             table_tag,
             offset,
             length,
             checksum: 0,
-            _data: TableRecordData::from_tag_data(table_tag, table_data),
+            _data: TableRecordData::from_tag_data(table_tag, table_data, table_dir),
         }
         .reassign_checksum(table_data)
     }
@@ -141,7 +170,6 @@ impl TableRecord {
     }
 }
 
-#[derive(Debug)]
 pub struct TableDirectory {
     /// 0x00010000 or 0x4F54544F ('OTTO') — see below.
     pub sfnt_version: uint32,
@@ -162,6 +190,24 @@ pub struct TableDirectory {
 
     /// Table records array—one for each top-level table in the font.
     pub table_records: Vec<TableRecord>,
+
+    _num_glyphs: Option<usize>,
+    _num_h_metrics: Option<usize>,
+
+    _parse_queue: Vec<(Tag, Offset32, uint32, Box<dyn Fn(&TableDirectory) -> bool>)>,
+}
+
+impl Debug for TableDirectory {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TableDirectory")
+            .field("sfnt_version", &format_args!("{:08X}", self.sfnt_version))
+            .field("num_tables", &self.num_tables)
+            .field("search_range", &self.search_range)
+            .field("entry_selector", &self.entry_selector)
+            .field("range_shift", &self.range_shift)
+            .field("table_records", &self.table_records)
+            .finish()
+    }
 }
 
 impl TableDirectory {
@@ -179,7 +225,16 @@ impl TableDirectory {
             entry_selector,
             range_shift,
             table_records: Vec::with_capacity(num_tables as usize),
+            _num_glyphs: None,
+            _num_h_metrics: None,
+            _parse_queue: Vec::new(),
         }
+    }
+
+    pub fn has_table(&self, tag: Tag) -> bool {
+        self.table_records
+            .iter()
+            .any(|record| record.table_tag == tag)
     }
 }
 
@@ -203,7 +258,7 @@ pub fn parse_table_directory(data: &[u8], offset: Option<usize>) -> TableDirecto
     let mut record_offset = start_offset + 12;
 
     for _ in 0..num_tables {
-        let table_tag = &data[record_offset..record_offset + 4];
+        let table_tag: [u8; 4] = data[record_offset..record_offset + 4].try_into().unwrap();
 
         // let checksum = u32::from_be_bytes(
         //     data[record_offset + 4..record_offset + 8]
@@ -211,20 +266,68 @@ pub fn parse_table_directory(data: &[u8], offset: Option<usize>) -> TableDirecto
         //         .unwrap(),
         // );
 
-        let offset = Offset32::from_be_bytes(
-            data[record_offset + 8..record_offset + 12]
-                .try_into()
-                .unwrap(),
-        );
-        let length = uint32::from_be_bytes(
-            data[record_offset + 12..record_offset + 16]
-                .try_into()
-                .unwrap(),
-        );
+        let offset = Offset32::from_data(&data[record_offset + 8..]);
+        let length = uint32::from_data(&data[record_offset + 12..]);
 
-        let table_record = TableRecord::new(table_tag.try_into().unwrap(), offset, length, data);
+        if let Some(req) = TableRecord::has_unmet_requirements(table_tag) {
+            if !req(&table_directory) {
+                table_directory
+                    ._parse_queue
+                    .push((table_tag, offset, length, req));
+                record_offset += 16;
+                continue;
+            }
+        }
 
+        let table_record = TableRecord::new(table_tag, offset, length, data, &table_directory);
         table_directory.table_records.push(table_record);
+
+        match &table_tag {
+            b"hhea" => {
+                if let TableRecordData::HHea(hhea_table) =
+                    &table_directory.table_records.last().unwrap()._data
+                {
+                    table_directory._num_h_metrics = Some(hhea_table.number_of_h_metrics as usize);
+                }
+            }
+            b"maxp" => {
+                if let TableRecordData::MaxP(maxp_table) =
+                    &table_directory.table_records.last().unwrap()._data
+                {
+                    match maxp_table {
+                        maxp::MaxPTable::V0_5(table_v0_5) => {
+                            table_directory._num_glyphs = Some(table_v0_5.num_glyphs as usize);
+                        }
+                        maxp::MaxPTable::V1_0(table_v1_0) => {
+                            table_directory._num_glyphs = Some(table_v1_0.num_glyphs as usize);
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+
+        let mut recorded_updates = true;
+        while recorded_updates {
+            recorded_updates = false;
+
+            'req_update: for (i, (tag, offset, length, req)) in
+                table_directory._parse_queue.iter().enumerate()
+            {
+                if req(&table_directory) {
+                    recorded_updates = true;
+
+                    let table_record =
+                        TableRecord::new(*tag, *offset, *length, data, &table_directory);
+
+                    table_directory.table_records.push(table_record);
+                    _ = table_directory._parse_queue.remove(i);
+
+                    break 'req_update;
+                }
+            }
+        }
+
         record_offset += 16;
     }
 

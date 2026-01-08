@@ -1,6 +1,7 @@
 use std::fmt::Debug;
 
 use crate::font::otf_dtypes::*;
+use crate::font::tables::TableTrait;
 
 fn flags_to_string(flags: uint16) -> String {
     let mut flag_descriptions = Vec::new();
@@ -115,9 +116,6 @@ pub struct HeaderTable {
 
     /// 0 for short offsets (Offset16), 1 for long (Offset32).
     pub index_to_loc_format: int16,
-
-    /// 0 for current format.
-    pub glyph_data_format: int16,
 }
 
 impl Debug for HeaderTable {
@@ -144,13 +142,12 @@ impl Debug for HeaderTable {
             .field("lowest_rec_ppem", &self.lowest_rec_ppem)
             .field("font_direction_hint", &self.font_direction_hint)
             .field("index_to_loc_format", &self.index_to_loc_format)
-            .field("glyph_data_format", &self.glyph_data_format)
             .finish()
     }
 }
 
-impl HeaderTable {
-    pub fn parse(data: &[u8]) -> HeaderTable {
+impl TableTrait for HeaderTable {
+    fn parse(data: &[u8]) -> HeaderTable {
         HeaderTable {
             major_version: uint16::from_be_bytes(data[0..2].try_into().unwrap()),
             minor_version: uint16::from_be_bytes(data[2..4].try_into().unwrap()),
@@ -169,10 +166,15 @@ impl HeaderTable {
             lowest_rec_ppem: uint16::from_be_bytes(data[46..48].try_into().unwrap()),
             font_direction_hint: int16::from_be_bytes(data[48..50].try_into().unwrap()),
             index_to_loc_format: int16::from_be_bytes(data[50..52].try_into().unwrap()),
-            glyph_data_format: int16::from_be_bytes(data[52..54].try_into().unwrap()),
         }
     }
 
+    fn construct(&mut self, _data: &[u8]) {
+        panic!("HeaderTable does not required construction - simply use HeaderTable::parse()");
+    }
+}
+
+impl HeaderTable {
     pub fn new() -> HeaderTable {
         HeaderTable::default()
     }
