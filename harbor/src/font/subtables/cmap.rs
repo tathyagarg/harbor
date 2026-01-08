@@ -1,10 +1,13 @@
+#![allow(dead_code)]
+#![allow(non_camel_case_types)]
+
 use std::fmt::Debug;
 
 use crate::font::otf_dtypes::*;
 
 fn interpret_language(platform_id: uint16, language: uint16) -> uint16 {
     if platform_id == (PlatformID::Macintosh as uint16) {
-        if language == (EncodingID_Macintosh::Roman as uint16) {
+        if language == (MacintoshEncodingID::Roman as uint16) {
             return 0;
         }
 
@@ -27,7 +30,7 @@ pub enum PlatformID {
 
 #[repr(u16)]
 #[derive(Debug)]
-pub enum EncodingID_Unicode {
+pub enum UnicodeEncodingID {
     #[deprecated(note = "Unicode 1.0 is deprecated")]
     Unicode_1_0 = 0,
     #[deprecated(note = "Unicode 1.1 is deprecated")]
@@ -36,16 +39,16 @@ pub enum EncodingID_Unicode {
     ISO_10646 = 2,
     Unicode_2_0_BMP = 3,
     Unicode_2_0_Full = 4,
-    Unicode_Variation_Sequences = 5,
-    Unicode_Full_Support = 6,
+    UnicodeVariationSequences = 5,
+    UnicodeFullSupport = 6,
 }
 
 #[repr(u16)]
 #[derive(Debug)]
-pub enum EncodingID_Macintosh {
+pub enum MacintoshEncodingID {
     Roman = 0,
     Japanese = 1,
-    Chinese_Traditional = 2,
+    ChineseTraditional = 2,
     Korean = 3,
     Arabic = 4,
     Hebrew = 5,
@@ -68,19 +71,19 @@ pub enum EncodingID_Macintosh {
     Laotian = 22,
     Georgian = 23,
     Armenian = 24,
-    Chinese_Simplified = 25,
+    ChineseSimplified = 25,
     Tibetan = 26,
     Mongolian = 27,
     Geez = 28,
     Slavic = 29,
     Vietnamese = 30,
     Sindhi = 31,
-    Uninterpreted_Script = 32,
+    UninterpretedScript = 32,
 }
 
 #[repr(u16)]
 #[derive(Debug)]
-pub enum EncodingID_ISO {
+pub enum ISOEncodingID {
     SevenBitASCII = 0,
     ISO10646 = 1,
     ISO8859_1 = 2,
@@ -88,23 +91,23 @@ pub enum EncodingID_ISO {
 
 #[repr(u16)]
 #[derive(Debug)]
-pub enum EncodingID_Windows {
+pub enum WindowsEncodingID {
     Symbol = 0,
-    Unicode_BMP = 1,
+    UnicodeBMP = 1,
     ShiftJIS = 2,
     PRC = 3,
     Big5 = 4,
     Wansung = 5,
     Johab = 6,
-    Unicode_Full = 10,
+    UnicodeFull = 10,
 }
 
 #[derive(Debug)]
 pub enum EncodingID {
-    Unicode(EncodingID_Unicode),
-    Macintosh(EncodingID_Macintosh),
-    ISO(EncodingID_ISO),
-    Windows(EncodingID_Windows),
+    Unicode(UnicodeEncodingID),
+    Macintosh(MacintoshEncodingID),
+    ISO(ISOEncodingID),
+    Windows(WindowsEncodingID),
     Custom(uint16),
 }
 
@@ -180,6 +183,9 @@ pub trait CMAPSubtableTrait {
     fn parse(data: &[u8], encoding: &CMAPEncodingRecord) -> Self
     where
         Self: Sized;
+
+    /// Maps a character code to a glyph index.
+    fn char_to_glyph_index(&self, char_code: u32) -> Option<uint16>;
 }
 
 #[derive(Clone, Debug)]
@@ -220,6 +226,14 @@ impl CMAPSubtableTrait for CMAPSubtable0 {
             language,
             glyph_id_array,
         }
+    }
+
+    fn char_to_glyph_index(&self, char_code: u32) -> Option<uint16> {
+        if char_code > 255 {
+            return None;
+        }
+
+        Some(self.glyph_id_array[char_code as usize] as uint16)
     }
 }
 
@@ -262,6 +276,8 @@ pub struct CMAPSubtable4 {
 
     /// Glyph index array (arbitrary length)
     glyph_id_array: Vec<uint16>,
+
+    _seg_count: uint16,
 }
 
 impl Debug for CMAPSubtable4 {
@@ -348,7 +364,130 @@ impl CMAPSubtableTrait for CMAPSubtable4 {
             id_delta,
             id_range_offset,
             glyph_id_array,
+            _seg_count: seg_count,
         }
+    }
+
+    fn char_to_glyph_index(&self, char_code: u32) -> Option<uint16> {
+        if char_code > 0xFFFF {
+            return None;
+        }
+
+        let char_code_u16 = char_code as uint16;
+
+        let segment_index = self
+            .end_code
+            .iter()
+            .position(|&end_code| char_code_u16 <= end_code);
+
+        if segment_index.is_none() {
+            return None;
+        }
+
+        let seg_index = segment_index.unwrap();
+        let start_code = self.start_code[seg_index];
+        // let end_code = self.end_code[seg_index];
+        let id_delta = self.id_delta[seg_index];
+        let id_range_offset = self.id_range_offset[seg_index];
+
+        if start_code > char_code_u16 {
+            return None;
+        }
+
+        if id_range_offset == 0 {
+            Some(char_code_u16.wrapping_add_signed(id_delta))
+        } else {
+            let glyph_index_idx = (id_range_offset / 2) + (char_code_u16 - start_code)
+                - (self._seg_count - seg_index as uint16);
+
+            if (glyph_index_idx as usize) >= self.glyph_id_array.len() {
+                return None;
+            }
+
+            let glyph_index = self.glyph_id_array[glyph_index_idx as usize];
+            if glyph_index == 0 {
+                return None;
+            }
+
+            Some(glyph_index.wrapping_add_signed(id_delta))
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct CMAPSubtable6 {
+    /// This is the length in bytes of the subtable.
+    length: uint16,
+
+    language: uint16,
+
+    /// First character code of subrange.
+    first_code: uint16,
+
+    /// Number of character codes in subrange.
+    entry_count: uint16,
+
+    /// Array of glyph index values for character codes in the range.
+    glyph_id_array: Vec<uint16>,
+}
+
+impl Debug for CMAPSubtable6 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CMAPSubtable6")
+            .field("length", &self.length)
+            .field("language", &self.language)
+            .field("first_code", &self.first_code)
+            .field("entry_count", &self.entry_count)
+            .field("glyph_id_array_length", &self.glyph_id_array.len())
+            .finish()
+    }
+}
+
+impl CMAPSubtableTrait for CMAPSubtable6 {
+    fn parse(data: &[u8], encoding: &CMAPEncodingRecord) -> Self
+    where
+        Self: Sized,
+    {
+        let length = uint16::from_data(&data[2..]);
+
+        let language = interpret_language(encoding.platform_id, uint16::from_data(&data[4..]));
+
+        let first_code = uint16::from_data(&data[6..]);
+        let entry_count = uint16::from_data(&data[8..]);
+        let mut glyph_id_array = Vec::with_capacity(entry_count as usize);
+
+        let mut offset = 10;
+
+        for _ in 0..entry_count {
+            glyph_id_array.push(uint16::from_data(&data[offset..]));
+            offset += 2;
+        }
+
+        CMAPSubtable6 {
+            length,
+            language,
+            first_code,
+            entry_count,
+            glyph_id_array,
+        }
+    }
+
+    fn char_to_glyph_index(&self, char_code: u32) -> Option<uint16> {
+        if char_code < self.first_code as u32 {
+            return None;
+        }
+
+        if char_code > (self.first_code as u32 + self.entry_count as u32 - 1) {
+            return None;
+        }
+
+        let index = char_code as uint16 - self.first_code;
+
+        if index >= self.entry_count {
+            return None;
+        }
+
+        Some(self.glyph_id_array[index as usize])
     }
 }
 
@@ -357,7 +496,7 @@ pub enum CMAPSubtable {
     Format0(CMAPSubtable0),
     Format2,
     Format4(CMAPSubtable4),
-    Format6,
+    Format6(CMAPSubtable6),
     Format8,
     Format10,
     Format12,
@@ -374,7 +513,7 @@ impl CMAPSubtable {
         match format {
             0 => CMAPSubtable::Format0(CMAPSubtable0::parse(data, encoding)),
             4 => CMAPSubtable::Format4(CMAPSubtable4::parse(data, encoding)),
-            6 => CMAPSubtable::Format6,
+            6 => CMAPSubtable::Format6(CMAPSubtable6::parse(data, encoding)),
             _ => panic!("Unsupported CMAP subtable format: {}", format),
         }
     }
