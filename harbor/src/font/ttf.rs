@@ -4,11 +4,12 @@
 use std::fmt::Debug;
 
 use crate::font::otf_dtypes::*;
-use crate::font::subtables::cmap;
+use crate::font::tables::{cmap, head};
 
 #[derive(Clone)]
 pub enum TableRecordData {
     CMAP(cmap::CMAPTable),
+    Head(head::HeaderTable),
     Raw(Vec<u8>),
 }
 
@@ -22,6 +23,7 @@ impl Debug for TableRecordData {
                 .field("encoding_records", &cmap_table.encoding_records)
                 .field("subtables", &cmap_table.subtables)
                 .finish(),
+            TableRecordData::Head(head_table) => head_table.fmt(f),
             TableRecordData::Raw(raw_data) => f
                 .debug_struct("TableRecordData::Raw")
                 .field("data_length", &raw_data.len())
@@ -34,49 +36,15 @@ impl TableRecordData {
     pub fn from_tag(tag: Tag) -> TableRecordData {
         match &tag {
             b"cmap" => TableRecordData::CMAP(cmap::CMAPTable::default()),
+            b"head" => TableRecordData::Head(head::HeaderTable::default()),
             _ => TableRecordData::Raw(Vec::new()),
         }
     }
 
     pub fn from_tag_data(tag: Tag, data: &[u8]) -> TableRecordData {
         match &tag {
-            b"cmap" => {
-                let version = uint16::from_data(&data[0..2]);
-                let num_tables = uint16::from_data(&data[2..4]);
-
-                let mut cmap_table = cmap::CMAPTable::new(version, num_tables);
-
-                let mut offset = 4;
-
-                for _ in 0..num_tables {
-                    let platform_id = uint16::from_data(&data[offset..]);
-                    let encoding_id = uint16::from_data(&data[offset + 2..]);
-                    let subtable_offset = uint32::from_data(&data[offset + 4..]);
-
-                    cmap_table.push_encoding_record(cmap::CMAPEncodingRecord {
-                        platform_id,
-                        encoding_id,
-                        subtable_offset,
-                    });
-
-                    offset += 8;
-                }
-
-                for encoding in &cmap_table.encoding_records {
-                    let subtable_start = encoding.subtable_offset as usize;
-                    let format = uint16::from_data(&data[subtable_start..]);
-
-                    let subtable = cmap::CMAPSubtable::parse_from_format_int(
-                        format,
-                        &data[subtable_start..],
-                        encoding,
-                    );
-
-                    cmap_table.subtables.push(subtable);
-                }
-
-                TableRecordData::CMAP(cmap_table)
-            }
+            b"cmap" => TableRecordData::CMAP(cmap::CMAPTable::parse(data)),
+            b"head" => TableRecordData::Head(head::HeaderTable::parse(data)),
             _ => TableRecordData::Raw(data.to_vec()),
         }
     }

@@ -1,7 +1,7 @@
 pub mod ttc;
 pub mod ttf;
 
-pub mod subtables;
+pub mod tables;
 
 pub use ttc::parse_ttc;
 
@@ -22,13 +22,15 @@ pub mod otf_dtypes {
     pub type int32 = i32;
 
     // TODO: Determine usage and workaround
-    // type Fixed
+    pub type Fixed = int32;
 
     pub type FWORD = int16;
     pub type UFWORD = uint16;
 
     // TODO: Determine usage and workaround
     // type F2DOT14
+
+    pub type LongDateTime = i64;
 
     pub type Tag = [uint8; 4];
 
@@ -97,5 +99,11 @@ pub mod otf_dtypes {
         fn from_data(bytes: &[u8]) -> Self {
             int16::from_be_bytes(bytes[..2].try_into().unwrap())
         }
+    }
+
+    pub fn fixed_to_string(fixed: Fixed) -> String {
+        let integer_part = fixed >> 16;
+        let fractional_part = fixed & 0xFFFF;
+        format!("{}.{}", integer_part, fractional_part)
     }
 }

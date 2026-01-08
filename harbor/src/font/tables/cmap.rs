@@ -533,6 +533,41 @@ pub struct CMAPTable {
 }
 
 impl CMAPTable {
+    pub fn parse(data: &[u8]) -> CMAPTable {
+        let version = uint16::from_data(&data[0..2]);
+        let num_tables = uint16::from_data(&data[2..4]);
+
+        let mut cmap_table = CMAPTable::new(version, num_tables);
+
+        let mut offset = 4;
+
+        for _ in 0..num_tables {
+            let platform_id = uint16::from_data(&data[offset..]);
+            let encoding_id = uint16::from_data(&data[offset + 2..]);
+            let subtable_offset = Offset32::from_data(&data[offset + 4..]);
+
+            cmap_table.push_encoding_record(CMAPEncodingRecord {
+                platform_id,
+                encoding_id,
+                subtable_offset,
+            });
+
+            offset += 8;
+        }
+
+        for encoding in &cmap_table.encoding_records {
+            let subtable_start = encoding.subtable_offset as usize;
+            let format = uint16::from_data(&data[subtable_start..]);
+
+            let subtable =
+                CMAPSubtable::parse_from_format_int(format, &data[subtable_start..], encoding);
+
+            cmap_table.subtables.push(subtable);
+        }
+
+        cmap_table
+    }
+
     pub fn new(version: uint16, num_tables: uint16) -> CMAPTable {
         CMAPTable {
             version,
