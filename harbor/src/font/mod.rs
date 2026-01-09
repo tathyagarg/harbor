@@ -27,8 +27,15 @@ pub mod otf_dtypes {
     pub type FWORD = int16;
     pub type UFWORD = uint16;
 
-    // TODO: Determine usage and workaround
-    // type F2DOT14
+    pub type F2DOT14 = uint16;
+
+    pub fn f2dot14_to_f32(value: F2DOT14) -> f32 {
+        let sign = if (value & 0x8000) != 0 { -1.0 } else { 1.0 };
+
+        let integer_part = (value >> 14 & 1) as f32 * sign;
+        let fractional_part = (value & 0x3FFF) as f32 / 16384.0;
+        integer_part + fractional_part
+    }
 
     pub type LongDateTime = i64;
 

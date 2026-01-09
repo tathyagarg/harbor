@@ -9,7 +9,7 @@ use crate::font::otf_dtypes::*;
 use crate::font::tables::{ParseContext, TableTrait};
 
 #[repr(u8)]
-pub enum GlyphFlags {
+pub enum SimpleGlyphFlags {
     OnCurvePoint = 0x01,
     XShortVector = 0x02,
     YShortVector = 0x04,
@@ -19,11 +19,35 @@ pub enum GlyphFlags {
     OverlapSimple = 0x40,
 }
 
-impl BitAnd<GlyphFlags> for uint8 {
+impl BitAnd<SimpleGlyphFlags> for uint8 {
     type Output = uint8;
 
-    fn bitand(self, rhs: GlyphFlags) -> Self::Output {
+    fn bitand(self, rhs: SimpleGlyphFlags) -> Self::Output {
         self & (rhs as uint8)
+    }
+}
+
+#[repr(u16)]
+pub enum CompositeGlyphFlags {
+    Arg1And2AreWords = 0x0001,
+    ArgsAreXYValues = 0x0002,
+    RoundXYToGrid = 0x0004,
+    WeHaveAScale = 0x0008,
+    MoreComponents = 0x0020,
+    WeHaveAnXAndYScale = 0x0040,
+    WeHaveATwoByTwo = 0x0080,
+    WeHaveInstructions = 0x0100,
+    UseMyMetrics = 0x0200,
+    OverlapCompound = 0x0400,
+    ScaledComponentOffset = 0x0800,
+    UnscaledComponentOffset = 0x1000,
+}
+
+impl BitAnd<CompositeGlyphFlags> for uint16 {
+    type Output = uint16;
+
+    fn bitand(self, rhs: CompositeGlyphFlags) -> Self::Output {
+        self & (rhs as uint16)
     }
 }
 
@@ -91,9 +115,61 @@ impl Debug for SimpleGlyphData {
 }
 
 #[derive(Clone, Debug)]
+pub enum GlyphTransform {
+    Scale(f32),
+    ScaleXY { x_scale: f32, y_scale: f32 },
+    Matrix { a: f32, b: f32, c: f32, d: f32 },
+}
+
+#[derive(Clone, Default)]
+pub struct GlyphComponent {
+    flags: uint16,
+    glyph_index: uint16,
+
+    arg1: int16,
+    arg2: int16,
+
+    transform: Option<GlyphTransform>,
+}
+
+impl Debug for GlyphComponent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GlyphComponent")
+            .field("flags", &format!("{:016b}", self.flags))
+            .field("glyph_index", &self.glyph_index)
+            .field("arg1", &self.arg1)
+            .field("arg2", &self.arg2)
+            .field("transform", &self.transform)
+            .finish()
+    }
+}
+
+#[derive(Clone)]
+pub struct CompositeGlyphData {
+    components: Vec<GlyphComponent>,
+
+    instructions: Option<Vec<uint8>>,
+}
+
+impl Debug for CompositeGlyphData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CompositeGlyphData")
+            .field("components", &self.components)
+            .field(
+                "instructions_preview",
+                &self
+                    .instructions
+                    .as_ref()
+                    .map(|ins| ins.iter().take(10).collect::<Vec<&uint8>>()),
+            )
+            .finish()
+    }
+}
+
+#[derive(Clone, Debug)]
 pub enum GlyphDataType {
     Simple(SimpleGlyphData),
-    Composite,
+    Composite(CompositeGlyphData),
 }
 
 #[derive(Clone, Debug)]
@@ -116,7 +192,8 @@ impl Debug for GlyfTable {
             .field("glyphs_count", &self.glyphs.len())
             .field(
                 "glyphs_preview",
-                &self.glyphs.iter().take(5).collect::<Vec<&GlyphData>>(),
+                // &self.glyphs.iter().take(5).collect::<Vec<&GlyphData>>(),
+                &self.glyphs,
             )
             .finish()
     }
@@ -175,9 +252,9 @@ impl TableTrait for GlyfTable {
                 y_max,
             };
 
+            let mut offset = 10;
             if number_of_contours >= 0 {
                 // Simple glyph
-                let mut offset = 10;
 
                 let mut end_pts_of_contours =
                     Vec::<uint16>::with_capacity(number_of_contours as usize);
@@ -218,16 +295,17 @@ impl TableTrait for GlyfTable {
                 let mut x_coords = Vec::<int16>::new();
 
                 for &flag in &flags {
-                    if flag & GlyphFlags::XShortVector != 0 {
+                    if flag & SimpleGlyphFlags::XShortVector != 0 {
                         let x_byte = glyph_data[offset];
                         offset += 1;
-                        let x_value = if flag & GlyphFlags::XIsSameOrPositiveXShortVector != 0 {
+                        let x_value = if flag & SimpleGlyphFlags::XIsSameOrPositiveXShortVector != 0
+                        {
                             x_byte as int16
                         } else {
                             -(x_byte as int16)
                         };
                         x_coords.push(x_value);
-                    } else if flag & GlyphFlags::XIsSameOrPositiveXShortVector == 0 {
+                    } else if flag & SimpleGlyphFlags::XIsSameOrPositiveXShortVector == 0 {
                         let x_value = int16::from_data(&glyph_data[offset..offset + 2]);
                         offset += 2;
                         x_coords.push(x_value);
@@ -239,16 +317,17 @@ impl TableTrait for GlyfTable {
                 let mut y_coords = Vec::<int16>::new();
 
                 for &flag in &flags {
-                    if flag & GlyphFlags::YShortVector != 0 {
+                    if flag & SimpleGlyphFlags::YShortVector != 0 {
                         let y_byte = glyph_data[offset];
                         offset += 1;
-                        let y_value = if flag & GlyphFlags::YIsSameOrPositiveYShortVector != 0 {
+                        let y_value = if flag & SimpleGlyphFlags::YIsSameOrPositiveYShortVector != 0
+                        {
                             y_byte as int16
                         } else {
                             -(y_byte as int16)
                         };
                         y_coords.push(y_value);
-                    } else if flag & GlyphFlags::YIsSameOrPositiveYShortVector == 0 {
+                    } else if flag & SimpleGlyphFlags::YIsSameOrPositiveYShortVector == 0 {
                         let y_value = int16::from_data(&glyph_data[offset..offset + 2]);
                         offset += 2;
                         y_coords.push(y_value);
@@ -270,9 +349,99 @@ impl TableTrait for GlyfTable {
                 });
             } else {
                 // Composite glyph
+                let mut components = Vec::<GlyphComponent>::new();
+
+                let mut we_have_instructions = false;
+
+                loop {
+                    let mut component = GlyphComponent::default();
+
+                    let flags = uint16::from_data(&glyph_data[offset..offset + 2]);
+                    offset += 2;
+                    component.flags = flags;
+
+                    we_have_instructions = we_have_instructions
+                        || (flags & CompositeGlyphFlags::WeHaveInstructions != 0);
+
+                    let _glyph_index = uint16::from_data(&glyph_data[offset..offset + 2]);
+                    offset += 2;
+                    component.glyph_index = _glyph_index;
+
+                    let arg1_and_2_are_words = flags & CompositeGlyphFlags::Arg1And2AreWords != 0;
+
+                    let (arg1, arg2) = if arg1_and_2_are_words {
+                        let result = (
+                            int16::from_data(&glyph_data[offset..offset + 2]),
+                            int16::from_data(&glyph_data[offset + 2..offset + 4]),
+                        );
+
+                        offset += 4;
+
+                        result
+                    } else {
+                        let result = (glyph_data[offset] as int16, glyph_data[offset + 1] as int16);
+
+                        offset += 2;
+
+                        result
+                    };
+
+                    component.arg1 = arg1;
+                    component.arg2 = arg2;
+
+                    component.transform = if flags & CompositeGlyphFlags::WeHaveAScale != 0 {
+                        let scale =
+                            f2dot14_to_f32(F2DOT14::from_data(&glyph_data[offset..offset + 2]));
+
+                        offset += 2;
+
+                        Some(GlyphTransform::Scale(scale))
+                    } else if flags & CompositeGlyphFlags::WeHaveAnXAndYScale != 0 {
+                        let x_scale =
+                            f2dot14_to_f32(F2DOT14::from_data(&glyph_data[offset..offset + 2]));
+                        let y_scale =
+                            f2dot14_to_f32(F2DOT14::from_data(&glyph_data[offset + 2..offset + 4]));
+                        offset += 4;
+
+                        Some(GlyphTransform::ScaleXY { x_scale, y_scale })
+                    } else if flags & CompositeGlyphFlags::WeHaveATwoByTwo != 0 {
+                        let a = f2dot14_to_f32(F2DOT14::from_data(&glyph_data[offset..offset + 2]));
+                        let b =
+                            f2dot14_to_f32(F2DOT14::from_data(&glyph_data[offset + 2..offset + 4]));
+                        let c =
+                            f2dot14_to_f32(F2DOT14::from_data(&glyph_data[offset + 4..offset + 6]));
+                        let d =
+                            f2dot14_to_f32(F2DOT14::from_data(&glyph_data[offset + 6..offset + 8]));
+                        offset += 8;
+
+                        Some(GlyphTransform::Matrix { a, b, c, d })
+                    } else {
+                        None
+                    };
+
+                    components.push(component);
+
+                    if flags & CompositeGlyphFlags::MoreComponents == 0 {
+                        break;
+                    }
+                }
+
+                let instructions = if we_have_instructions {
+                    let instruction_length = uint16::from_data(&glyph_data[offset..offset + 2]);
+                    let instructions =
+                        &glyph_data[offset + 2..offset + 2 + (instruction_length as usize)];
+
+                    Some(instructions)
+                } else {
+                    None
+                };
+
                 self.glyphs.push(GlyphData {
                     header,
-                    data: GlyphDataType::Composite,
+                    data: GlyphDataType::Composite(CompositeGlyphData {
+                        components,
+                        instructions: instructions.map(|ins| ins.to_vec()),
+                    }),
                 });
             }
         }
