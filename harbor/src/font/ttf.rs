@@ -4,7 +4,9 @@
 use std::fmt::Debug;
 
 use crate::font::otf_dtypes::*;
-use crate::font::tables::{TableTrait, cmap, glyf, head, hhea, hmtx, loca, maxp, name, os2, post};
+use crate::font::tables::{
+    TableTrait, cmap, cvt, fpgm, glyf, head, hhea, hmtx, loca, maxp, name, os2, post,
+};
 
 #[derive(Clone)]
 pub enum TableRecordData {
@@ -18,6 +20,8 @@ pub enum TableRecordData {
     Post(post::PostTable),
     Loca(loca::LocaTable),
     Glyf(glyf::GlyfTable),
+    CVT(cvt::CVTable),
+    FPGM(fpgm::FPGMTable),
     Raw(Vec<u8>),
 }
 
@@ -34,6 +38,8 @@ impl Debug for TableRecordData {
             TableRecordData::Post(post_table) => post_table.fmt(f),
             TableRecordData::Loca(loca_table) => loca_table.fmt(f),
             TableRecordData::Glyf(glyf_table) => glyf_table.fmt(f),
+            TableRecordData::CVT(cvt_table) => cvt_table.fmt(f),
+            TableRecordData::FPGM(fpgm_table) => fpgm_table.fmt(f),
             TableRecordData::Raw(raw_data) => f
                 .debug_struct("TableRecordData::Raw")
                 .field("data_length", &raw_data.len())
@@ -102,6 +108,8 @@ impl TableRecordData {
                 glyf_table.construct(data);
                 glyf_table
             }),
+            b"cvt " => TableRecordData::CVT(cvt::CVTable::parse(data, None)),
+            b"fpgm" => TableRecordData::FPGM(fpgm::FPGMTable::parse(data, None)),
             _ => TableRecordData::Raw(data.to_vec()),
         }
     }

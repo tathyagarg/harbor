@@ -192,8 +192,8 @@ impl Debug for GlyfTable {
             .field("glyphs_count", &self.glyphs.len())
             .field(
                 "glyphs_preview",
-                // &self.glyphs.iter().take(5).collect::<Vec<&GlyphData>>(),
-                &self.glyphs,
+                &self.glyphs.iter().take(5).collect::<Vec<&GlyphData>>(),
+                // &self.glyphs,
             )
             .finish()
     }
