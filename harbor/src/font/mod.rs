@@ -72,8 +72,8 @@ pub mod otf_dtypes {
         true
     }
 
-    pub fn tag_as_str(t: Tag) -> Result<String, Utf8Error> {
-        str::from_utf8(&t).map(|s| s.to_string())
+    pub fn tag_as_str(t: &Tag) -> Result<String, Utf8Error> {
+        str::from_utf8(t).map(|s| s.to_string())
     }
 
     #[allow(dead_code)]

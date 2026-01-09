@@ -422,7 +422,7 @@ impl Debug for OS2Table_v432 {
             .field("ul_unicode_range4", &self.ul_unicode_range4)
             .field(
                 "ach_vend_id",
-                &tag_as_str(self.ach_vend_id).unwrap_or(String::from("????")),
+                &tag_as_str(&self.ach_vend_id).unwrap_or(String::from("????")),
             )
             .field(
                 "fs_selection",

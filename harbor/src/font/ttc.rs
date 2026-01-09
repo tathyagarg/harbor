@@ -63,7 +63,7 @@ impl Debug for TTCHeader_v1_0 {
         f.debug_struct("TTCHeader_v1_0")
             .field(
                 "ttc_tag",
-                &tag_as_str(self.ttc_tag).unwrap_or(String::from("Invalid Tag")),
+                &tag_as_str(&self.ttc_tag).unwrap_or(String::from("Invalid Tag")),
             )
             .field("major_version", &self.major_version)
             .field("minor_version", &self.minor_version)

@@ -5,7 +5,8 @@ use std::fmt::Debug;
 
 use crate::font::otf_dtypes::*;
 use crate::font::tables::{
-    TableTrait, cmap, cvt, fpgm, glyf, head, hhea, hmtx, loca, maxp, name, os2, post,
+    TableTrait, cmap, cvt, fpgm, gasp, glyf, head, hhea, hmtx, loca, maxp, meta, name, os2, post,
+    prep,
 };
 
 #[derive(Clone)]
@@ -22,6 +23,9 @@ pub enum TableRecordData {
     Glyf(glyf::GlyfTable),
     CVT(cvt::CVTable),
     FPGM(fpgm::FPGMTable),
+    Prep(prep::PrepTable),
+    GASP(gasp::GASPTable),
+    Meta(meta::MetaTable),
     Raw(Vec<u8>),
 }
 
@@ -40,6 +44,9 @@ impl Debug for TableRecordData {
             TableRecordData::Glyf(glyf_table) => glyf_table.fmt(f),
             TableRecordData::CVT(cvt_table) => cvt_table.fmt(f),
             TableRecordData::FPGM(fpgm_table) => fpgm_table.fmt(f),
+            TableRecordData::Prep(prep_table) => prep_table.fmt(f),
+            TableRecordData::GASP(gasp_table) => gasp_table.fmt(f),
+            TableRecordData::Meta(meta_table) => meta_table.fmt(f),
             TableRecordData::Raw(raw_data) => f
                 .debug_struct("TableRecordData::Raw")
                 .field("data_length", &raw_data.len())
@@ -110,6 +117,9 @@ impl TableRecordData {
             }),
             b"cvt " => TableRecordData::CVT(cvt::CVTable::parse(data, None)),
             b"fpgm" => TableRecordData::FPGM(fpgm::FPGMTable::parse(data, None)),
+            b"prep" => TableRecordData::Prep(prep::PrepTable::parse(data, None)),
+            b"gasp" => TableRecordData::GASP(gasp::GASPTable::parse(data, None)),
+            b"meta" => TableRecordData::Meta(meta::MetaTable::parse(data, None)),
             _ => TableRecordData::Raw(data.to_vec()),
         }
     }
@@ -137,7 +147,7 @@ impl Debug for TableRecord {
         f.debug_struct("TableRecord")
             .field(
                 "table_tag",
-                &tag_as_str(self.table_tag).unwrap_or(String::from("Invalid Tag")),
+                &tag_as_str(&self.table_tag).unwrap_or(String::from("Invalid Tag")),
             )
             .field("checksum", &format_args!("0x{:08X}", self.checksum))
             .field("offset", &self.offset)
