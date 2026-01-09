@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+#![allow(non_camel_case_types)]
 
 use std::fmt::Debug;
 
@@ -100,7 +101,7 @@ impl TableTrait for MaxPTable {
         }
     }
 
-    fn construct(&mut self, data: &[u8]) {
+    fn construct(&mut self, _data: &[u8]) {
         panic!("MaxPTable does not require construction - simply use MaxPTable::parse()");
     }
 }

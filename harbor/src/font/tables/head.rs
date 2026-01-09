@@ -111,8 +111,8 @@ pub struct HeaderTable {
     pub lowest_rec_ppem: uint16,
 
     /// Deprecated (Set to 2).
-    #[deprecated]
-    pub font_direction_hint: int16,
+    /// #[deprecated]
+    /// pub font_direction_hint: int16,
 
     /// 0 for short offsets (Offset16), 1 for long (Offset32).
     pub index_to_loc_format: int16,
@@ -140,7 +140,6 @@ impl Debug for HeaderTable {
             .field("mac_style", &mac_style_to_string(self.mac_style))
             .field("mac_style_raw", &format!("0b{:016b}", self.mac_style))
             .field("lowest_rec_ppem", &self.lowest_rec_ppem)
-            .field("font_direction_hint", &self.font_direction_hint)
             .field("index_to_loc_format", &self.index_to_loc_format)
             .finish()
     }
@@ -164,7 +163,6 @@ impl TableTrait for HeaderTable {
             y_max: int16::from_be_bytes(data[42..44].try_into().unwrap()),
             mac_style: uint16::from_be_bytes(data[44..46].try_into().unwrap()),
             lowest_rec_ppem: uint16::from_be_bytes(data[46..48].try_into().unwrap()),
-            font_direction_hint: int16::from_be_bytes(data[48..50].try_into().unwrap()),
             index_to_loc_format: int16::from_be_bytes(data[50..52].try_into().unwrap()),
         }
     }

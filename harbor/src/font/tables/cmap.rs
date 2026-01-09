@@ -159,13 +159,6 @@ impl CMAPEncodingRecord {
 
                 EncodingID::Macintosh(unsafe { std::mem::transmute(self.encoding_id) })
             }
-            PlatformID::ISO => {
-                if self.encoding_id > 2 {
-                    panic!("Unknown ISO Encoding ID: {}", self.encoding_id);
-                }
-
-                EncodingID::ISO(unsafe { std::mem::transmute(self.encoding_id) })
-            }
             PlatformID::Windows => {
                 if self.encoding_id > 10 {
                     panic!("Unknown Windows Encoding ID: {}", self.encoding_id);
@@ -174,6 +167,10 @@ impl CMAPEncodingRecord {
                 EncodingID::Windows(unsafe { std::mem::transmute(self.encoding_id) })
             }
             PlatformID::Custom => EncodingID::Custom(self.encoding_id),
+            _ => panic!(
+                "Unsupported Platform ID for Encoding ID retrieval: {:?}",
+                self.platform_id()
+            ),
         }
     }
 }
@@ -292,19 +289,23 @@ impl Debug for CMAPSubtable4 {
             .field("range_shift", &self.range_shift)
             .field(
                 "end_code",
-                &&self.end_code[..std::cmp::min(4, self.end_code.len())],
+                &self.end_code.iter().take(5).collect::<Vec<&uint16>>(),
             )
             .field(
                 "start_code",
-                &&self.start_code[..std::cmp::min(4, self.start_code.len())],
+                &self.start_code.iter().take(5).collect::<Vec<&uint16>>(),
             )
             .field(
                 "id_delta",
-                &&self.id_delta[..std::cmp::min(4, self.id_delta.len())],
+                &self.id_delta.iter().take(5).collect::<Vec<&int16>>(),
             )
             .field(
                 "id_range_offset",
-                &&self.id_range_offset[..std::cmp::min(4, self.id_range_offset.len())],
+                &self
+                    .id_range_offset
+                    .iter()
+                    .take(5)
+                    .collect::<Vec<&uint16>>(),
             )
             .field("glyph_id_array_length", &self.glyph_id_array.len())
             .finish()
@@ -615,8 +616,24 @@ impl Debug for CMAPTable {
         f.debug_struct("CMAPTable")
             .field("version", &self.version)
             .field("num_tables", &self.num_tables)
-            .field("encoding_records", &self.encoding_records)
-            .field("subtables", &self.subtables)
+            .field("encoding_records_count", &self.encoding_records.len())
+            .field(
+                "encoding_records_preview",
+                &self
+                    .encoding_records
+                    .iter()
+                    .take(5)
+                    .collect::<Vec<&CMAPEncodingRecord>>(),
+            )
+            .field("subtables_count", &self.subtables.len())
+            .field(
+                "subtables_preview",
+                &self
+                    .subtables
+                    .iter()
+                    .take(5)
+                    .collect::<Vec<&CMAPSubtable>>(),
+            )
             .finish()
     }
 }

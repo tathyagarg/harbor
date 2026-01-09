@@ -121,10 +121,30 @@ pub struct NameTable_v0 {
     pub name_records: Vec<NameRecord>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum NameTable {
     // TODO: Add support for version 1
     v0(NameTable_v0),
+}
+
+impl Debug for NameTable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NameTable::v0(table) => f
+                .debug_struct("NameTable_v0")
+                .field("count", &table.count)
+                .field("storage_offset", &table.storage_offset)
+                .field(
+                    "name_records_preview",
+                    &table
+                        .name_records
+                        .iter()
+                        .take(5)
+                        .collect::<Vec<&NameRecord>>(),
+                )
+                .finish(),
+        }
+    }
 }
 
 impl TableTrait for NameTable {
@@ -139,7 +159,6 @@ impl TableTrait for NameTable {
                 let storage_offset = Offset16::from_data(&data[4..6]);
 
                 let mut name_records = Vec::new();
-                let mut total_length = 0;
 
                 for i in 0..count as usize {
                     let offset = 6 + i * 12;
@@ -170,12 +189,8 @@ impl TableTrait for NameTable {
                         _ => String::from_utf8_lossy(raw_data).to_string(),
                     };
 
-                    total_length += name_record.length as usize;
                     name_records.push(name_record);
                 }
-
-                let data_start = storage_offset as usize;
-                let data = data[data_start..data_start + total_length].to_vec();
 
                 NameTable::v0(NameTable_v0 {
                     count,
@@ -187,7 +202,7 @@ impl TableTrait for NameTable {
         }
     }
 
-    fn construct(&mut self, data: &[u8]) {
+    fn construct(&mut self, _data: &[u8]) {
         panic!("NameTable does not require construction - simply use NameTable::parse()");
     }
 }

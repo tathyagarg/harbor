@@ -4,7 +4,7 @@
 use std::fmt::Debug;
 
 use crate::font::otf_dtypes::*;
-use crate::font::tables::{TableTrait, cmap, head, hhea, hmtx, loca, maxp, name, os2, post};
+use crate::font::tables::{TableTrait, cmap, glyf, head, hhea, hmtx, loca, maxp, name, os2, post};
 
 #[derive(Clone)]
 pub enum TableRecordData {
@@ -17,6 +17,7 @@ pub enum TableRecordData {
     OS2(os2::OS2Table),
     Post(post::PostTable),
     Loca(loca::LocaTable),
+    Glyf(glyf::GlyfTable),
     Raw(Vec<u8>),
 }
 
@@ -32,6 +33,7 @@ impl Debug for TableRecordData {
             TableRecordData::OS2(os2_table) => os2_table.fmt(f),
             TableRecordData::Post(post_table) => post_table.fmt(f),
             TableRecordData::Loca(loca_table) => loca_table.fmt(f),
+            TableRecordData::Glyf(glyf_table) => glyf_table.fmt(f),
             TableRecordData::Raw(raw_data) => f
                 .debug_struct("TableRecordData::Raw")
                 .field("data_length", &raw_data.len())
@@ -88,6 +90,17 @@ impl TableRecordData {
 
                 loca_table.construct(data);
                 loca_table
+            }),
+            b"glyf" => TableRecordData::Glyf({
+                let mut glyf_table = glyf::GlyfTable::default().with_locas(
+                    table_dir
+                        ._loca_offsets
+                        .clone()
+                        .expect("loca offsets not set in TableDirectory."),
+                );
+
+                glyf_table.construct(data);
+                glyf_table
             }),
             _ => TableRecordData::Raw(data.to_vec()),
         }
@@ -162,6 +175,9 @@ impl TableRecord {
                 table_dir._head_index_to_loc_format.is_some()
                     && table_dir._maxp_num_glyphs.is_some()
             })),
+            b"glyf" => Some(Box::new(|table_dir: &TableDirectory| {
+                table_dir._loca_offsets.is_some()
+            })),
             _ => None,
         }
     }
@@ -234,6 +250,7 @@ pub struct TableDirectory {
     _hhea_num_h_metrics: Option<usize>,
     _head_mac_style: Option<uint16>,
     _head_index_to_loc_format: Option<int16>,
+    _loca_offsets: Option<Vec<uint32>>,
 
     _deferred_parse_queue: Vec<(Tag, Offset32, uint32, Box<dyn Fn(&TableDirectory) -> bool>)>,
 }
@@ -270,6 +287,7 @@ impl TableDirectory {
             _hhea_num_h_metrics: None,
             _head_mac_style: None,
             _head_index_to_loc_format: None,
+            _loca_offsets: None,
             _deferred_parse_queue: Vec::new(),
         }
     }
@@ -278,6 +296,45 @@ impl TableDirectory {
         self.table_records
             .iter()
             .any(|record| record.table_tag == tag)
+    }
+}
+
+fn update_table_directory_with_record(table_directory: &mut TableDirectory) {
+    let table_record = table_directory.table_records.last().unwrap();
+
+    match &table_record.table_tag {
+        b"maxp" => {
+            if let TableRecordData::MaxP(maxp_table) = &table_record._data {
+                table_directory._maxp_num_glyphs = Some(match maxp_table {
+                    maxp::MaxPTable::V0_5(table_v0_5) => table_v0_5.num_glyphs as usize,
+                    maxp::MaxPTable::V1_0(table_v1_0) => table_v1_0.num_glyphs as usize,
+                });
+            }
+        }
+        b"hhea" => {
+            if let TableRecordData::HHea(hhea_table) = &table_record._data {
+                table_directory._hhea_num_h_metrics = Some(hhea_table.number_of_h_metrics as usize);
+            }
+        }
+        b"head" => {
+            if let TableRecordData::Head(head_table) = &table_record._data {
+                table_directory._head_mac_style = Some(head_table.mac_style);
+                table_directory._head_index_to_loc_format = Some(head_table.index_to_loc_format);
+            }
+        }
+        b"loca" => {
+            if let TableRecordData::Loca(loca_table) = &table_record._data {
+                table_directory._loca_offsets = Some(match loca_table {
+                    loca::LocaTable::Short(offsets) => offsets
+                        .iter()
+                        .map(|&offset| (offset as uint32) * 2)
+                        .collect(),
+                    loca::LocaTable::Long(offsets) => offsets.clone(),
+                    _ => panic!("Loca table not constructed yet."),
+                });
+            }
+        }
+        _ => {}
     }
 }
 
@@ -325,40 +382,7 @@ pub fn parse_table_directory(data: &[u8], offset: Option<usize>) -> TableDirecto
         let table_record = TableRecord::new(table_tag, offset, length, data, &table_directory);
         table_directory.table_records.push(table_record);
 
-        match &table_tag {
-            b"hhea" => {
-                if let TableRecordData::HHea(hhea_table) =
-                    &table_directory.table_records.last().unwrap()._data
-                {
-                    table_directory._hhea_num_h_metrics =
-                        Some(hhea_table.number_of_h_metrics as usize);
-                }
-            }
-            b"maxp" => {
-                if let TableRecordData::MaxP(maxp_table) =
-                    &table_directory.table_records.last().unwrap()._data
-                {
-                    match maxp_table {
-                        maxp::MaxPTable::V0_5(table_v0_5) => {
-                            table_directory._maxp_num_glyphs = Some(table_v0_5.num_glyphs as usize);
-                        }
-                        maxp::MaxPTable::V1_0(table_v1_0) => {
-                            table_directory._maxp_num_glyphs = Some(table_v1_0.num_glyphs as usize);
-                        }
-                    }
-                }
-            }
-            b"head" => {
-                if let TableRecordData::Head(head_table) =
-                    &table_directory.table_records.last().unwrap()._data
-                {
-                    table_directory._head_mac_style = Some(head_table.mac_style);
-                    table_directory._head_index_to_loc_format =
-                        Some(head_table.index_to_loc_format);
-                }
-            }
-            _ => {}
-        }
+        update_table_directory_with_record(&mut table_directory);
 
         let mut recorded_updates = true;
         while recorded_updates {
@@ -374,6 +398,8 @@ pub fn parse_table_directory(data: &[u8], offset: Option<usize>) -> TableDirecto
                         TableRecord::new(*tag, *offset, *length, data, &table_directory);
 
                     table_directory.table_records.push(table_record);
+                    update_table_directory_with_record(&mut table_directory);
+
                     _ = table_directory._deferred_parse_queue.remove(i);
 
                     break 'req_update;
