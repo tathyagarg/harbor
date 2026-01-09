@@ -85,7 +85,7 @@ impl ActiveFormattingElements {
         })
     }
 
-    pub fn reconstruct(&mut self, Parser: &mut Parser) {
-        Parser._reconstruct_active_formatting_elements();
+    pub fn reconstruct(&mut self, parser: &mut Parser) {
+        parser._reconstruct_active_formatting_elements();
     }
 }

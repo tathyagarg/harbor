@@ -45,12 +45,14 @@ impl Debug for HMtxTable {
 }
 
 impl HMtxTable {
-    pub fn set_num_glyphs(&mut self, num_glyphs: usize) {
+    pub fn set_num_glyphs(mut self, num_glyphs: usize) -> Self {
         self._num_glyphs = Some(num_glyphs);
+        self
     }
 
-    pub fn set_num_h_metrics(&mut self, num_h_metrics: usize) {
+    pub fn set_num_h_metrics(mut self, num_h_metrics: usize) -> Self {
         self._num_h_metrics = Some(num_h_metrics);
+        self
     }
 }
 
