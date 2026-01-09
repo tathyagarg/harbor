@@ -1,6 +1,7 @@
 pub mod cmap;
 pub mod gasp;
 pub mod glyf;
+pub mod hdmx;
 pub mod head;
 pub mod hhea;
 pub mod hmtx;
@@ -16,6 +17,7 @@ use crate::font::otf_dtypes::*;
 pub enum ParseContext {
     OS2(uint16),
     Loca((int16, uint16)),
+    Hdmx(uint16),
 }
 
 pub trait TableTrait {

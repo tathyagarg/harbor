@@ -185,7 +185,7 @@ impl TTCHeader {
 #[derive(Debug)]
 pub struct TTCData {
     header: TTCHeader,
-    table_directories: Vec<TableDirectory>,
+    pub table_directories: Vec<TableDirectory>,
 }
 
 pub fn parse_ttc_header(data: &[u8]) -> TTCHeader {

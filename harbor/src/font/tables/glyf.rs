@@ -283,7 +283,7 @@ impl TableTrait for GlyfTable {
                     offset += 1;
                     flags.push(flag);
 
-                    if flag & 0x08 != 0 {
+                    if flag & SimpleGlyphFlags::RepeatFlag != 0 {
                         let repeat_count = glyph_data[offset];
                         offset += 1;
                         for _ in 0..repeat_count {

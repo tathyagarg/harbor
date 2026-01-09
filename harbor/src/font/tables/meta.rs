@@ -105,8 +105,6 @@ fn get_tag_data(
 
 impl TableTrait for MetaTable {
     fn parse(data: &[u8], _ctx: Option<ParseContext>) -> Self {
-        println!("Raw data: {:?}", data);
-
         let data_map_count = uint32::from_data(&data[12..16]);
 
         let mut data_maps = Vec::with_capacity(data_map_count as usize);

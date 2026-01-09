@@ -4,9 +4,10 @@
 use std::fmt::Debug;
 
 use crate::font::otf_dtypes::*;
+use crate::font::tables::cmap::CMAPSubtableTrait;
 use crate::font::tables::{
-    TableTrait, cmap, cvt, fpgm, gasp, glyf, head, hhea, hmtx, loca, maxp, meta, name, os2, post,
-    prep,
+    ParseContext, TableTrait, cmap, cvt, fpgm, gasp, glyf, hdmx, head, hhea, hmtx, loca, maxp,
+    meta, name, os2, post, prep,
 };
 
 #[derive(Clone)]
@@ -26,6 +27,7 @@ pub enum TableRecordData {
     Prep(prep::PrepTable),
     GASP(gasp::GASPTable),
     Meta(meta::MetaTable),
+    HDMX(hdmx::HdmxTable),
     Raw(Vec<u8>),
 }
 
@@ -47,6 +49,7 @@ impl Debug for TableRecordData {
             TableRecordData::Prep(prep_table) => prep_table.fmt(f),
             TableRecordData::GASP(gasp_table) => gasp_table.fmt(f),
             TableRecordData::Meta(meta_table) => meta_table.fmt(f),
+            TableRecordData::HDMX(hdmx_table) => hdmx_table.fmt(f),
             TableRecordData::Raw(raw_data) => f
                 .debug_struct("TableRecordData::Raw")
                 .field("data_length", &raw_data.len())
@@ -120,6 +123,15 @@ impl TableRecordData {
             b"prep" => TableRecordData::Prep(prep::PrepTable::parse(data, None)),
             b"gasp" => TableRecordData::GASP(gasp::GASPTable::parse(data, None)),
             b"meta" => TableRecordData::Meta(meta::MetaTable::parse(data, None)),
+            b"hdmx" => TableRecordData::HDMX(hdmx::HdmxTable::parse(
+                data,
+                Some(ParseContext::Hdmx(
+                    table_dir
+                        ._maxp_num_glyphs
+                        .expect("Number of glyphs not set in TableDirectory.")
+                        as uint16,
+                )),
+            )),
             _ => TableRecordData::Raw(data.to_vec()),
         }
     }
@@ -181,6 +193,10 @@ impl TableRecord {
         )
     }
 
+    pub fn data(&self) -> &TableRecordData {
+        &self._data
+    }
+
     pub fn has_unmet_requirements(tag: Tag) -> Option<Box<dyn Fn(&TableDirectory) -> bool>> {
         match &tag {
             b"hmtx" => Some(Box::new(|table_dir: &TableDirectory| {
@@ -195,6 +211,9 @@ impl TableRecord {
             })),
             b"glyf" => Some(Box::new(|table_dir: &TableDirectory| {
                 table_dir._loca_offsets.is_some()
+            })),
+            b"hdmx" => Some(Box::new(|table_dir: &TableDirectory| {
+                table_dir._maxp_num_glyphs.is_some()
             })),
             _ => None,
         }
@@ -310,10 +329,24 @@ impl TableDirectory {
         }
     }
 
-    pub fn has_table(&self, tag: Tag) -> bool {
+    pub fn has_table(&self, tag: &Tag) -> bool {
+        self.get_table_record(tag).is_some()
+    }
+
+    pub fn get_table_record(&self, tag: &Tag) -> Option<&TableRecord> {
         self.table_records
             .iter()
-            .any(|record| record.table_tag == tag)
+            .find(|record| &record.table_tag == tag)
+    }
+
+    pub fn cmap_lookup(&self, char_code: uint32) -> Option<uint16> {
+        if let Some(cmap_record) = self.get_table_record(b"cmap") {
+            if let TableRecordData::CMAP(cmap_table) = &cmap_record._data {
+                return cmap_table.char_to_glyph_index(char_code);
+            }
+        }
+
+        None
     }
 }
 

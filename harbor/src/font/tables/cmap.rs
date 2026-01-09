@@ -178,7 +178,7 @@ impl CMAPEncodingRecord {
 pub trait CMAPSubtableTrait {
     /// Parses the CMAP subtable from the given data slice.
     /// data: The byte slice containing the CMAP subtable data (including header).
-    fn parse(data: &[u8], encoding: &CMAPEncodingRecord) -> Self
+    fn sub_parse(data: &[u8], encoding: &CMAPEncodingRecord) -> Self
     where
         Self: Sized;
 
@@ -208,7 +208,7 @@ impl Default for CMAPSubtable0 {
 }
 
 impl CMAPSubtableTrait for CMAPSubtable0 {
-    fn parse(data: &[u8], encoding: &CMAPEncodingRecord) -> Self
+    fn sub_parse(data: &[u8], encoding: &CMAPEncodingRecord) -> Self
     where
         Self: Sized,
     {
@@ -313,7 +313,7 @@ impl Debug for CMAPSubtable4 {
 }
 
 impl CMAPSubtableTrait for CMAPSubtable4 {
-    fn parse(data: &[u8], encoding: &CMAPEncodingRecord) -> Self
+    fn sub_parse(data: &[u8], encoding: &CMAPEncodingRecord) -> Self
     where
         Self: Sized,
     {
@@ -458,7 +458,7 @@ impl Debug for CMAPSubtable6 {
 }
 
 impl CMAPSubtableTrait for CMAPSubtable6 {
-    fn parse(data: &[u8], encoding: &CMAPEncodingRecord) -> Self
+    fn sub_parse(data: &[u8], encoding: &CMAPEncodingRecord) -> Self
     where
         Self: Sized,
     {
@@ -525,9 +525,9 @@ impl CMAPSubtable {
         encoding: &CMAPEncodingRecord,
     ) -> CMAPSubtable {
         match format {
-            0 => CMAPSubtable::Format0(CMAPSubtable0::parse(data, encoding)),
-            4 => CMAPSubtable::Format4(CMAPSubtable4::parse(data, encoding)),
-            6 => CMAPSubtable::Format6(CMAPSubtable6::parse(data, encoding)),
+            0 => CMAPSubtable::Format0(CMAPSubtable0::sub_parse(data, encoding)),
+            4 => CMAPSubtable::Format4(CMAPSubtable4::sub_parse(data, encoding)),
+            6 => CMAPSubtable::Format6(CMAPSubtable6::sub_parse(data, encoding)),
             _ => panic!("Unsupported CMAP subtable format: {}", format),
         }
     }
@@ -608,6 +608,31 @@ impl CMAPTable {
         }
 
         self.encoding_records.push(record);
+    }
+
+    pub fn char_to_glyph_index(&self, char_code: u32) -> Option<uint16> {
+        for subtable in &self.subtables {
+            match subtable {
+                CMAPSubtable::Format0(st) => {
+                    if let Some(glyph_index) = st.char_to_glyph_index(char_code) {
+                        return Some(glyph_index);
+                    }
+                }
+                CMAPSubtable::Format4(st) => {
+                    if let Some(glyph_index) = st.char_to_glyph_index(char_code) {
+                        return Some(glyph_index);
+                    }
+                }
+                CMAPSubtable::Format6(st) => {
+                    if let Some(glyph_index) = st.char_to_glyph_index(char_code) {
+                        return Some(glyph_index);
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        None
     }
 }
 
