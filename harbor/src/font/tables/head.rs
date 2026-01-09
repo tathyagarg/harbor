@@ -173,9 +173,3 @@ impl TableTrait for HeaderTable {
         panic!("HeaderTable does not required construction - simply use HeaderTable::parse()");
     }
 }
-
-impl HeaderTable {
-    pub fn new() -> HeaderTable {
-        HeaderTable::default()
-    }
-}

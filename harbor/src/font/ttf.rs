@@ -4,7 +4,7 @@
 use std::fmt::Debug;
 
 use crate::font::otf_dtypes::*;
-use crate::font::tables::{TableTrait, cmap, head, hhea, hmtx, maxp, name, os2};
+use crate::font::tables::{TableTrait, cmap, head, hhea, hmtx, maxp, name, os2, post};
 
 #[derive(Clone)]
 pub enum TableRecordData {
@@ -15,6 +15,7 @@ pub enum TableRecordData {
     MaxP(maxp::MaxPTable),
     Name(name::NameTable),
     OS2(os2::OS2Table),
+    Post(post::PostTable),
     Raw(Vec<u8>),
 }
 
@@ -28,6 +29,7 @@ impl Debug for TableRecordData {
             TableRecordData::MaxP(maxp_table) => maxp_table.fmt(f),
             TableRecordData::Name(name_table) => name_table.fmt(f),
             TableRecordData::OS2(os2_table) => os2_table.fmt(f),
+            TableRecordData::Post(post_table) => post_table.fmt(f),
             TableRecordData::Raw(raw_data) => f
                 .debug_struct("TableRecordData::Raw")
                 .field("data_length", &raw_data.len())
@@ -72,6 +74,7 @@ impl TableRecordData {
                 os2_table.construct(data);
                 os2_table
             }),
+            b"post" => TableRecordData::Post(post::PostTable::parse(data, None)),
             _ => TableRecordData::Raw(data.to_vec()),
         }
     }
