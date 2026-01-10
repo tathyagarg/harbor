@@ -89,7 +89,7 @@ fn main() {
     match &glyph.data {
         GlyphDataType::Simple(simple) => {
             for contour in &simple.contours {
-                for i in 0..contour.length {
+                for i in 0..contour.length - 1 {
                     let (x, y) = contour.points[i];
 
                     // scale x and align to center
@@ -103,7 +103,32 @@ fn main() {
                         }
                         .to_clip(800.0, 600.0),
                     );
+
+                    let (next_x, next_y) = contour.points[i + 1];
+
+                    let scaled_next_x = origin.0 + next_x as f32 * scale;
+                    let scaled_next_y = origin.1 - next_y as f32 * scale;
+
+                    vertices.push(
+                        render::Vertex {
+                            position: [scaled_next_x, scaled_next_y, 0.0],
+                            color: [1.0, 0.0, 0.0],
+                        }
+                        .to_clip(800.0, 600.0),
+                    );
                 }
+
+                vertices.push(
+                    render::Vertex {
+                        position: [
+                            origin.0 + contour.points[contour.length - 1].0 as f32 * scale,
+                            origin.1 - contour.points[contour.length - 1].1 as f32 * scale,
+                            0.0,
+                        ],
+                        color: [1.0, 0.0, 0.0],
+                    }
+                    .to_clip(800.0, 600.0),
+                );
 
                 vertices.push(
                     render::Vertex {
