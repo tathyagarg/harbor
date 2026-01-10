@@ -80,7 +80,6 @@ impl State {
                     view: &view,
                     resolve_target: None,
                     depth_slice: None,
-                    // Clear to a blue
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(self.window_options.background_color),
                         store: wgpu::StoreOp::Store,
@@ -100,7 +99,7 @@ impl State {
         output.present();
     }
 
-    pub async fn new(window: Arc<Window>, window_options: WindowOptions) -> Self {
+    pub async fn new(window: Arc<Window>, window_options: WindowOptions, verts: &[Vertex]) -> Self {
         let size = window.inner_size();
 
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
@@ -180,7 +179,7 @@ impl State {
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             }),
             primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
+                topology: wgpu::PrimitiveTopology::LineStrip,
                 strip_index_format: None,
                 front_face: wgpu::FrontFace::Ccw,
                 cull_mode: Some(wgpu::Face::Back),
@@ -200,11 +199,11 @@ impl State {
 
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(VERTICES),
+            contents: bytemuck::cast_slice(verts),
             usage: wgpu::BufferUsages::VERTEX,
         });
 
-        let number_of_vertices = VERTICES.len() as u32;
+        let number_of_vertices = verts.len() as u32;
 
         Self {
             surface,
@@ -248,6 +247,8 @@ pub struct WindowOptions {
 pub struct App {
     pub window_options: WindowOptions,
     pub state: Option<State>,
+
+    pub vertices: Vec<Vertex>,
 }
 
 impl ApplicationHandler<State> for App {
@@ -267,6 +268,7 @@ impl ApplicationHandler<State> for App {
         self.state = Some(pollster::block_on(State::new(
             window,
             self.window_options.clone(),
+            &self.vertices,
         )));
     }
 
@@ -306,9 +308,9 @@ impl ApplicationHandler<State> for App {
 }
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-struct Vertex {
-    position: [f32; 3],
-    color: [f32; 3],
+pub struct Vertex {
+    pub position: [f32; 3],
+    pub color: [f32; 3],
 }
 
 impl Vertex {
@@ -330,19 +332,15 @@ impl Vertex {
             ],
         }
     }
-}
 
-const VERTICES: &[Vertex] = &[
-    Vertex {
-        position: [0.0, 0.5, 0.0],
-        color: [1.0, 0.0, 0.0],
-    },
-    Vertex {
-        position: [-0.5, -0.5, 0.0],
-        color: [0.0, 1.0, 0.0],
-    },
-    Vertex {
-        position: [0.5, -0.5, 0.0],
-        color: [0.0, 0.0, 1.0],
-    },
-];
+    pub fn to_clip(&self, width: f32, height: f32) -> Vertex {
+        Vertex {
+            position: [
+                (self.position[0] / width) * 2.0 - 1.0,
+                1.0 - (self.position[1] / height) * 2.0,
+                self.position[2],
+            ],
+            color: self.color,
+        }
+    }
+}

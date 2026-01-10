@@ -5,7 +5,7 @@ mod render;
 
 use winit::event_loop::EventLoop;
 
-use crate::font::ttf::TableRecordData;
+use crate::font::{tables::glyf::GlyphDataType, ttf::TableRecordData};
 
 fn main() {
     env_logger::init();
@@ -48,6 +48,85 @@ fn main() {
     //     );
     // }
 
+    let ttc_data = include_bytes!("../../assets/fonts/Times.ttc");
+    let ttc = font::parse_ttc(ttc_data);
+    let ttf = ttc.table_directories.first().unwrap();
+
+    let cmap = match ttf.get_table_record(b"cmap").unwrap().data() {
+        TableRecordData::CMAP(cmap_table) => cmap_table,
+        _ => {
+            return;
+        }
+    };
+
+    let head = match ttf.get_table_record(b"head").unwrap().data() {
+        TableRecordData::Head(head_table) => head_table,
+        _ => {
+            return;
+        }
+    };
+
+    let glyf = match ttf.get_table_record(b"glyf").unwrap().data() {
+        TableRecordData::Glyf(glyf_table) => glyf_table,
+        _ => {
+            return;
+        }
+    };
+
+    let units_per_em = head.units_per_em as f32;
+    println!("Units per EM: {}", units_per_em);
+    let font_size = 120.0;
+
+    let scale = font_size / units_per_em;
+
+    let glyph_index = cmap.char_to_glyph_index('A' as u32).unwrap() as usize;
+    let glyph = glyf.glyphs.get(glyph_index).unwrap();
+
+    let mut vertices = Vec::new();
+
+    let origin = (20.0, 100.0);
+
+    match &glyph.data {
+        GlyphDataType::Simple(simple) => {
+            for contour in &simple.contours {
+                for i in 0..contour.length {
+                    let (x, y) = contour.points[i];
+
+                    // scale x and align to center
+                    let scaled_x = origin.0 + x as f32 * scale;
+                    let scaled_y = origin.1 - y as f32 * scale;
+
+                    vertices.push(
+                        render::Vertex {
+                            position: [scaled_x, scaled_y, 0.0],
+                            color: [1.0, 0.0, 0.0],
+                        }
+                        .to_clip(800.0, 600.0),
+                    );
+                }
+
+                vertices.push(
+                    render::Vertex {
+                        position: [
+                            origin.0 + contour.points[0].0 as f32 * scale,
+                            origin.1 - contour.points[0].1 as f32 * scale,
+                            0.0,
+                        ],
+                        color: [1.0, 0.0, 0.0],
+                    }
+                    .to_clip(800.0, 600.0),
+                );
+            }
+
+            println!("{:#?}", vertices);
+        }
+        GlyphDataType::Composite(composite) => {
+            println!("Rendering composite glyph...");
+        }
+    }
+
+    // panic!();
+
     let event_loop = EventLoop::with_user_event().build().unwrap();
     event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
 
@@ -61,23 +140,8 @@ fn main() {
                 a: 0.0,
             },
         },
+        vertices: vertices,
         ..Default::default()
     };
     _ = event_loop.run_app(&mut app);
-
-    // let ttc_data = include_bytes!("../../assets/fonts/Times.ttc");
-    // let ttc = font::parse_ttc(ttc_data);
-    // let ttf = ttc.table_directories.first().unwrap();
-
-    // let _cmap = ttf.get_table_record(b"cmap").unwrap().data();
-    // if let TableRecordData::CMAP(cmap_table) = _cmap {
-    //     let idx = cmap_table.char_to_glyph_index('A' as u32).unwrap();
-
-    //     let _glyf = ttf.get_table_record(b"glyf").unwrap().data();
-
-    //     if let TableRecordData::Glyf(glyf_table) = _glyf {
-    //         let glyph_data = glyf_table.glyphs[idx as usize].clone();
-    //         println!("Glyph data for 'A': {:?}", glyph_data);
-    //     }
-    // }
 }

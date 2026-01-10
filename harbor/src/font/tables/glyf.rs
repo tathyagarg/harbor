@@ -70,16 +70,21 @@ pub struct GlyphHeader {
     pub y_max: int16,
 }
 
+#[derive(Clone, Debug)]
+pub struct Contour {
+    pub points: Vec<(int16, int16)>,
+    pub flags: Vec<uint8>,
+
+    pub length: usize,
+}
+
 #[derive(Clone)]
 pub struct SimpleGlyphData {
-    end_pts_of_contours: Vec<uint16>,
-    instruction_length: uint16,
-    instructions: Vec<uint8>,
+    pub end_pts_of_contours: Vec<uint16>,
+    pub instruction_length: uint16,
+    pub instructions: Vec<uint8>,
 
-    flags: Vec<uint8>,
-
-    x_coordinates: Vec<int16>,
-    y_coordinates: Vec<int16>,
+    pub contours: Vec<Contour>,
 }
 
 impl Debug for SimpleGlyphData {
@@ -91,24 +96,10 @@ impl Debug for SimpleGlyphData {
                 "instructions_preview",
                 &self.instructions.iter().take(10).collect::<Vec<&uint8>>(),
             )
+            .field("contours_length", &self.contours.len())
             .field(
-                "flags_preview",
-                &self
-                    .flags
-                    .iter()
-                    .take(10)
-                    .map(|b| format!("{:08b}", b))
-                    .collect::<Vec<String>>(),
-            )
-            .field("x_coordinates_length", &self.x_coordinates.len())
-            .field(
-                "x_coordinates_preview",
-                &self.x_coordinates.iter().take(10).collect::<Vec<&int16>>(),
-            )
-            .field("y_coordinates_length", &self.y_coordinates.len())
-            .field(
-                "y_coordinates_preview",
-                &self.y_coordinates.iter().take(10).collect::<Vec<&int16>>(),
+                "contours_preview",
+                &self.contours.iter().take(2).collect::<Vec<&Contour>>(),
             )
             .finish()
     }
@@ -146,9 +137,9 @@ impl Debug for GlyphComponent {
 
 #[derive(Clone)]
 pub struct CompositeGlyphData {
-    components: Vec<GlyphComponent>,
+    pub components: Vec<GlyphComponent>,
 
-    instructions: Option<Vec<uint8>>,
+    pub instructions: Option<Vec<uint8>>,
 }
 
 impl Debug for CompositeGlyphData {
@@ -174,9 +165,9 @@ pub enum GlyphDataType {
 
 #[derive(Clone, Debug)]
 pub struct GlyphData {
-    header: GlyphHeader,
+    pub header: GlyphHeader,
 
-    data: GlyphDataType,
+    pub data: GlyphDataType,
 }
 
 #[derive(Clone, Default)]
@@ -229,15 +220,14 @@ impl TableTrait for GlyfTable {
                         end_pts_of_contours: vec![],
                         instruction_length: 0,
                         instructions: vec![],
-                        flags: vec![],
-                        x_coordinates: vec![],
-                        y_coordinates: vec![],
+                        contours: vec![],
                     }),
                 });
                 continue;
             }
 
             let glyph_data = &data[start..end];
+
             let number_of_contours = int16::from_data(&glyph_data[0..2]);
             let x_min = int16::from_data(&glyph_data[2..4]);
             let y_min = int16::from_data(&glyph_data[4..6]);
@@ -258,6 +248,7 @@ impl TableTrait for GlyfTable {
 
                 let mut end_pts_of_contours =
                     Vec::<uint16>::with_capacity(number_of_contours as usize);
+
                 for _ in 0..number_of_contours {
                     let end_pt = uint16::from_data(&glyph_data[offset..offset + 2]);
                     end_pts_of_contours.push(end_pt);
@@ -271,68 +262,120 @@ impl TableTrait for GlyfTable {
                     glyph_data[offset..offset + (instruction_length as usize)].to_vec();
                 offset += instruction_length as usize;
 
-                let mut flags = Vec::<uint8>::new();
+                let mut contours = Vec::<Contour>::with_capacity(number_of_contours as usize);
+                let mut prev_countour_end = 0;
 
-                while flags.len()
-                    < (end_pts_of_contours
-                        .last()
-                        .map(|v| *v as usize + 1)
-                        .unwrap_or(0))
-                {
+                let mut total_length = 0;
+
+                for contour_index in 0..number_of_contours as usize {
+                    let contour_length = end_pts_of_contours[contour_index] - prev_countour_end + 1;
+                    prev_countour_end = end_pts_of_contours[contour_index] + 1;
+
+                    total_length += contour_length as usize;
+
+                    let mut points = Vec::new();
+                    let mut flags = Vec::new();
+                    for _ in 0..contour_length {
+                        points.push((0, 0));
+                        flags.push(0);
+                    }
+
+                    contours.push(Contour {
+                        points,
+                        flags,
+                        length: contour_length as usize,
+                    });
+                }
+
+                let mut flags = Vec::new();
+
+                while flags.len() < total_length {
                     let flag = glyph_data[offset];
                     offset += 1;
+
                     flags.push(flag);
 
                     if flag & SimpleGlyphFlags::RepeatFlag != 0 {
                         let repeat_count = glyph_data[offset];
                         offset += 1;
+
                         for _ in 0..repeat_count {
                             flags.push(flag);
                         }
                     }
                 }
 
-                let mut x_coords = Vec::<int16>::new();
+                assert!(flags.len() == total_length);
 
-                for &flag in &flags {
-                    if flag & SimpleGlyphFlags::XShortVector != 0 {
-                        let x_byte = glyph_data[offset];
-                        offset += 1;
-                        let x_value = if flag & SimpleGlyphFlags::XIsSameOrPositiveXShortVector != 0
-                        {
-                            x_byte as int16
-                        } else {
-                            -(x_byte as int16)
-                        };
-                        x_coords.push(x_value);
-                    } else if flag & SimpleGlyphFlags::XIsSameOrPositiveXShortVector == 0 {
-                        let x_value = int16::from_data(&glyph_data[offset..offset + 2]);
-                        offset += 2;
-                        x_coords.push(x_value);
-                    } else {
-                        x_coords.push(0);
+                for contour in &mut contours {
+                    for i in 0..contour.flags.len() {
+                        contour.flags[i] = flags.remove(0);
                     }
                 }
 
-                let mut y_coords = Vec::<int16>::new();
+                assert!(flags.is_empty());
 
-                for &flag in &flags {
-                    if flag & SimpleGlyphFlags::YShortVector != 0 {
-                        let y_byte = glyph_data[offset];
-                        offset += 1;
-                        let y_value = if flag & SimpleGlyphFlags::YIsSameOrPositiveYShortVector != 0
-                        {
-                            y_byte as int16
+                let mut prev_x = 0;
+
+                for contour in &mut contours {
+                    for (i, &flag) in contour.flags.iter().enumerate() {
+                        let dx = if flag & SimpleGlyphFlags::XShortVector != 0 {
+                            let x_byte = glyph_data[offset];
+                            offset += 1;
+
+                            let x_val =
+                                if flag & SimpleGlyphFlags::XIsSameOrPositiveXShortVector != 0 {
+                                    x_byte as int16
+                                } else {
+                                    -(x_byte as int16)
+                                };
+
+                            x_val
                         } else {
-                            -(y_byte as int16)
+                            if flag & SimpleGlyphFlags::XIsSameOrPositiveXShortVector != 0 {
+                                0
+                            } else {
+                                let dx = int16::from_data(&glyph_data[offset..offset + 2]);
+                                offset += 2;
+
+                                dx
+                            }
                         };
-                        y_coords.push(y_value);
-                    } else if flag & SimpleGlyphFlags::YIsSameOrPositiveYShortVector == 0 {
-                        let y_value = int16::from_data(&glyph_data[offset..offset + 2]);
-                        offset += 2;
-                        y_coords.push(y_value);
-                    } else {
-                        y_coords.push(0);
+
+                        contour.points[i].0 = prev_x + dx;
+                        prev_x = contour.points[i].0;
+                    }
+                }
+
+                let mut prev_y = 0;
+
+                for contour in &mut contours {
+                    for (i, &flag) in contour.flags.iter().enumerate() {
+                        let dy = if flag & SimpleGlyphFlags::YShortVector != 0 {
+                            let y_byte = glyph_data[offset];
+                            offset += 1;
+
+                            let y_val =
+                                if flag & SimpleGlyphFlags::YIsSameOrPositiveYShortVector != 0 {
+                                    y_byte as int16
+                                } else {
+                                    -(y_byte as int16)
+                                };
+
+                            y_val
+                        } else {
+                            if flag & SimpleGlyphFlags::YIsSameOrPositiveYShortVector != 0 {
+                                0
+                            } else {
+                                let dy = int16::from_data(&glyph_data[offset..offset + 2]);
+                                offset += 2;
+
+                                dy
+                            }
+                        };
+
+                        contour.points[i].1 = prev_y + dy;
+                        prev_y = contour.points[i].1;
                     }
                 }
 
@@ -342,11 +385,9 @@ impl TableTrait for GlyfTable {
                         end_pts_of_contours,
                         instruction_length,
                         instructions,
-                        flags,
-                        x_coordinates: x_coords,
-                        y_coordinates: y_coords,
+                        contours,
                     }),
-                });
+                })
             } else {
                 // Composite glyph
                 let mut components = Vec::<GlyphComponent>::new();
