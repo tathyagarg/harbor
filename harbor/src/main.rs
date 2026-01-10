@@ -5,7 +5,10 @@ mod render;
 
 use winit::event_loop::EventLoop;
 
-use crate::font::{tables::glyf::GlyphDataType, ttf::TableRecordData};
+use crate::font::{
+    tables::glyf::{GlyphDataType, Point},
+    ttf::TableRecordData,
+};
 
 fn main() {
     env_logger::init();
@@ -75,75 +78,73 @@ fn main() {
 
     let units_per_em = head.units_per_em as f32;
     println!("Units per EM: {}", units_per_em);
-    let font_size = 120.0;
+    let font_size = 400.0;
 
     let scale = font_size / units_per_em;
 
     let glyph_index = cmap.char_to_glyph_index('A' as u32).unwrap() as usize;
     let glyph = glyf.glyphs.get(glyph_index).unwrap();
 
+    let mut segments = Vec::<render::Segment>::new();
     let mut vertices = Vec::new();
 
-    let origin = (20.0, 100.0);
+    let origin = (20.0, 350.0);
+    let color = [0.0, 0.0, 0.0];
+
+    let width = 800.0;
+    let height = 600.0;
+
+    let vertex_maker = render::VertexMaker::new(origin, scale, width, height, color);
 
     match &glyph.data {
         GlyphDataType::Simple(simple) => {
             for contour in &simple.contours {
-                for i in 0..contour.length - 1 {
-                    let (x, y) = contour.points[i];
+                // populate segments
+                let mut contour_points = contour.points.clone();
 
-                    // scale x and align to center
-                    let scaled_x = origin.0 + x as f32 * scale;
-                    let scaled_y = origin.1 - y as f32 * scale;
+                let mut i = 0;
 
-                    vertices.push(
-                        render::Vertex {
-                            position: [scaled_x, scaled_y, 0.0],
-                            color: [1.0, 0.0, 0.0],
+                while i < contour_points.len() {
+                    let current_point = &contour_points[i];
+                    let next_point = &contour_points[(i + 1) % contour_points.len()];
+
+                    if current_point.on_curve && next_point.on_curve {
+                        // Line segment
+                        segments.push(render::Segment::Line(
+                            vertex_maker.from_point(current_point),
+                            vertex_maker.from_point(next_point),
+                        ));
+                        i += 1;
+                    } else if current_point.on_curve && !next_point.on_curve {
+                        let next_next_point = &contour_points[(i + 2) % contour_points.len()];
+                        if next_next_point.on_curve {
+                            // Quadratic Bezier segment
+                            segments.push(render::Segment::Quadratic(
+                                vertex_maker.from_point(current_point),
+                                vertex_maker.from_point(next_point),
+                                vertex_maker.from_point(next_next_point),
+                            ));
+                            i += 2;
+                        } else {
+                            // Implied on-curve point
+                            let implied_point = Point::midpoint(next_point, next_next_point);
+
+                            segments.push(render::Segment::Quadratic(
+                                vertex_maker.from_point(current_point),
+                                vertex_maker.from_point(next_point),
+                                vertex_maker.from_point(&implied_point),
+                            ));
+                            contour_points.insert((i + 2) % contour_points.len(), implied_point);
+
+                            i += 2;
                         }
-                        .to_clip(800.0, 600.0),
-                    );
-
-                    let (next_x, next_y) = contour.points[i + 1];
-
-                    let scaled_next_x = origin.0 + next_x as f32 * scale;
-                    let scaled_next_y = origin.1 - next_y as f32 * scale;
-
-                    vertices.push(
-                        render::Vertex {
-                            position: [scaled_next_x, scaled_next_y, 0.0],
-                            color: [1.0, 0.0, 0.0],
-                        }
-                        .to_clip(800.0, 600.0),
-                    );
+                    } else {
+                        // This case should not happen in well-formed glyphs
+                        println!("Warning: Two consecutive off-curve points found.");
+                        i += 1;
+                    }
                 }
-
-                vertices.push(
-                    render::Vertex {
-                        position: [
-                            origin.0 + contour.points[contour.length - 1].0 as f32 * scale,
-                            origin.1 - contour.points[contour.length - 1].1 as f32 * scale,
-                            0.0,
-                        ],
-                        color: [1.0, 0.0, 0.0],
-                    }
-                    .to_clip(800.0, 600.0),
-                );
-
-                vertices.push(
-                    render::Vertex {
-                        position: [
-                            origin.0 + contour.points[0].0 as f32 * scale,
-                            origin.1 - contour.points[0].1 as f32 * scale,
-                            0.0,
-                        ],
-                        color: [1.0, 0.0, 0.0],
-                    }
-                    .to_clip(800.0, 600.0),
-                );
             }
-
-            println!("{:#?}", vertices);
         }
         GlyphDataType::Composite(composite) => {
             println!("Rendering composite glyph...");
@@ -151,6 +152,10 @@ fn main() {
     }
 
     // panic!();
+
+    for segment in &segments {
+        segment.flatten(&mut vertices, scale / 20.0);
+    }
 
     let event_loop = EventLoop::with_user_event().build().unwrap();
     event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);

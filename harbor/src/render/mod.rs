@@ -12,6 +12,8 @@ use winit::window::{Window, WindowId};
 
 use wgpu;
 
+use crate::font::tables::glyf::Point;
+
 /// Converts RGBA values (0-255 for RGB, 0-100 for A) to wgpu::Color
 /// A being 0-100 is because I was feeling quirky
 pub fn rgba_to_color(r: u8, g: u8, b: u8, a: u8) -> wgpu::Color {
@@ -333,6 +335,76 @@ impl Vertex {
         }
     }
 
+    pub fn clipped_from_point(
+        point: &Point,
+        origin: (f32, f32),
+        scale: f32,
+        width: f32,
+        height: f32,
+        color: [f32; 3],
+    ) -> Vertex {
+        let vertex_position = point.vertex_position(origin, scale);
+
+        Vertex {
+            position: [
+                (vertex_position[0] / width) * 2.0 - 1.0,
+                1.0 - (vertex_position[1] / height) * 2.0,
+                vertex_position[2],
+            ],
+            color,
+        }
+    }
+
+    pub fn distance_to(&self, other: &Vertex) -> f32 {
+        let dx = self.position[0] - other.position[0];
+        let dy = self.position[1] - other.position[1];
+        let dz = self.position[2] - other.position[2];
+        (dx * dx + dy * dy + dz * dz).sqrt()
+    }
+
+    pub fn distance_to_line(&self, v1: &Vertex, v2: &Vertex) -> f32 {
+        let a = self.position[0] - v1.position[0];
+        let b = self.position[1] - v1.position[1];
+        let c = self.position[2] - v1.position[2];
+
+        let d = v2.position[0] - v1.position[0];
+        let e = v2.position[1] - v1.position[1];
+        let f = v2.position[2] - v1.position[2];
+
+        let dot = a * d + b * e + c * f;
+        let len_sq = d * d + e * e + f * f;
+        let param = if len_sq != 0.0 { dot / len_sq } else { -1.0 };
+
+        let (xx, yy, zz) = if param < 0.0 {
+            (v1.position[0], v1.position[1], v1.position[2])
+        } else if param > 1.0 {
+            (v2.position[0], v2.position[1], v2.position[2])
+        } else {
+            (
+                v1.position[0] + param * d,
+                v1.position[1] + param * e,
+                v1.position[2] + param * f,
+            )
+        };
+
+        let dx = self.position[0] - xx;
+        let dy = self.position[1] - yy;
+        let dz = self.position[2] - zz;
+
+        (dx * dx + dy * dy + dz * dz).sqrt()
+    }
+
+    fn midpoint(v1: &Vertex, v2: &Vertex) -> Vertex {
+        Vertex {
+            position: [
+                (v1.position[0] + v2.position[0]) / 2.0,
+                (v1.position[1] + v2.position[1]) / 2.0,
+                (v1.position[2] + v2.position[2]) / 2.0,
+            ],
+            color: v1.color,
+        }
+    }
+
     pub fn to_clip(&self, width: f32, height: f32) -> Vertex {
         Vertex {
             position: [
@@ -341,6 +413,71 @@ impl Vertex {
                 self.position[2],
             ],
             color: self.color,
+        }
+    }
+}
+
+pub struct VertexMaker {
+    origin: (f32, f32),
+    scale: f32,
+    width: f32,
+    height: f32,
+    color: [f32; 3],
+}
+
+impl VertexMaker {
+    pub fn new(origin: (f32, f32), scale: f32, width: f32, height: f32, color: [f32; 3]) -> Self {
+        Self {
+            origin,
+            scale,
+            width,
+            height,
+            color,
+        }
+    }
+
+    pub fn from_point(&self, point: &Point) -> Vertex {
+        Vertex::clipped_from_point(
+            point,
+            self.origin,
+            self.scale,
+            self.width,
+            self.height,
+            self.color,
+        )
+    }
+}
+
+pub enum Segment {
+    Line(Vertex, Vertex),
+    Quadratic(Vertex, Vertex, Vertex),
+    Cubic(Vertex, Vertex, Vertex, Vertex),
+}
+
+impl Segment {
+    pub fn flatten(&self, out: &mut Vec<Vertex>, precision: f32) {
+        match self {
+            Segment::Line(v0, v1) => {
+                out.push(v0.clone());
+                out.push(v1.clone());
+            }
+            Segment::Quadratic(v0, c, v2) => {
+                if c.distance_to_line(v0, v2) < precision {
+                    out.push(v0.clone());
+                    out.push(v2.clone());
+                } else {
+                    let mid1 = Vertex::midpoint(v0, c);
+                    let mid2 = Vertex::midpoint(c, v2);
+                    let mid = Vertex::midpoint(&mid1, &mid2);
+
+                    Segment::Quadratic(v0.clone(), mid1, mid.clone()).flatten(out, precision);
+                    Segment::Quadratic(mid, mid2, v2.clone()).flatten(out, precision);
+                }
+            }
+            Segment::Cubic(v0, v1, v2, v3) => {
+                panic!("Cubic segment flattening not implemented yet.");
+                // Simple linear approximation for demonstration
+            }
         }
     }
 }

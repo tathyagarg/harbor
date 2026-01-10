@@ -71,9 +71,54 @@ pub struct GlyphHeader {
 }
 
 #[derive(Clone, Debug)]
+pub struct Point {
+    pub x: int16,
+    pub y: int16,
+
+    pub on_curve: bool,
+}
+
+impl Point {
+    pub fn empty() -> Self {
+        Point {
+            x: 0,
+            y: 0,
+            on_curve: false,
+        }
+    }
+
+    pub fn midpoint(first: &Point, second: &Point) -> Self {
+        Point {
+            x: ((first.x as i32 + second.x as i32) / 2) as int16,
+            y: ((first.y as i32 + second.y as i32) / 2) as int16,
+            on_curve: true,
+        }
+    }
+
+    pub fn distance_to(&self, other: &Point) -> f32 {
+        let dx = (other.x - self.x) as f32;
+        let dy = (other.y - self.y) as f32;
+
+        (dx * dx + dy * dy).sqrt()
+    }
+
+    pub fn vertex_coords(&self, origin: (f32, f32), scale: f32) -> (f32, f32) {
+        let scaled_x = origin.0 + self.x as f32 * scale;
+        let scaled_y = origin.1 - self.y as f32 * scale;
+
+        (scaled_x, scaled_y)
+    }
+
+    pub fn vertex_position(&self, origin: (f32, f32), scale: f32) -> [f32; 3] {
+        let (scaled_x, scaled_y) = self.vertex_coords(origin, scale);
+
+        [scaled_x, scaled_y, 0.0]
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct Contour {
-    pub points: Vec<(int16, int16)>,
-    pub flags: Vec<uint8>,
+    pub points: Vec<Point>,
 
     pub length: usize,
 }
@@ -274,15 +319,13 @@ impl TableTrait for GlyfTable {
                     total_length += contour_length as usize;
 
                     let mut points = Vec::new();
-                    let mut flags = Vec::new();
+
                     for _ in 0..contour_length {
-                        points.push((0, 0));
-                        flags.push(0);
+                        points.push(Point::empty());
                     }
 
                     contours.push(Contour {
                         points,
-                        flags,
                         length: contour_length as usize,
                     });
                 }
@@ -307,18 +350,25 @@ impl TableTrait for GlyfTable {
 
                 assert!(flags.len() == total_length);
 
+                let mut curr_point_index = 0;
+
                 for contour in &mut contours {
-                    for i in 0..contour.flags.len() {
-                        contour.flags[i] = flags.remove(0);
+                    for i in 0..contour.length {
+                        contour.points[i].on_curve =
+                            (flags[curr_point_index] & SimpleGlyphFlags::OnCurvePoint) != 0;
+
+                        curr_point_index += 1;
                     }
                 }
 
-                assert!(flags.is_empty());
-
                 let mut prev_x = 0;
+                let mut curr_flag_index = 0;
 
                 for contour in &mut contours {
-                    for (i, &flag) in contour.flags.iter().enumerate() {
+                    for i in 0..contour.length {
+                        let flag = flags[curr_flag_index];
+                        curr_flag_index += 1;
+
                         let dx = if flag & SimpleGlyphFlags::XShortVector != 0 {
                             let x_byte = glyph_data[offset];
                             offset += 1;
@@ -342,15 +392,19 @@ impl TableTrait for GlyfTable {
                             }
                         };
 
-                        contour.points[i].0 = prev_x + dx;
-                        prev_x = contour.points[i].0;
+                        contour.points[i].x = prev_x + dx;
+                        prev_x = contour.points[i].x;
                     }
                 }
 
                 let mut prev_y = 0;
+                curr_flag_index = 0;
 
                 for contour in &mut contours {
-                    for (i, &flag) in contour.flags.iter().enumerate() {
+                    for i in 0..contour.length {
+                        let flag = flags[curr_flag_index];
+                        curr_flag_index += 1;
+
                         let dy = if flag & SimpleGlyphFlags::YShortVector != 0 {
                             let y_byte = glyph_data[offset];
                             offset += 1;
@@ -374,8 +428,8 @@ impl TableTrait for GlyfTable {
                             }
                         };
 
-                        contour.points[i].1 = prev_y + dy;
-                        prev_y = contour.points[i].1;
+                        contour.points[i].y = prev_y + dy;
+                        prev_y = contour.points[i].y;
                     }
                 }
 
