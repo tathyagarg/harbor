@@ -1255,7 +1255,7 @@ impl InsertMode {
             let mut bookmark = adjusted_formatting_element_pos.unwrap();
 
             let mut node_index = adjusted_furthest_block_pos.unwrap();
-            let mut last_node_index = adjusted_furthest_block_pos.unwrap();
+            let last_node_index = adjusted_furthest_block_pos.unwrap();
 
             let mut node = Rc::clone(parser.open_elements_stack.nth(node_index).as_ref().unwrap());
             let mut last_node = Rc::clone(

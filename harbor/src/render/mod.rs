@@ -304,7 +304,6 @@ impl ApplicationHandler<State> for App {
         }
     }
 }
-
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 struct Vertex {
