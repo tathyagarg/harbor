@@ -1,5 +1,6 @@
 #![allow(warnings)]
 
+use std::fmt::Debug;
 use std::sync::Arc;
 
 use wgpu::util::DeviceExt;
@@ -12,7 +13,9 @@ use winit::window::{Window, WindowId};
 
 use wgpu;
 
-use crate::font::tables::glyf::Point;
+use crate::font::otf_dtypes::int16;
+use crate::font::tables::glyf::{GlyphTransform, Point};
+use crate::font::ttf::{ParsedTableDirectory, TableDirectory};
 
 /// Converts RGBA values (0-255 for RGB, 0-100 for A) to wgpu::Color
 /// A being 0-100 is because I was feeling quirky
@@ -22,6 +25,93 @@ pub fn rgba_to_color(r: u8, g: u8, b: u8, a: u8) -> wgpu::Color {
         g: (g as f64) / 255.0,
         b: (b as f64) / 255.0,
         a: (a as f64) / 100.0,
+    }
+}
+
+#[derive(Clone)]
+pub struct TextRenderer {
+    pub font: Option<ParsedTableDirectory>,
+    pub text_lines: Vec<(String, f32)>,
+
+    _vertices: Vec<Vertex>,
+    _verts_upto_date: bool,
+}
+
+impl TextRenderer {
+    pub fn empty() -> Self {
+        Self {
+            font: None,
+            text_lines: vec![],
+            _vertices: vec![],
+            _verts_upto_date: false,
+        }
+    }
+
+    pub fn new(font: ParsedTableDirectory, text: Vec<(String, f32)>) -> Self {
+        Self {
+            font: Some(font),
+            text_lines: text,
+            _vertices: vec![],
+            _verts_upto_date: false,
+        }
+    }
+
+    pub fn expire(&mut self) {
+        self._verts_upto_date = false;
+    }
+
+    pub fn vertices(&mut self, origin: (f32, f32), window_size: (f32, f32)) -> Vec<Vertex> {
+        if self._verts_upto_date {
+            self._vertices.clone()
+        } else {
+            self._vertices.clear();
+            let font = match &self.font {
+                Some(f) => f,
+                None => return vec![],
+            };
+
+            let mut prev_h = origin.0;
+
+            for (line, font_size) in &self.text_lines {
+                let scale = font_size / font.units_per_em() as f32;
+                // let line_above = font.ascent().unwrap_or(0) as f32;
+
+                // let line_max_y = line
+                //     .chars()
+                //     .map(|c| {
+                //         font.from_char_code(c as u32, |c| font.y_max(c))
+                //             .unwrap_or(0) as f32
+                //     })
+                //     .max_by(|a, b| a.partial_cmp(b).unwrap())
+                //     .unwrap_or(0.0);
+
+                // let line_min_y = line
+                //     .chars()
+                //     .map(|c| {
+                //         font.from_char_code(c as u32, |c| font.y_min(c))
+                //             .unwrap_or(0) as f32
+                //     })
+                //     .min_by(|a, b| a.partial_cmp(b).unwrap())
+                //     .unwrap_or(0.0);
+
+                // prev_h -= (line_min_y * scale);
+
+                prev_h += (font.line_height().unwrap_or(0) as f32) * scale;
+                let line_origin = (origin.0, prev_h);
+                prev_h += 10.0;
+
+                self._vertices.extend(font.rasterize(
+                    line,
+                    scale,
+                    800.0 / *font_size,
+                    line_origin,
+                    window_size,
+                ));
+            }
+
+            self._verts_upto_date = true;
+            self._vertices.clone()
+        }
     }
 }
 
@@ -35,6 +125,9 @@ pub struct State {
     device: wgpu::Device,
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
+
+    text_renderer: TextRenderer,
+    msaa_view: wgpu::TextureView,
 
     render_pipeline: wgpu::RenderPipeline,
 
@@ -65,6 +158,7 @@ impl State {
             }
             Err(_) => return,
         };
+
         let view = output
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
@@ -79,8 +173,8 @@ impl State {
             let mut _render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
-                    resolve_target: None,
+                    view: &self.msaa_view,
+                    resolve_target: Some(&view),
                     depth_slice: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(self.window_options.background_color),
@@ -101,7 +195,11 @@ impl State {
         output.present();
     }
 
-    pub async fn new(window: Arc<Window>, window_options: WindowOptions, verts: &[Vertex]) -> Self {
+    pub async fn new(
+        window: Arc<Window>,
+        window_options: WindowOptions,
+        text_renderer: TextRenderer,
+    ) -> Self {
         let size = window.inner_size();
 
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
@@ -152,6 +250,23 @@ impl State {
             desired_maximum_frame_latency: 1,
         };
 
+        let msaa_texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Multisampled Texture"),
+            size: wgpu::Extent3d {
+                width: config.width,
+                height: config.height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 4,
+            dimension: wgpu::TextureDimension::D2,
+            format: config.format,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        });
+
+        let msaa_view = msaa_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
         let shader = device.create_shader_module(wgpu::include_wgsl!("../shader.wgsl"));
 
         let render_pipeline_layout =
@@ -175,7 +290,7 @@ impl State {
                 entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: config.format,
-                    blend: Some(wgpu::BlendState::REPLACE),
+                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
@@ -191,7 +306,7 @@ impl State {
             },
             depth_stencil: None,
             multisample: wgpu::MultisampleState {
-                count: 1,
+                count: 4,
                 mask: !0,
                 alpha_to_coverage_enabled: false,
             },
@@ -201,11 +316,11 @@ impl State {
 
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(verts),
+            contents: bytemuck::cast_slice(&[] as &[Vertex]),
             usage: wgpu::BufferUsages::VERTEX,
         });
 
-        let number_of_vertices = verts.len() as u32;
+        let number_of_vertices = 0;
 
         Self {
             surface,
@@ -214,6 +329,8 @@ impl State {
             device,
             queue,
             config,
+            msaa_view,
+            text_renderer,
             render_pipeline,
             vertex_buffer,
             number_of_vertices,
@@ -222,10 +339,27 @@ impl State {
         }
     }
 
+    pub fn with_font(mut self, font: ParsedTableDirectory) -> Self {
+        self.text_renderer.font = Some(font);
+        self
+    }
+
+    pub fn with_text(mut self, text: Vec<(String, f32)>) -> Self {
+        self.text_renderer.text_lines = text;
+        self
+    }
+
     pub fn update(&mut self) {
         if !self.is_surface_configured {
             self.surface.configure(&self.device, &self.config);
             self.is_surface_configured = true;
+
+            let verts = self.text_renderer.vertices(
+                (20.0, 20.0),
+                (self.config.width as f32, self.config.height as f32),
+            );
+
+            self.update_vertex_buffer(&verts);
         }
     }
 
@@ -235,7 +369,37 @@ impl State {
             self.config.height = height;
             // self.surface.configure(&self.device, &self.config);
             self.is_surface_configured = false;
+            self.text_renderer.expire();
+
+            let msaa_texture = self.device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("Multisampled Texture"),
+                size: wgpu::Extent3d {
+                    width: self.config.width,
+                    height: self.config.height,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 4,
+                dimension: wgpu::TextureDimension::D2,
+                format: self.config.format,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                view_formats: &[],
+            });
+
+            self.msaa_view = msaa_texture.create_view(&wgpu::TextureViewDescriptor::default());
         }
+    }
+
+    pub fn update_vertex_buffer(&mut self, verts: &[Vertex]) {
+        self.vertex_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Vertex Buffer"),
+                contents: bytemuck::cast_slice(verts),
+                usage: wgpu::BufferUsages::VERTEX,
+            });
+
+        self.number_of_vertices = verts.len() as u32;
     }
 }
 
@@ -245,12 +409,11 @@ pub struct WindowOptions {
     pub background_color: wgpu::Color,
 }
 
-#[derive(Default)]
 pub struct App {
     pub window_options: WindowOptions,
     pub state: Option<State>,
 
-    pub vertices: Vec<Vertex>,
+    pub text_renderer: TextRenderer,
 }
 
 impl ApplicationHandler<State> for App {
@@ -266,11 +429,12 @@ impl ApplicationHandler<State> for App {
         }
 
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
+        let inner_size = window.inner_size();
 
         self.state = Some(pollster::block_on(State::new(
             window,
             self.window_options.clone(),
-            &self.vertices,
+            self.text_renderer.clone(),
         )));
     }
 
@@ -287,7 +451,9 @@ impl ApplicationHandler<State> for App {
 
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
-            WindowEvent::Resized(size) => state.resize(size.width, size.height),
+            WindowEvent::Resized(size) => {
+                state.resize(size.width, size.height);
+            }
             WindowEvent::RedrawRequested => {
                 state.update();
                 state.render();
@@ -339,16 +505,15 @@ impl Vertex {
         point: &Point,
         origin: (f32, f32),
         scale: f32,
-        width: f32,
-        height: f32,
+        window_size: (f32, f32),
         color: [f32; 3],
     ) -> Vertex {
         let vertex_position = point.vertex_position(origin, scale);
 
         Vertex {
             position: [
-                (vertex_position[0] / width) * 2.0 - 1.0,
-                1.0 - (vertex_position[1] / height) * 2.0,
+                (vertex_position[0] / window_size.0) * 2.0 - 1.0,
+                1.0 - (vertex_position[1] / window_size.1) * 2.0,
                 vertex_position[2],
             ],
             color,
@@ -420,64 +585,94 @@ impl Vertex {
 pub struct VertexMaker {
     origin: (f32, f32),
     scale: f32,
-    width: f32,
-    height: f32,
+    window_size: (f32, f32),
     color: [f32; 3],
 }
 
 impl VertexMaker {
-    pub fn new(origin: (f32, f32), scale: f32, width: f32, height: f32, color: [f32; 3]) -> Self {
+    pub fn new(origin: (f32, f32), scale: f32, window_size: (f32, f32), color: [f32; 3]) -> Self {
         Self {
             origin,
             scale,
-            width,
-            height,
+            window_size,
             color,
         }
     }
 
     pub fn from_point(&self, point: &Point) -> Vertex {
-        Vertex::clipped_from_point(
-            point,
-            self.origin,
-            self.scale,
-            self.width,
-            self.height,
-            self.color,
-        )
+        Vertex::clipped_from_point(point, self.origin, self.scale, self.window_size, self.color)
     }
 }
 
+#[derive(Clone)]
 pub enum Segment {
-    Line(Vertex, Vertex),
-    Quadratic(Vertex, Vertex, Vertex),
-    Cubic(Vertex, Vertex, Vertex, Vertex),
+    Line(Point, Point),
+    Quadratic(Point, Point, Point),
+}
+
+impl Debug for Segment {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Segment::Line(p0, p1) => f
+                .debug_struct("Line")
+                .field("p0", p0)
+                .field("p1", p1)
+                .finish(),
+            Segment::Quadratic(p0, c, p2) => f
+                .debug_struct("Quadratic")
+                .field("p0", p0)
+                .field("c", c)
+                .field("p2", p2)
+                .finish(),
+        }
+    }
 }
 
 impl Segment {
-    pub fn flatten(&self, out: &mut Vec<Vertex>, precision: f32) {
+    pub fn flatten(&self, out: &mut Vec<Point>, precision: f32) {
         match self {
-            Segment::Line(v0, v1) => {
-                out.push(v0.clone());
-                out.push(v1.clone());
+            Segment::Line(p0, p1) => {
+                out.push(p0.clone());
+                out.push(p1.clone());
             }
-            Segment::Quadratic(v0, c, v2) => {
-                if c.distance_to_line(v0, v2) < precision {
-                    out.push(v0.clone());
-                    out.push(v2.clone());
+            Segment::Quadratic(p0, c, p2) => {
+                if c.distance_to_line(p0, p2) < 5.0 {
+                    out.push(p0.clone());
+                    out.push(p2.clone());
                 } else {
-                    let mid1 = Vertex::midpoint(v0, c);
-                    let mid2 = Vertex::midpoint(c, v2);
-                    let mid = Vertex::midpoint(&mid1, &mid2);
+                    let mid1 = Point::midpoint(p0, c);
+                    let mid2 = Point::midpoint(c, p2);
+                    let mid = Point::midpoint(&mid1, &mid2);
 
-                    Segment::Quadratic(v0.clone(), mid1, mid.clone()).flatten(out, precision);
-                    Segment::Quadratic(mid, mid2, v2.clone()).flatten(out, precision);
+                    Segment::Quadratic(p0.clone(), mid1, mid.clone()).flatten(out, precision);
+                    Segment::Quadratic(mid, mid2, p2.clone()).flatten(out, precision);
                 }
             }
-            Segment::Cubic(v0, v1, v2, v3) => {
-                panic!("Cubic segment flattening not implemented yet.");
-                // Simple linear approximation for demonstration
-            }
+        }
+    }
+
+    pub fn transformed(&self, transform: Option<GlyphTransform>) -> Segment {
+        match self {
+            Segment::Line(p0, p1) => Segment::Line(
+                p0.transformed(transform.clone()),
+                p1.transformed(transform.clone()),
+            ),
+            Segment::Quadratic(p0, c, p2) => Segment::Quadratic(
+                p0.transformed(transform.clone()),
+                c.transformed(transform.clone()),
+                p2.transformed(transform.clone()),
+            ),
+        }
+    }
+
+    pub fn translate(&mut self, dx: int16, dy: int16) {
+        *self = match self {
+            Segment::Line(p0, p1) => Segment::Line(p0.translate(dx, dy), p1.translate(dx, dy)),
+            Segment::Quadratic(p0, c, p2) => Segment::Quadratic(
+                p0.translate(dx, dy),
+                c.translate(dx, dy),
+                p2.translate(dx, dy),
+            ),
         }
     }
 }

@@ -505,6 +505,85 @@ impl CMAPSubtableTrait for CMAPSubtable6 {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct SequentialMapGroup {
+    /// First character code in the group
+    start_char_code: uint32,
+
+    /// Number of character codes in the group
+    end_char_code: uint32,
+
+    /// Glyph index corresponding to the first character code in the group
+    start_glyph_id: uint32,
+}
+
+#[derive(Debug, Clone)]
+pub struct CMAPSubtable12 {
+    /// Subtable format; set to 12.
+    /// format: uint16,
+
+    /// Reserved; set to 0
+    /// reserved: uint16,
+
+    /// Byte length of this subtable (including the header)
+    length: uint32,
+
+    language: uint32,
+
+    /// Number of groupings which follow
+    n_groups: uint32,
+
+    /// Array of SequentialMapGroup records.
+    groups: Vec<SequentialMapGroup>,
+}
+
+impl CMAPSubtableTrait for CMAPSubtable12 {
+    fn sub_parse(_data: &[u8], _encoding: &CMAPEncodingRecord) -> Self
+    where
+        Self: Sized,
+    {
+        let length = uint32::from_data(&_data[4..]);
+
+        let language = uint32::from_data(&_data[8..]);
+
+        let n_groups = uint32::from_data(&_data[12..]);
+        let mut groups = Vec::with_capacity(n_groups as usize);
+
+        let mut offset = 16;
+        for _ in 0..n_groups {
+            let start_char_code = uint32::from_data(&_data[offset..]);
+            let end_char_code = uint32::from_data(&_data[offset + 4..]);
+            let start_glyph_id = uint32::from_data(&_data[offset + 8..]);
+
+            groups.push(SequentialMapGroup {
+                start_char_code,
+                end_char_code,
+                start_glyph_id,
+            });
+
+            offset += 12;
+        }
+
+        CMAPSubtable12 {
+            length,
+            language,
+            n_groups,
+            groups,
+        }
+    }
+
+    fn char_to_glyph_index(&self, _char_code: u32) -> Option<uint16> {
+        for group in &self.groups {
+            if _char_code >= group.start_char_code && _char_code <= group.end_char_code {
+                let glyph_index = group.start_glyph_id + (_char_code - group.start_char_code);
+                return Some(glyph_index as uint16);
+            }
+        }
+
+        None
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum CMAPSubtable {
     Format0(CMAPSubtable0),
@@ -513,7 +592,7 @@ pub enum CMAPSubtable {
     Format6(CMAPSubtable6),
     Format8,
     Format10,
-    Format12,
+    Format12(CMAPSubtable12),
     Format13,
     Format14,
 }
@@ -528,6 +607,7 @@ impl CMAPSubtable {
             0 => CMAPSubtable::Format0(CMAPSubtable0::sub_parse(data, encoding)),
             4 => CMAPSubtable::Format4(CMAPSubtable4::sub_parse(data, encoding)),
             6 => CMAPSubtable::Format6(CMAPSubtable6::sub_parse(data, encoding)),
+            12 => CMAPSubtable::Format12(CMAPSubtable12::sub_parse(data, encoding)),
             _ => panic!("Unsupported CMAP subtable format: {}", format),
         }
     }

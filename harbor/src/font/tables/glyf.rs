@@ -7,6 +7,7 @@ use std::ops::BitAnd;
 
 use crate::font::otf_dtypes::*;
 use crate::font::tables::{ParseContext, TableTrait};
+use crate::render::Segment;
 
 #[repr(u8)]
 pub enum SimpleGlyphFlags {
@@ -102,6 +103,49 @@ impl Point {
         (dx * dx + dy * dy).sqrt()
     }
 
+    pub fn distance_to_line(&self, line_start: &Point, line_end: &Point) -> f32 {
+        let a = line_end.y as f64 - line_start.y as f64;
+        let b = line_start.x as f64 - line_end.x as f64;
+        let c = line_end.x as f64 * line_start.y as f64 - line_start.x as f64 * line_end.y as f64;
+
+        let numerator = (a * self.x as f64 + b * self.y as f64 + c).abs();
+        let denominator = (a * a + b * b).sqrt();
+
+        (numerator / denominator) as f32
+    }
+
+    pub fn transformed(&self, transform: Option<GlyphTransform>) -> Self {
+        if let Some(transform) = transform {
+            match transform {
+                GlyphTransform::Scale(s) => Point {
+                    x: ((self.x as f32) * s) as int16,
+                    y: ((self.y as f32) * s) as int16,
+                    on_curve: self.on_curve,
+                },
+                GlyphTransform::ScaleXY { x_scale, y_scale } => Point {
+                    x: ((self.x as f32) * x_scale) as int16,
+                    y: ((self.y as f32) * y_scale) as int16,
+                    on_curve: self.on_curve,
+                },
+                GlyphTransform::Matrix { a, b, c, d } => Point {
+                    x: ((self.x as f32) * a + (self.y as f32) * c) as int16,
+                    y: ((self.x as f32) * b + (self.y as f32) * d) as int16,
+                    on_curve: self.on_curve,
+                },
+            }
+        } else {
+            self.clone()
+        }
+    }
+
+    pub fn translate(&self, dx: int16, dy: int16) -> Self {
+        Point {
+            x: self.x + dx,
+            y: self.y + dy,
+            on_curve: self.on_curve,
+        }
+    }
+
     pub fn vertex_coords(&self, origin: (f32, f32), scale: f32) -> (f32, f32) {
         let scaled_x = origin.0 + self.x as f32 * scale;
         let scaled_y = origin.1 - self.y as f32 * scale;
@@ -121,6 +165,42 @@ pub struct Contour {
     pub points: Vec<Point>,
 
     pub length: usize,
+}
+
+impl Contour {
+    pub fn to_segments(&self) -> Vec<Segment> {
+        let mut segments = Vec::new();
+
+        let num_points = self.points.len();
+
+        for i in 0..num_points {
+            let current_point = &self.points[i];
+            let next_point = &self.points[(i + 1) % num_points];
+
+            if current_point.on_curve && next_point.on_curve {
+                // Line segment
+                segments.push(Segment::Line(current_point.clone(), next_point.clone()));
+            } else if current_point.on_curve && !next_point.on_curve {
+                // Quadratic Bezier segment
+                let after_next_point = &self.points[(i + 2) % num_points];
+
+                let control_point = next_point.clone();
+                let end_point = if after_next_point.on_curve {
+                    after_next_point.clone()
+                } else {
+                    Point::midpoint(next_point, after_next_point)
+                };
+
+                segments.push(Segment::Quadratic(
+                    current_point.clone(),
+                    control_point,
+                    end_point,
+                ));
+            }
+        }
+
+        segments
+    }
 }
 
 #[derive(Clone)]
@@ -159,13 +239,13 @@ pub enum GlyphTransform {
 
 #[derive(Clone, Default)]
 pub struct GlyphComponent {
-    flags: uint16,
-    glyph_index: uint16,
+    pub flags: uint16,
+    pub glyph_index: uint16,
 
-    arg1: int16,
-    arg2: int16,
+    pub arg1: int16,
+    pub arg2: int16,
 
-    transform: Option<GlyphTransform>,
+    pub transform: Option<GlyphTransform>,
 }
 
 impl Debug for GlyphComponent {

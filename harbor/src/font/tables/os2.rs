@@ -296,13 +296,13 @@ pub struct OS2Table_v5 {
 
     ach_vend_id: Tag,
 
-    fs_selection: uint16,
+    pub fs_selection: uint16,
     us_first_char_index: uint16,
     us_last_char_index: uint16,
 
-    s_typo_ascender: FWORD,
-    s_typo_descender: FWORD,
-    s_typo_line_gap: FWORD,
+    pub s_typo_ascender: FWORD,
+    pub s_typo_descender: FWORD,
+    pub s_typo_line_gap: FWORD,
 
     us_win_ascent: UFWORD,
     us_win_descent: UFWORD,
@@ -355,13 +355,13 @@ pub struct OS2Table_v432 {
 
     ach_vend_id: Tag,
 
-    fs_selection: uint16,
+    pub fs_selection: uint16,
     us_first_char_index: uint16,
     us_last_char_index: uint16,
 
-    s_typo_ascender: FWORD,
-    s_typo_descender: FWORD,
-    s_typo_line_gap: FWORD,
+    pub s_typo_ascender: FWORD,
+    pub s_typo_descender: FWORD,
+    pub s_typo_line_gap: FWORD,
 
     us_win_ascent: UFWORD,
     us_win_descent: UFWORD,

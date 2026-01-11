@@ -5,6 +5,10 @@ pub mod tables;
 
 pub use ttc::parse_ttc;
 
+pub fn parse_ttf(data: &[u8]) -> ttf::TableDirectory {
+    ttf::parse_table_directory(data, None)
+}
+
 pub mod otf_dtypes {
     #![allow(non_camel_case_types)]
 
