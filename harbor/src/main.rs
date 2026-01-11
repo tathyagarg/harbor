@@ -72,9 +72,9 @@ fn main() {
         // text: "Hello, world!".to_string(),
         // vertices: vec![],
         state: None,
-        text_renderer: TextRenderer::new(
-            ttf.complete(),
-            vec![
+        text_renderer: TextRenderer::new()
+            .with_font(ttf.complete())
+            .with_text(vec![
                 (String::from("Hello, world!"), 160.0),
                 (
                     String::from("This is a test of the Harbor browser font rendering system."),
@@ -85,8 +85,8 @@ fn main() {
                     72.0,
                 ),
                 (String::from("Made with <3 by Tathya"), 36.0),
-            ],
-        ),
+            ])
+            .with_origin((10.0, 10.0)),
         // resize_function: Box::new(resize_function),
     };
     _ = event_loop.run_app(&mut app);
