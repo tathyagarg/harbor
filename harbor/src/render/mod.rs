@@ -1,5 +1,6 @@
 #![allow(warnings)]
 
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
 
@@ -16,6 +17,7 @@ use wgpu;
 use crate::font::otf_dtypes::int16;
 use crate::font::tables::glyf::{GlyphTransform, Point};
 use crate::font::ttf::{ParsedTableDirectory, TableDirectory};
+use crate::html5::dom::Text;
 
 /// Converts RGBA values (0-255 for RGB, 0-100 for A) to wgpu::Color
 /// A being 0-100 is because I was feeling quirky
@@ -31,17 +33,11 @@ pub fn rgba_to_color(r: u8, g: u8, b: u8, a: u8) -> wgpu::Color {
 #[derive(Clone, Default)]
 pub struct TextRendererCreator {
     pub font: Option<ParsedTableDirectory>,
-    pub text_lines: Vec<(String, f32)>,
-
-    pub origin: (f32, f32),
     pub window_size: (f32, f32),
 
+    pub buffer: Option<wgpu::Buffer>,
+
     pub color: [f32; 3],
-
-    _vertices: Vec<Vertex>,
-
-    vertex_buffer: Option<wgpu::Buffer>,
-    vertex_count: usize,
 }
 
 impl TextRendererCreator {
@@ -50,34 +46,19 @@ impl TextRendererCreator {
         self
     }
 
-    pub fn with_text(mut self, text: Vec<(String, f32)>) -> Self {
-        self.text_lines = text;
-        self
-    }
-
-    pub fn with_vertex_buffer_device(mut self, device: &wgpu::Device) -> Self {
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(&[] as &[Vertex]),
-            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-        });
-
-        self.vertex_buffer = Some(vertex_buffer);
-        self
-    }
-
-    pub fn with_vertex_buffer(mut self, vertex_buffer: wgpu::Buffer) -> Self {
-        self.vertex_buffer = Some(vertex_buffer);
-        self
-    }
-
-    pub fn with_origin(mut self, origin: (f32, f32)) -> Self {
-        self.origin = origin;
-        self
-    }
-
     pub fn with_window_size(mut self, window_size: (f32, f32)) -> Self {
         self.window_size = window_size;
+        self
+    }
+
+    pub fn with_device(mut self, device: &wgpu::Device) -> Self {
+        self.buffer = Some(
+            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Vertex Buffer"),
+                contents: bytemuck::cast_slice(&[] as &[Vertex]),
+                usage: wgpu::BufferUsages::VERTEX,
+            }),
+        );
         self
     }
 
@@ -86,23 +67,13 @@ impl TextRendererCreator {
         self
     }
 
-    pub fn with_vertex_count(mut self, count: usize) -> Self {
-        self.vertex_count = count;
-        self
-    }
-
     pub fn build(self) -> TextRenderer {
         TextRenderer {
             font: self.font,
-            text_lines: self.text_lines,
-            origin: self.origin,
             window_size: self.window_size,
-            _vertices: self._vertices,
-            _verts_upto_date: false,
-            vertex_buffer: self
-                .vertex_buffer
-                .expect("Vertex buffer must be set before building TextRenderer"),
-            vertex_count: self.vertex_count,
+            vertex_cache: HashMap::new(),
+            _empty_buffer: self.buffer,
+            outline_vertex_buffers: HashMap::new(),
         }
     }
 }
@@ -110,16 +81,19 @@ impl TextRendererCreator {
 #[derive(Clone)]
 pub struct TextRenderer {
     pub font: Option<ParsedTableDirectory>,
-    pub text_lines: Vec<(String, f32)>,
 
-    pub origin: (f32, f32),
+    /// Key: (text, x position, y position, font-size (rounded))
+    /// Value: (vertices, font-size)
+    /// The font size in the key is rounded
+    /// When getting a value from the cache, if the required font-size matches the key but is not
+    /// equal, the cache will not be used and new vertices will be generated. This will not update
+    /// the cache.
+    pub vertex_cache: HashMap<(String, u32, u32, u32), (Vec<Vertex>, f32)>,
+
     pub window_size: (f32, f32),
 
-    _vertices: Vec<Vertex>,
-    _verts_upto_date: bool,
-
-    vertex_buffer: wgpu::Buffer,
-    vertex_count: usize,
+    _empty_buffer: Option<wgpu::Buffer>,
+    outline_vertex_buffers: HashMap<(String, u32, u32, u32), (wgpu::Buffer, usize)>,
 }
 
 impl TextRenderer {
@@ -127,47 +101,96 @@ impl TextRenderer {
         TextRendererCreator::default()
     }
 
-    pub fn expire(&mut self) {
-        self._verts_upto_date = false;
-    }
-
-    pub fn vertices(&mut self) -> Vec<Vertex> {
-        if self._verts_upto_date {
-            self._vertices.clone()
-        } else {
-            self._vertices.clear();
-            let font = match &self.font {
-                Some(f) => f,
-                None => return vec![],
-            };
-
-            let mut prev_h = self.origin.1;
-
-            for (line, font_size) in &self.text_lines {
-                let scale = font_size / font.units_per_em() as f32;
-
-                prev_h += (font.ascent().unwrap_or(0) as f32) * scale;
-                let line_origin = (self.origin.0, prev_h);
-                prev_h += 10.0
-                    + (font.line_height().unwrap_or(0) - font.ascent().unwrap_or(0)) as f32 * scale;
-
-                self._vertices.extend(font.rasterize(
-                    line,
-                    scale,
-                    800.0 / *font_size,
-                    line_origin,
-                    self.window_size,
-                ));
+    pub fn vertices(&mut self, text: String, font_size: f32, position: (u32, u32)) -> Vec<Vertex> {
+        let update_cache = if let Some((verts, cached_font_size)) =
+            self.vertex_cache
+                .get(&(text.clone(), position.0, position.1, font_size as u32))
+        {
+            if *cached_font_size == font_size {
+                return verts.clone();
             }
 
-            self._verts_upto_date = true;
-            self._vertices.clone()
+            false
+        } else {
+            true
+        };
+
+        let font = match &self.font {
+            Some(f) => f,
+            None => return vec![],
+        };
+
+        let scale = font_size / font.units_per_em() as f32;
+
+        let mut y = position.1 as f32;
+        y += (font.ascent().unwrap_or(0) as f32) * scale;
+
+        let float_position = (position.0 as f32, y);
+
+        let verts = font.rasterize(
+            text.as_str(),
+            scale,
+            800.0 / font_size,
+            float_position,
+            self.window_size,
+        );
+
+        if update_cache {
+            self.vertex_cache.insert(
+                (text, position.0, position.1, font_size as u32),
+                (verts.clone(), font_size),
+            );
         }
+
+        verts
+    }
+
+    pub fn update_vertex_buffer(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        text: String,
+        font_size: f32,
+        position: (u32, u32),
+    ) {
+        let verts = self.vertices(text.clone(), font_size, position);
+
+        let key = (text, position.0, position.1, font_size as u32);
+
+        let existing_buffer = self.outline_vertex_buffers.get_mut(&key);
+
+        let new_buffer = if let Some((buffer, _)) = existing_buffer {
+            if buffer.size() < (verts.len() * std::mem::size_of::<Vertex>()) as wgpu::BufferAddress
+            {
+                let new_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("Vertex Buffer"),
+                    contents: bytemuck::cast_slice(&verts),
+                    usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                });
+
+                *buffer = new_buffer;
+            } else {
+                queue.write_buffer(buffer, 0, bytemuck::cast_slice(&verts));
+            }
+
+            buffer.clone()
+        } else {
+            let new_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Vertex Buffer"),
+                contents: bytemuck::cast_slice(&verts),
+                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            });
+
+            new_buffer
+        };
+
+        self.outline_vertex_buffers
+            .insert(key, (new_buffer.clone(), verts.len()));
     }
 
     pub fn resized(&mut self, new_size: (f32, f32)) {
         self.window_size = new_size;
-        self.expire();
+        self.vertex_cache.clear();
     }
 }
 
@@ -182,7 +205,8 @@ pub struct State {
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
 
-    text_renderer: TextRenderer,
+    layout: Layout,
+
     msaa_view: wgpu::TextureView,
 
     render_pipeline: wgpu::RenderPipeline,
@@ -249,9 +273,40 @@ impl State {
                 _render_pass.draw(0..self.number_of_vertices, 0..1);
             }
 
-            if self.text_renderer.vertex_count > 0 {
-                _render_pass.set_vertex_buffer(0, self.text_renderer.vertex_buffer.slice(..));
-                _render_pass.draw(0..self.text_renderer.vertex_count as u32, 0..1);
+            if !self.layout.text.is_empty() {
+                for entry in self.layout.text.iter() {
+                    if let Some(renderer) = self.layout._renderers.get_mut(&entry.font_name) {
+                        if let Some(r) = renderer {
+                            let verts = r.vertices(
+                                entry.content.clone(),
+                                entry.font_size,
+                                (entry.origin.0 as u32, entry.origin.1 as u32),
+                            );
+
+                            if !verts.is_empty() {
+                                r.update_vertex_buffer(
+                                    &self.device,
+                                    &self.queue,
+                                    entry.content.clone(),
+                                    entry.font_size,
+                                    (entry.origin.0 as u32, entry.origin.1 as u32),
+                                );
+
+                                let key = (
+                                    entry.content.clone(),
+                                    entry.origin.0 as u32,
+                                    entry.origin.1 as u32,
+                                    entry.font_size as u32,
+                                );
+
+                                if let Some((buffer, count)) = r.outline_vertex_buffers.get(&key) {
+                                    _render_pass.set_vertex_buffer(0, buffer.slice(..));
+                                    _render_pass.draw(0..*count as u32, 0..1);
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -259,11 +314,7 @@ impl State {
         output.present();
     }
 
-    pub async fn new(
-        window: Arc<Window>,
-        window_options: WindowOptions,
-        text_renderer: TextRendererCreator,
-    ) -> Self {
+    pub async fn new(window: Arc<Window>, window_options: WindowOptions, layout: Layout) -> Self {
         let size = window.inner_size();
 
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
@@ -386,7 +437,10 @@ impl State {
 
         let number_of_vertices = 0;
 
-        let text_renderer = text_renderer.with_vertex_buffer_device(&device).build();
+        let window_size = (size.width as f32, size.height as f32);
+
+        let mut populated_layout = layout.clone();
+        populated_layout.populate_renderers(&device, window_size);
 
         Self {
             surface,
@@ -396,7 +450,7 @@ impl State {
             queue,
             config,
             msaa_view,
-            text_renderer,
+            layout: populated_layout,
             render_pipeline,
             vertex_buffer,
             number_of_vertices,
@@ -405,42 +459,10 @@ impl State {
         }
     }
 
-    pub fn with_font(mut self, font: ParsedTableDirectory) -> Self {
-        self.text_renderer.font = Some(font);
-        self
-    }
-
-    pub fn with_text(mut self, text: Vec<(String, f32)>) -> Self {
-        self.text_renderer.text_lines = text;
-        self
-    }
-
     pub fn update(&mut self) {
         if !self.is_surface_configured {
             self.surface.configure(&self.device, &self.config);
             self.is_surface_configured = true;
-
-            let verts = self.text_renderer.vertices();
-
-            if self.text_renderer.vertex_buffer.size()
-                < (verts.len() * std::mem::size_of::<Vertex>()) as wgpu::BufferAddress
-            {
-                self.text_renderer.vertex_buffer =
-                    self.device
-                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                            label: Some("Vertex Buffer"),
-                            contents: bytemuck::cast_slice(&verts),
-                            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-                        });
-            } else {
-                self.queue.write_buffer(
-                    &self.text_renderer.vertex_buffer,
-                    0,
-                    bytemuck::cast_slice(&verts),
-                );
-            }
-
-            self.text_renderer.vertex_count = verts.len();
         }
     }
 
@@ -448,10 +470,11 @@ impl State {
         if width > 0 && height > 0 {
             self.config.width = width;
             self.config.height = height;
-            // self.surface.configure(&self.device, &self.config);
+            self.surface.configure(&self.device, &self.config);
+
             self.is_surface_configured = false;
 
-            self.text_renderer.resized((width as f32, height as f32));
+            self.layout.resized((width as f32, height as f32));
 
             let msaa_texture = self.device.create_texture(&wgpu::TextureDescriptor {
                 label: Some("Multisampled Texture"),
@@ -479,11 +502,72 @@ pub struct WindowOptions {
     pub background_color: wgpu::Color,
 }
 
+#[derive(Clone)]
+pub struct TextEntry {
+    pub font_name: String,
+    pub origin: (f32, f32),
+
+    pub content: String,
+
+    pub font_size: f32,
+}
+
+#[derive(Clone)]
+pub struct Layout {
+    pub available_fonts: HashMap<String, ParsedTableDirectory>,
+    _renderers: HashMap<String, Option<TextRenderer>>,
+
+    pub text: Vec<TextEntry>,
+}
+
+impl Layout {
+    pub fn new(fonts: HashMap<String, ParsedTableDirectory>, text: Vec<TextEntry>) -> Self {
+        let renderers = fonts.iter().map(|(name, _)| (name.clone(), None)).collect();
+
+        Self {
+            available_fonts: fonts,
+            _renderers: renderers,
+            text,
+        }
+    }
+
+    fn resized(&mut self, new_size: (f32, f32)) {
+        for renderer in self._renderers.values_mut() {
+            if let Some(r) = renderer {
+                r.resized(new_size);
+            }
+        }
+    }
+
+    fn populate_renderers(&mut self, device: &wgpu::Device, window_size: (f32, f32)) {
+        for entry in &self.text {
+            if let Some(font) = self.available_fonts.get(&entry.font_name) {
+                if self._renderers.get(&entry.font_name).is_none()
+                    || self._renderers.get(&entry.font_name).unwrap().is_none()
+                {
+                    self._renderers.insert(
+                        entry.font_name.clone(),
+                        Some(
+                            TextRenderer::new()
+                                .with_font(font.clone())
+                                .with_window_size(window_size)
+                                .with_color([0.0, 0.0, 0.0])
+                                .build(),
+                        ),
+                    );
+                }
+            } else {
+                panic!("Unknown font name: {}", entry.font_name);
+            }
+        }
+    }
+}
+
 pub struct App {
     pub window_options: WindowOptions,
     pub state: Option<State>,
 
-    pub text_renderer: TextRendererCreator,
+    pub layout: Layout,
 }
 
 impl ApplicationHandler<State> for App {
@@ -504,7 +588,7 @@ impl ApplicationHandler<State> for App {
         self.state = Some(pollster::block_on(State::new(
             window,
             self.window_options.clone(),
-            self.text_renderer.clone(),
+            self.layout.clone(),
         )));
     }
 

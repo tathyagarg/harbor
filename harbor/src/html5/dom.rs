@@ -57,7 +57,7 @@ impl InsertLocation {
 pub enum NodeKind {
     Node(Node),
     Element(Rc<RefCell<Element>>),
-    Text(Text),
+    Text(Rc<RefCell<Text>>),
     Comment(Comment),
     DocumentType(DocumentType),
     Document(Document),
@@ -68,7 +68,7 @@ impl NodeKind {
         match self {
             NodeKind::Node(n) => panic!("NodeKind::Node does not contain a Rc<RefCell<Node>>"),
             NodeKind::Element(e) => Rc::clone(&e.borrow()._node),
-            NodeKind::Text(t) => Rc::clone(&t._character_data._node),
+            NodeKind::Text(t) => Rc::clone(&t.borrow()._character_data._node),
             NodeKind::Comment(c) => Rc::clone(&c._character_data._node),
             NodeKind::DocumentType(dt) => Rc::clone(&dt._node),
             NodeKind::Document(d) => Rc::clone(&d._node),
@@ -168,6 +168,17 @@ impl NodeList {
     {
         self._nodes.iter().map(|n| f(n)).collect()
     }
+
+    pub fn filter<F>(&self, mut f: F) -> Vec<Rc<RefCell<NodeKind>>>
+    where
+        F: FnMut(&Rc<RefCell<NodeKind>>) -> bool,
+    {
+        self._nodes.iter().filter(|n| f(n)).cloned().collect()
+    }
+
+    pub fn len(&self) -> usize {
+        self._nodes.len()
+    }
 }
 
 #[derive(Clone)]
@@ -262,6 +273,10 @@ impl Node {
         } else {
             self._child_nodes.item(len - 1)
         }
+    }
+
+    pub fn nth_child(&self, n: usize) -> Option<&Rc<RefCell<NodeKind>>> {
+        self._child_nodes.item(n)
     }
 
     pub fn append_child(parent: &Rc<RefCell<Node>>, child: Rc<RefCell<NodeKind>>) {
@@ -422,6 +437,10 @@ impl Text {
 
     pub fn push(&mut self, ch: char) {
         self._character_data.append_ch(ch);
+    }
+
+    pub fn data(&self) -> &str {
+        &self._character_data.data
     }
 }
 
@@ -733,7 +752,7 @@ pub enum ElementKind {
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct Element {
-    _node: Rc<RefCell<Node>>,
+    pub _node: Rc<RefCell<Node>>,
 
     pub id: ElementID,
 
@@ -1375,5 +1394,29 @@ impl Document {
             }
         }
         None
+    }
+
+    pub fn get_elements_by_tag_name(&self, _name: &str) -> NodeList {
+        let mut nodes = NodeList::new();
+
+        for child in self._node.borrow().child_nodes().iter() {
+            if let NodeKind::Element(element) = child.borrow().deref() {
+                if element.borrow().local_name == _name {
+                    nodes._nodes.push(Rc::clone(child));
+                }
+
+                let child_doc = Document {
+                    _node: Rc::clone(&child.borrow().node()),
+                    ..self.clone()
+                };
+
+                let child_elements = child_doc.get_elements_by_tag_name(_name);
+                for elem in child_elements.iter() {
+                    nodes._nodes.push(Rc::clone(elem));
+                }
+            }
+        }
+
+        nodes
     }
 }

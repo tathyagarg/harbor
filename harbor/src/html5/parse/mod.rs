@@ -1,5 +1,6 @@
 use core::panic;
 use std::cell::Ref;
+use std::ops::Deref;
 use std::{cell::RefCell, rc::Rc};
 
 mod afe;
@@ -165,4 +166,41 @@ pub struct Parser<'a> {
 
     flag_scripting: bool,
     flag_frameset_ok: bool,
+}
+
+impl _Document {
+    pub fn get_elements_by_tag_name(&self, tag_name: &str) -> Vec<Rc<RefCell<Element>>> {
+        let document = self.document();
+        let mut elements = Vec::new();
+
+        fn traverse(
+            node: &Rc<RefCell<NodeKind>>,
+            tag_name: &str,
+            elements: &mut Vec<Rc<RefCell<Element>>>,
+        ) {
+            match node.borrow().deref() {
+                NodeKind::Element(element) => {
+                    if element
+                        .borrow()
+                        .qualified_name()
+                        .eq_ignore_ascii_case(tag_name)
+                    {
+                        elements.push(Rc::clone(&element));
+                    }
+                    for child in element.borrow().node().borrow().child_nodes().iter() {
+                        traverse(child, tag_name, elements);
+                    }
+                }
+                NodeKind::Text(_) => {}
+                _ => {}
+            }
+        }
+
+        traverse(
+            document._node.borrow().nth_child(1).unwrap(),
+            tag_name,
+            &mut elements,
+        );
+        elements
+    }
 }

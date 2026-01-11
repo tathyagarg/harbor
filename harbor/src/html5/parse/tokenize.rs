@@ -270,7 +270,7 @@ impl<'a> Parser<'a> {
         if let Some(text) = location.preceding()
             && let NodeKind::Text(text_node) = &mut *text.borrow_mut()
         {
-            text_node.push(ch);
+            text_node.borrow_mut().push(ch);
             return;
         } else {
             let node_doc = Rc::clone(
@@ -285,10 +285,10 @@ impl<'a> Parser<'a> {
                     .unwrap(),
             );
 
-            location.insert(&mut NodeKind::Text(Text::new(
+            location.insert(&mut NodeKind::Text(Rc::new(RefCell::new(Text::new(
                 ch.to_string().as_str(),
                 node_doc,
-            )));
+            )))));
         }
     }
 
