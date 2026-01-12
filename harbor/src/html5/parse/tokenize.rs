@@ -388,7 +388,7 @@ impl<'a> Parser<'a> {
 
     pub fn error(&self, err: ParseError) {
         // For now, just print the error to the console.
-        println!("Parse error: {:?}", err);
+        eprintln!("Parse error: {:?}", err);
     }
 
     pub fn reconsume(&mut self, state: ParserState) {
@@ -766,7 +766,7 @@ impl<'a> Parser<'a> {
                     && ch.is_ascii_alphabetic()
                 {
                     self.tag_token = Some(TagToken::End(Tag::empty()));
-                    self.reconsume(ParserState::RAWTEXTEndTagOpen);
+                    self.reconsume(ParserState::RAWTEXTEndTagName);
                 } else {
                     self.emit(Token::Character('\u{003C}'));
                     self.emit(Token::Character('\u{002F}'));
@@ -1259,7 +1259,6 @@ impl<'a> Parser<'a> {
 
                     for name in attr_names.iter().take(attr_names.len() - 1) {
                         if curr_tag_name == name.clone() {
-                            println!("names: {:?}", _self.tag_attribute_names());
                             _self.error(ParseError::DuplicateAttribute);
                             _self
                                 .tag_token
@@ -1785,13 +1784,13 @@ impl<'a> Parser<'a> {
                         }
                         _ => {
                             if self.stream.matches("public", Some(false), None) {
-                                for _i in 0.."public".len() {
+                                for _i in 1.."public".len() {
                                     _ = self.stream.consume();
                                 }
 
                                 self.state = ParserState::AfterDOCTYPEPublicKeyword;
                             } else if self.stream.matches("system", Some(false), None) {
-                                for _i in 0.."system".len() {
+                                for _i in 1.."system".len() {
                                     _ = self.stream.consume();
                                 }
 

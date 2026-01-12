@@ -157,7 +157,7 @@ impl InsertMode {
                         .as_ref()
                         .is_some_and(|idtfr| idtfr.as_str() != "about:legacy-compat")
                 {
-                    parser.error(ParseError::UnexpectedCharacterAfterDOCTYPESystemIdentifier);
+                    parser.error(ParseError::Custom("Malformed DOCTYPE"));
                 }
 
                 let doctype = DocumentType::new(
