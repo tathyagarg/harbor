@@ -170,7 +170,7 @@ impl InsertMode {
                 .with_system_id(doctype.system_identifier.unwrap_or(String::new()).as_str());
 
                 Node::append_child(
-                    &Rc::clone(&parser.document.document_mut()._node),
+                    &Rc::clone(&parser.document.document().borrow_mut()._node),
                     Rc::new(RefCell::new(NodeKind::DocumentType(doctype))),
                 );
 
@@ -205,9 +205,9 @@ impl InsertMode {
                 let element = Element::from_token(
                     &token,
                     html5::HTML_NAMESPACE,
-                    &NodeKind::Document(parser.document.document().clone()),
+                    &NodeKind::Document(parser.document.document().borrow().clone()),
                 );
-                let document = parser.document.document_mut();
+                let document = parser.document.document().borrow();
                 let element_node = Rc::new(RefCell::new(NodeKind::Element(Rc::clone(&element))));
 
                 Node::append_child(&Rc::clone(&document._node), element_node);
@@ -227,10 +227,10 @@ impl InsertMode {
                 let element = Element::from_token(
                     &Token::StartTag(Tag::new(&String::from("html"))),
                     "html",
-                    &NodeKind::Document(parser.document.document().clone()),
+                    &NodeKind::Document(parser.document.document().borrow().clone()),
                 );
 
-                let document = parser.document.document_mut();
+                let document = parser.document.document().borrow();
 
                 Node::append_child(
                     &Rc::clone(&document._node),

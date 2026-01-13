@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::ops::Deref;
 use std::sync::Arc;
 
 use wgpu::util::DeviceExt;
@@ -14,6 +15,8 @@ use winit::window::{Window, WindowId};
 
 use wgpu;
 
+use crate::css::r#box::{Box, BoxType};
+use crate::css::layout::Layout;
 use crate::font::otf_dtypes::int16;
 use crate::font::tables::glyf::{GlyphTransform, Point};
 use crate::font::ttf::{ParsedTableDirectory, TableDirectory};
@@ -102,6 +105,10 @@ impl TextRenderer {
     }
 
     pub fn vertices(&mut self, text: String, font_size: f32, position: (u32, u32)) -> Vec<Vertex> {
+        println!(
+            "Generating vertices for text: '{}', font_size: {}, position: {:?}",
+            text, font_size, position
+        );
         let update_cache = if let Some((verts, cached_font_size)) =
             self.vertex_cache
                 .get(&(text.clone(), position.0, position.1, font_size as u32))
@@ -127,6 +134,7 @@ impl TextRenderer {
 
         let float_position = (position.0 as f32, y);
 
+        println!("Rasterizing");
         let verts = font.rasterize(
             text.as_str(),
             scale,
@@ -136,12 +144,17 @@ impl TextRenderer {
         );
 
         if update_cache {
+            println!("Updating vertex cache");
             self.vertex_cache.insert(
-                (text, position.0, position.1, font_size as u32),
+                (text.clone(), position.0, position.1, font_size as u32),
                 (verts.clone(), font_size),
             );
+
+            self.outline_vertex_buffers
+                .remove(&(text, position.0, position.1, font_size as u32));
         }
 
+        println!("Generated {} vertices", verts.len());
         verts
     }
 
@@ -160,20 +173,7 @@ impl TextRenderer {
         let existing_buffer = self.outline_vertex_buffers.get_mut(&key);
 
         let new_buffer = if let Some((buffer, _)) = existing_buffer {
-            if buffer.size() < (verts.len() * std::mem::size_of::<Vertex>()) as wgpu::BufferAddress
-            {
-                let new_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("Vertex Buffer"),
-                    contents: bytemuck::cast_slice(&verts),
-                    usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-                });
-
-                *buffer = new_buffer;
-            } else {
-                queue.write_buffer(buffer, 0, bytemuck::cast_slice(&verts));
-            }
-
-            buffer.clone()
+            return;
         } else {
             let new_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("Vertex Buffer"),
@@ -273,41 +273,161 @@ impl State {
                 _render_pass.draw(0..self.number_of_vertices, 0..1);
             }
 
-            if !self.layout.text.is_empty() {
-                for entry in self.layout.text.iter() {
-                    if let Some(renderer) = self.layout._renderers.get_mut(&entry.font_name) {
-                        if let Some(r) = renderer {
-                            let verts = r.vertices(
-                                entry.content.clone(),
-                                entry.font_size,
-                                (entry.origin.0 as u32, entry.origin.1 as u32),
-                            );
+            fn render_box(
+                layout_box: Box,
+                position: (f64, f64),
+                layout: &mut Layout,
+                device: &wgpu::Device,
+                queue: &wgpu::Queue,
+                render_pass: &mut wgpu::RenderPass<'_>,
+            ) {
+                match layout_box._box_type {
+                    BoxType::Block => {}
+                    BoxType::Inline => {
+                        if layout_box.associated_node.is_some() {
+                            let node = layout_box.associated_node.as_ref().unwrap();
 
-                            if !verts.is_empty() {
-                                r.update_vertex_buffer(
-                                    &self.device,
-                                    &self.queue,
-                                    entry.content.clone(),
-                                    entry.font_size,
-                                    (entry.origin.0 as u32, entry.origin.1 as u32),
-                                );
+                            match node.borrow().deref() {
+                                crate::html5::dom::NodeKind::Text(text_node) => {
+                                    let text_content = text_node.borrow().data().to_string();
 
-                                let key = (
-                                    entry.content.clone(),
-                                    entry.origin.0 as u32,
-                                    entry.origin.1 as u32,
-                                    entry.font_size as u32,
-                                );
+                                    if text_content.trim().is_empty() {
+                                        return;
+                                    }
 
-                                if let Some((buffer, count)) = r.outline_vertex_buffers.get(&key) {
-                                    _render_pass.set_vertex_buffer(0, buffer.slice(..));
-                                    _render_pass.draw(0..*count as u32, 0..1);
+                                    println!("Rendering text: {}", text_content);
+                                    layout
+                                        ._renderers
+                                        .get_mut(
+                                            &layout_box
+                                                ._font_family
+                                                .clone()
+                                                .unwrap_or("Times New Roman".to_string()),
+                                        )
+                                        .and_then(|renderer_option| {
+                                            println!(
+                                                "Using renderer for font: {:?}",
+                                                layout_box._font_family
+                                            );
+                                            if let Some(renderer) = renderer_option {
+                                                println!("Renderer found, generating vertices");
+                                                let font_size =
+                                                    layout_box._font_size.unwrap_or(16.0) as f32;
+
+                                                let verts = renderer.vertices(
+                                                    text_content.clone(),
+                                                    font_size,
+                                                    (position.0 as u32, position.1 as u32),
+                                                );
+                                                println!("Generated {} vertices", verts.len());
+
+                                                if !verts.is_empty() {
+                                                    println!(
+                                                        "Updating vertex buffer for text: {}",
+                                                        text_content
+                                                    );
+                                                    renderer.update_vertex_buffer(
+                                                        device,
+                                                        queue,
+                                                        text_content.clone(),
+                                                        font_size,
+                                                        (position.0 as u32, position.1 as u32),
+                                                    );
+
+                                                    let key = (
+                                                        text_content.clone(),
+                                                        position.0 as u32,
+                                                        position.1 as u32,
+                                                        font_size as u32,
+                                                    );
+
+                                                    if let Some((buffer, count)) =
+                                                        renderer.outline_vertex_buffers.get(&key)
+                                                    {
+                                                        println!(
+                                                            "Drawing text buffer for key: {:?}",
+                                                            key
+                                                        );
+                                                        render_pass
+                                                            .set_vertex_buffer(0, buffer.slice(..));
+                                                        render_pass.draw(0..*count as u32, 0..1);
+                                                    }
+                                                }
+                                            }
+
+                                            Some(())
+                                        });
                                 }
+                                _ => {}
                             }
                         }
                     }
+                    _ => {}
+                }
+
+                for child in &layout_box.children {
+                    let new_position = (
+                        layout_box.position().0 + position.0,
+                        layout_box.position().1 + position.1,
+                    );
+
+                    render_box(
+                        child.borrow().clone(),
+                        new_position,
+                        layout,
+                        device,
+                        queue,
+                        render_pass,
+                    );
                 }
             }
+
+            let root_box = self.layout.root_box.as_ref().unwrap().borrow().clone();
+
+            render_box(
+                root_box,
+                (0.0, 0.0),
+                &mut self.layout,
+                &self.device,
+                &self.queue,
+                &mut _render_pass,
+            );
+
+            // if !self.layout.text.is_empty() {
+            //     for entry in self.layout.text.iter() {
+            //         if let Some(renderer) = self.layout._renderers.get_mut(&entry.font_name) {
+            //             if let Some(r) = renderer {
+            //                 let verts = r.vertices(
+            //                     entry.content.clone(),
+            //                     entry.font_size,
+            //                     (entry.origin.0 as u32, entry.origin.1 as u32),
+            //                 );
+
+            //                 if !verts.is_empty() {
+            //                     r.update_vertex_buffer(
+            //                         &self.device,
+            //                         &self.queue,
+            //                         entry.content.clone(),
+            //                         entry.font_size,
+            //                         (entry.origin.0 as u32, entry.origin.1 as u32),
+            //                     );
+
+            //                     let key = (
+            //                         entry.content.clone(),
+            //                         entry.origin.0 as u32,
+            //                         entry.origin.1 as u32,
+            //                         entry.font_size as u32,
+            //                     );
+
+            //                     if let Some((buffer, count)) = r.outline_vertex_buffers.get(&key) {
+            //                         _render_pass.set_vertex_buffer(0, buffer.slice(..));
+            //                         _render_pass.draw(0..*count as u32, 0..1);
+            //                     }
+            //                 }
+            //             }
+            //         }
+            //     }
+            // }
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
@@ -440,7 +560,7 @@ impl State {
         let window_size = (size.width as f32, size.height as f32);
 
         let mut populated_layout = layout.clone();
-        populated_layout.populate_renderers(&device, window_size);
+        populated_layout.populate_renderers(window_size);
 
         Self {
             surface,
@@ -474,7 +594,7 @@ impl State {
 
             self.is_surface_configured = false;
 
-            self.layout.resized((width as f32, height as f32));
+            self.layout.resized((width as f64, height as f64));
 
             let msaa_texture = self.device.create_texture(&wgpu::TextureDescriptor {
                 label: Some("Multisampled Texture"),
@@ -512,56 +632,56 @@ pub struct TextEntry {
     pub font_size: f32,
 }
 
-#[derive(Clone)]
-pub struct Layout {
-    pub available_fonts: HashMap<String, ParsedTableDirectory>,
-    _renderers: HashMap<String, Option<TextRenderer>>,
-
-    pub text: Vec<TextEntry>,
-}
-
-impl Layout {
-    pub fn new(fonts: HashMap<String, ParsedTableDirectory>, text: Vec<TextEntry>) -> Self {
-        let renderers = fonts.iter().map(|(name, _)| (name.clone(), None)).collect();
-
-        Self {
-            available_fonts: fonts,
-            _renderers: renderers,
-            text,
-        }
-    }
-
-    fn resized(&mut self, new_size: (f32, f32)) {
-        for renderer in self._renderers.values_mut() {
-            if let Some(r) = renderer {
-                r.resized(new_size);
-            }
-        }
-    }
-
-    fn populate_renderers(&mut self, device: &wgpu::Device, window_size: (f32, f32)) {
-        for entry in &self.text {
-            if let Some(font) = self.available_fonts.get(&entry.font_name) {
-                if self._renderers.get(&entry.font_name).is_none()
-                    || self._renderers.get(&entry.font_name).unwrap().is_none()
-                {
-                    self._renderers.insert(
-                        entry.font_name.clone(),
-                        Some(
-                            TextRenderer::new()
-                                .with_font(font.clone())
-                                .with_window_size(window_size)
-                                .with_color([0.0, 0.0, 0.0])
-                                .build(),
-                        ),
-                    );
-                }
-            } else {
-                panic!("Unknown font name: {}", entry.font_name);
-            }
-        }
-    }
-}
+// #[derive(Clone)]
+// pub struct Layout {
+//     pub available_fonts: HashMap<String, ParsedTableDirectory>,
+//     _renderers: HashMap<String, Option<TextRenderer>>,
+//
+//     pub text: Vec<TextEntry>,
+// }
+//
+// impl Layout {
+//     pub fn new(fonts: HashMap<String, ParsedTableDirectory>, text: Vec<TextEntry>) -> Self {
+//         let renderers = fonts.iter().map(|(name, _)| (name.clone(), None)).collect();
+//
+//         Self {
+//             available_fonts: fonts,
+//             _renderers: renderers,
+//             text,
+//         }
+//     }
+//
+//     fn resized(&mut self, new_size: (f32, f32)) {
+//         for renderer in self._renderers.values_mut() {
+//             if let Some(r) = renderer {
+//                 r.resized(new_size);
+//             }
+//         }
+//     }
+//
+//     fn populate_renderers(&mut self, device: &wgpu::Device, window_size: (f32, f32)) {
+//         for entry in &self.text {
+//             if let Some(font) = self.available_fonts.get(&entry.font_name) {
+//                 if self._renderers.get(&entry.font_name).is_none()
+//                     || self._renderers.get(&entry.font_name).unwrap().is_none()
+//                 {
+//                     self._renderers.insert(
+//                         entry.font_name.clone(),
+//                         Some(
+//                             TextRenderer::new()
+//                                 .with_font(font.clone())
+//                                 .with_window_size(window_size)
+//                                 .with_color([0.0, 0.0, 0.0])
+//                                 .build(),
+//                         ),
+//                     );
+//                 }
+//             } else {
+//                 panic!("Unknown font name: {}", entry.font_name);
+//             }
+//         }
+//     }
+// }
 
 pub struct App {
     pub window_options: WindowOptions,

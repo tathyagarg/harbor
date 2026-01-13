@@ -118,5 +118,5 @@ pub fn parse_html_path_to_document(path: &str) -> Document {
 
     parser.tokenize();
 
-    parser.document.document().clone()
+    parser.document.document().borrow().clone()
 }

@@ -442,6 +442,10 @@ impl Text {
     pub fn data(&self) -> &str {
         &self._character_data.data
     }
+
+    pub fn set_data(&mut self, data: &str) {
+        self._character_data.data = data.to_string();
+    }
 }
 
 impl INode for Text {

@@ -111,6 +111,10 @@ impl Point {
         let numerator = (a * self.x as f64 + b * self.y as f64 + c).abs();
         let denominator = (a * a + b * b).sqrt();
 
+        if denominator == 0.0 {
+            return 0.0;
+        }
+
         (numerator / denominator) as f32
     }
 

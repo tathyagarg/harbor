@@ -27,7 +27,7 @@ fn test_css000() {
     tokenizer.tokenize();
 
     common::verify_element_structure(
-        tokenizer.document.document().deref(),
+        tokenizer.document.document().borrow().deref(),
         common::ElementStructure {
             tag_name: "html".to_string(),
             attributes: vec![],

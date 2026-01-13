@@ -649,8 +649,6 @@ impl ParsedTableDirectory {
                     }
 
                     segments.extend(segment_part);
-
-                    // println!("Segments: {:#?}", segments);
                 }
             }
             GlyphDataType::Composite(composite) => {
@@ -713,7 +711,7 @@ impl ParsedTableDirectory {
         self.make_glyph_segments(glyph_index, precision, &mut segments);
 
         for segment in &segments {
-            segment.flatten(out, precision);
+            segment.flatten(out, 5.0);
         }
     }
 

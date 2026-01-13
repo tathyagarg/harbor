@@ -1,9 +1,8 @@
-use std::{collections::HashMap, ops::Deref};
+use std::{collections::HashMap, ops::Deref, rc::Rc};
 
-use crate::{
-    http::url::Serializable,
-    render::{Layout, TextEntry},
-};
+use crate::{css::layout::Layout, http::url::Serializable, render::TextEntry};
+
+mod css;
 mod font;
 mod html5;
 mod http;
@@ -59,7 +58,11 @@ fn main() {
 
     tokenizer.tokenize();
 
-    println!("{:#?}", tokenizer.document.document());
+    let mut layout = Layout::new(Rc::clone(&tokenizer.document.document()), (800.0, 600.0));
+    layout.make_tree();
+    layout.layout();
+
+    println!("Layout Tree: {:#?}", layout.root_box);
 
     // println!("Document Tree:");
     // let dom_length = format!("{:?}", tokenizer.document.document()._node).len();
@@ -121,62 +124,33 @@ fn main() {
     //     extracted_text_contents
     // );
 
-    // let ttc_data = include_bytes!("../../assets/fonts/Times.ttc");
-    // let ttc = font::parse_ttc(ttc_data);
-    // let ttf = ttc.table_directories.first().unwrap().complete();
+    let fira_code = font::parse_ttf(include_bytes!("../../assets/fonts/FiraCode.ttf"));
+    let times =
+        &font::parse_ttc(include_bytes!("../../assets/fonts/Times.ttc")).table_directories[0];
+    let sfns = font::parse_ttf(include_bytes!("../../assets/fonts/SFNS.ttf"));
 
-    // let fira_code = font::parse_ttf(include_bytes!("../../assets/fonts/FiraCode.ttf"));
-    // let times =
-    //     &font::parse_ttc(include_bytes!("../../assets/fonts/Times.ttc")).table_directories[0];
-    // let sfns = font::parse_ttf(include_bytes!("../../assets/fonts/SFNS.ttf"));
+    layout.register_font("Times New Roman", times.complete());
+    layout.register_font("FiraCode", fira_code.complete());
+    layout.register_font("SFNS", sfns.complete());
 
-    // let event_loop = EventLoop::with_user_event().build().unwrap();
-    // event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
+    let event_loop = EventLoop::with_user_event().build().unwrap();
+    event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
 
-    // let mut app = render::App {
-    //     window_options: render::WindowOptions {
-    //         use_transparent: true,
-    //         background_color: wgpu::Color {
-    //             r: 1.0,
-    //             g: 1.0,
-    //             b: 1.0,
-    //             a: 0.0,
-    //         },
-    //     },
-    //     // font: ttf.clone(),
-    //     // text: "Hello, world!".to_string(),
-    //     // vertices: vec![],
-    //     state: None,
-    //     layout: Layout::new(
-    //         HashMap::from([
-    //             ("FiraCode".to_string(), fira_code.complete()),
-    //             ("Times".to_string(), times.complete()),
-    //             ("SFNS".to_string(), sfns.complete()),
-    //         ]),
-    //         vec![
-    //             TextEntry {
-    //                 font_size: 120.0,
-    //                 origin: (0.0, 00.0),
-
-    //                 font_name: "FiraCode".to_string(),
-    //                 content: "Hello, world!".to_string(),
-    //             },
-    //             TextEntry {
-    //                 font_size: 80.0,
-    //                 origin: (0.0, 150.0),
-
-    //                 font_name: "Times".to_string(),
-    //                 content: "This is a test of the Harbor browser rendering engine.".to_string(),
-    //             },
-    //             TextEntry {
-    //                 font_size: 60.0,
-    //                 origin: (0.0, 250.0),
-
-    //                 font_name: "SFNS".to_string(),
-    //                 content: "Rendering text with multiple fonts.".to_string(),
-    //             },
-    //         ],
-    //     ),
-    // };
-    // _ = event_loop.run_app(&mut app);
+    let mut app = render::App {
+        window_options: render::WindowOptions {
+            use_transparent: true,
+            background_color: wgpu::Color {
+                r: 1.0,
+                g: 1.0,
+                b: 1.0,
+                a: 0.0,
+            },
+        },
+        // font: ttf.clone(),
+        // text: "Hello, world!".to_string(),
+        // vertices: vec![],
+        state: None,
+        layout,
+    };
+    _ = event_loop.run_app(&mut app);
 }

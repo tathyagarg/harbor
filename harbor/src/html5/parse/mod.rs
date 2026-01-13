@@ -23,12 +23,8 @@ pub struct _Document {
 }
 
 impl _Document {
-    pub fn document(&self) -> Ref<Document> {
-        self.document.borrow()
-    }
-
-    pub fn document_mut(&self) -> std::cell::RefMut<Document> {
-        self.document.borrow_mut()
+    pub fn document(&self) -> &Rc<RefCell<Document>> {
+        &self.document
     }
 }
 
@@ -197,7 +193,7 @@ impl _Document {
         }
 
         traverse(
-            document._node.borrow().nth_child(1).unwrap(),
+            document.borrow()._node.borrow().nth_child(1).unwrap(),
             tag_name,
             &mut elements,
         );
