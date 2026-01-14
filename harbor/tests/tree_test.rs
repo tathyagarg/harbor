@@ -1,6 +1,8 @@
 use std::ops::Deref;
 
 use harbor::html5;
+use harbor::infra;
+
 mod common;
 
 #[test]
@@ -21,7 +23,7 @@ fn test_css000() {
 </body>
 </html>"#;
 
-    let mut stream = html5::parse::InputStream::new(html_content.to_string());
+    let mut stream = infra::InputStream::new(html_content.to_string());
     let mut tokenizer = html5::parse::Parser::new(&mut stream);
 
     tokenizer.tokenize();

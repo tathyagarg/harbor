@@ -74,7 +74,7 @@ impl OpenElementsStack {
         override_target: Option<Rc<RefCell<Element>>>,
     ) -> InsertLocation {
         let target = override_target.unwrap_or_else(|| {
-            self.adjusted_current_node()
+            self.current_node()
                 .expect("No current node for appropriate insertion place")
         });
 

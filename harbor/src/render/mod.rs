@@ -1,4 +1,4 @@
-#![allow(warnings)]
+// #![allow(warnings)]
 
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -105,10 +105,6 @@ impl TextRenderer {
     }
 
     pub fn vertices(&mut self, text: String, font_size: f32, position: (u32, u32)) -> Vec<Vertex> {
-        println!(
-            "Generating vertices for text: '{}', font_size: {}, position: {:?}",
-            text, font_size, position
-        );
         let update_cache = if let Some((verts, cached_font_size)) =
             self.vertex_cache
                 .get(&(text.clone(), position.0, position.1, font_size as u32))
@@ -134,7 +130,6 @@ impl TextRenderer {
 
         let float_position = (position.0 as f32, y);
 
-        println!("Rasterizing");
         let verts = font.rasterize(
             text.as_str(),
             scale,
@@ -144,7 +139,6 @@ impl TextRenderer {
         );
 
         if update_cache {
-            println!("Updating vertex cache");
             self.vertex_cache.insert(
                 (text.clone(), position.0, position.1, font_size as u32),
                 (verts.clone(), font_size),
@@ -154,14 +148,12 @@ impl TextRenderer {
                 .remove(&(text, position.0, position.1, font_size as u32));
         }
 
-        println!("Generated {} vertices", verts.len());
         verts
     }
 
     pub fn update_vertex_buffer(
         &mut self,
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
         text: String,
         font_size: f32,
         position: (u32, u32),
@@ -172,7 +164,7 @@ impl TextRenderer {
 
         let existing_buffer = self.outline_vertex_buffers.get_mut(&key);
 
-        let new_buffer = if let Some((buffer, _)) = existing_buffer {
+        let new_buffer = if let Some((_, _)) = existing_buffer {
             return;
         } else {
             let new_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -295,7 +287,6 @@ impl State {
                                         return;
                                     }
 
-                                    println!("Rendering text: {}", text_content);
                                     layout
                                         ._renderers
                                         .get_mut(
@@ -305,12 +296,7 @@ impl State {
                                                 .unwrap_or("Times New Roman".to_string()),
                                         )
                                         .and_then(|renderer_option| {
-                                            println!(
-                                                "Using renderer for font: {:?}",
-                                                layout_box._font_family
-                                            );
                                             if let Some(renderer) = renderer_option {
-                                                println!("Renderer found, generating vertices");
                                                 let font_size =
                                                     layout_box._font_size.unwrap_or(16.0) as f32;
 
@@ -319,16 +305,10 @@ impl State {
                                                     font_size,
                                                     (position.0 as u32, position.1 as u32),
                                                 );
-                                                println!("Generated {} vertices", verts.len());
 
                                                 if !verts.is_empty() {
-                                                    println!(
-                                                        "Updating vertex buffer for text: {}",
-                                                        text_content
-                                                    );
                                                     renderer.update_vertex_buffer(
                                                         device,
-                                                        queue,
                                                         text_content.clone(),
                                                         font_size,
                                                         (position.0 as u32, position.1 as u32),
@@ -344,10 +324,6 @@ impl State {
                                                     if let Some((buffer, count)) =
                                                         renderer.outline_vertex_buffers.get(&key)
                                                     {
-                                                        println!(
-                                                            "Drawing text buffer for key: {:?}",
-                                                            key
-                                                        );
                                                         render_pass
                                                             .set_vertex_buffer(0, buffer.slice(..));
                                                         render_pass.draw(0..*count as u32, 0..1);
@@ -392,42 +368,6 @@ impl State {
                 &self.queue,
                 &mut _render_pass,
             );
-
-            // if !self.layout.text.is_empty() {
-            //     for entry in self.layout.text.iter() {
-            //         if let Some(renderer) = self.layout._renderers.get_mut(&entry.font_name) {
-            //             if let Some(r) = renderer {
-            //                 let verts = r.vertices(
-            //                     entry.content.clone(),
-            //                     entry.font_size,
-            //                     (entry.origin.0 as u32, entry.origin.1 as u32),
-            //                 );
-
-            //                 if !verts.is_empty() {
-            //                     r.update_vertex_buffer(
-            //                         &self.device,
-            //                         &self.queue,
-            //                         entry.content.clone(),
-            //                         entry.font_size,
-            //                         (entry.origin.0 as u32, entry.origin.1 as u32),
-            //                     );
-
-            //                     let key = (
-            //                         entry.content.clone(),
-            //                         entry.origin.0 as u32,
-            //                         entry.origin.1 as u32,
-            //                         entry.font_size as u32,
-            //                     );
-
-            //                     if let Some((buffer, count)) = r.outline_vertex_buffers.get(&key) {
-            //                         _render_pass.set_vertex_buffer(0, buffer.slice(..));
-            //                         _render_pass.draw(0..*count as u32, 0..1);
-            //                     }
-            //                 }
-            //             }
-            //         }
-            //     }
-            // }
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
@@ -622,67 +562,6 @@ pub struct WindowOptions {
     pub background_color: wgpu::Color,
 }
 
-#[derive(Clone)]
-pub struct TextEntry {
-    pub font_name: String,
-    pub origin: (f32, f32),
-
-    pub content: String,
-
-    pub font_size: f32,
-}
-
-// #[derive(Clone)]
-// pub struct Layout {
-//     pub available_fonts: HashMap<String, ParsedTableDirectory>,
-//     _renderers: HashMap<String, Option<TextRenderer>>,
-//
-//     pub text: Vec<TextEntry>,
-// }
-//
-// impl Layout {
-//     pub fn new(fonts: HashMap<String, ParsedTableDirectory>, text: Vec<TextEntry>) -> Self {
-//         let renderers = fonts.iter().map(|(name, _)| (name.clone(), None)).collect();
-//
-//         Self {
-//             available_fonts: fonts,
-//             _renderers: renderers,
-//             text,
-//         }
-//     }
-//
-//     fn resized(&mut self, new_size: (f32, f32)) {
-//         for renderer in self._renderers.values_mut() {
-//             if let Some(r) = renderer {
-//                 r.resized(new_size);
-//             }
-//         }
-//     }
-//
-//     fn populate_renderers(&mut self, device: &wgpu::Device, window_size: (f32, f32)) {
-//         for entry in &self.text {
-//             if let Some(font) = self.available_fonts.get(&entry.font_name) {
-//                 if self._renderers.get(&entry.font_name).is_none()
-//                     || self._renderers.get(&entry.font_name).unwrap().is_none()
-//                 {
-//                     self._renderers.insert(
-//                         entry.font_name.clone(),
-//                         Some(
-//                             TextRenderer::new()
-//                                 .with_font(font.clone())
-//                                 .with_window_size(window_size)
-//                                 .with_color([0.0, 0.0, 0.0])
-//                                 .build(),
-//                         ),
-//                     );
-//                 }
-//             } else {
-//                 panic!("Unknown font name: {}", entry.font_name);
-//             }
-//         }
-//     }
-// }
-
 pub struct App {
     pub window_options: WindowOptions,
     pub state: Option<State>,
@@ -703,7 +582,6 @@ impl ApplicationHandler<State> for App {
         }
 
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
-        let inner_size = window.inner_size();
 
         self.state = Some(pollster::block_on(State::new(
             window,
@@ -831,17 +709,6 @@ impl Vertex {
         let dz = self.position[2] - zz;
 
         (dx * dx + dy * dy + dz * dz).sqrt()
-    }
-
-    fn midpoint(v1: &Vertex, v2: &Vertex) -> Vertex {
-        Vertex {
-            position: [
-                (v1.position[0] + v2.position[0]) / 2.0,
-                (v1.position[1] + v2.position[1]) / 2.0,
-                (v1.position[2] + v2.position[2]) / 2.0,
-            ],
-            color: v1.color,
-        }
     }
 
     pub fn to_clip(&self, width: f32, height: f32) -> Vertex {

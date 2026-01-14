@@ -2,11 +2,12 @@ use crate::html5::{
     dom::*,
     parse::{
         _Document, ActiveFormattingElements, DOCTYPE, ElementOrMarker, InputStream, InsertMode,
-        OpenElementsStack, Parser, Tag, TagToken, Token, is_ascii_whitespace, is_c0_control,
-        is_control, is_leading_surrogate, is_noncharacter, is_surrogate, is_trailing_surrogate,
-        map_character_reference,
+        OpenElementsStack, Parser, Tag, TagToken, Token, is_ascii_whitespace, is_control,
+        is_noncharacter, map_character_reference,
     },
 };
+use crate::infra::is_surrogate;
+
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -360,8 +361,6 @@ impl<'a> Parser<'a> {
         self.emitted_tokens.push(token.clone());
         let mut mode = self.insertion_mode.clone();
 
-        // println!("Ttok state: {:?}", self.state);
-        // println!("Handling: {:?} token: {:?}", mode, token);
         while !mode.handle(self, &token) {
             mode = self.insertion_mode.clone();
         }

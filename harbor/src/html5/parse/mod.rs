@@ -1,21 +1,18 @@
-use core::panic;
-use std::cell::Ref;
 use std::ops::Deref;
 use std::{cell::RefCell, rc::Rc};
 
 mod afe;
 mod open_elems;
-mod stream;
 mod tokenize;
 mod tree;
 
 pub use afe::{ActiveFormattingElements, ElementOrMarker};
 pub use open_elems::OpenElementsStack;
-pub use stream::InputStream;
 pub use tokenize::{ParseError, ParserState};
 pub use tree::{DOCTYPE, InsertMode, Tag, TagToken, Token};
 
-pub use crate::html5::{dom::*, tag_groups::*};
+pub use crate::html5::dom::*;
+use crate::infra::InputStream;
 
 #[derive(Debug)]
 pub struct _Document {
@@ -30,18 +27,6 @@ impl _Document {
 
 fn preprocess_input(input: &String) -> String {
     input.replace("\r\n", "\n").replace("\r", "\n")
-}
-
-fn is_leading_surrogate(code: u32) -> bool {
-    (0xD800..=0xDBFF).contains(&code)
-}
-
-fn is_trailing_surrogate(code: u32) -> bool {
-    (0xDC00..=0xDFFF).contains(&code)
-}
-
-fn is_surrogate(code: u32) -> bool {
-    is_leading_surrogate(code) || is_trailing_surrogate(code)
 }
 
 fn is_noncharacter(code: u32) -> bool {

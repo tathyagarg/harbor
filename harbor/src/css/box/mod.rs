@@ -289,11 +289,14 @@ impl Box {
                     "h4" => 16.0,
                     "h5" => 13.28,
                     "h6" => 10.72,
-                    _ => parent
-                        .and_then(|weak_box| weak_box.upgrade())
-                        .and_then(|parent_box_rc| parent_box_rc.borrow()._font_size)
-                        .unwrap_or(16.0),
-                };
+                    _ => {
+                        parent
+                            .and_then(|weak_box| weak_box.upgrade())
+                            .and_then(|parent_box_rc| parent_box_rc.borrow()._font_size)
+                            .unwrap_or(16.0 * 2.5)
+                            / 2.5
+                    }
+                } * 2.5;
 
                 let line_height = font_size * 1.2;
 

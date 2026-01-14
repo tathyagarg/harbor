@@ -147,7 +147,16 @@ impl InsertMode {
         match token {
             Token::Character('\u{0009}' | '\u{000A}' | '\u{000C}' | '\u{000D}' | '\u{0020}') => {}
             Token::Comment(data) => {
-                parser._insert_comment(data.as_str(), None);
+                let comment = Comment::new(data.as_str(), Rc::clone(parser.document.document()));
+
+                parser
+                    .document
+                    .document()
+                    .borrow_mut()
+                    ._node
+                    .borrow_mut()
+                    .child_nodes_mut()
+                    .push(&Rc::new(RefCell::new(NodeKind::Comment(comment))));
             }
             Token::DOCTYPE(doctype) => {
                 if doctype.name.as_ref().unwrap().to_ascii_lowercase() != "html"
@@ -951,11 +960,6 @@ impl InsertMode {
                     .adjusted_current_node()
                     .is_some_and(|el| el.borrow().qualified_name() != "li")
                 {
-                    println!(
-                        "Current node: {:#?}",
-                        parser.open_elements_stack.adjusted_current_node()
-                    );
-
                     parser.error(ParseError::Custom(
                         "Unexpected current node after generating implied end tags for li end tag",
                     ));
