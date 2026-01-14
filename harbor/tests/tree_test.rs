@@ -23,7 +23,10 @@ fn test_css000() {
 </body>
 </html>"#;
 
-    let mut stream = infra::InputStream::new(html_content.to_string());
+    let chars = html_content.chars().collect::<Vec<char>>();
+    let slice = chars.as_slice();
+
+    let mut stream = infra::InputStream::new(slice);
     let mut tokenizer = html5::parse::Parser::new(&mut stream);
 
     tokenizer.tokenize();

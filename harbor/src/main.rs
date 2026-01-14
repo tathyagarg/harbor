@@ -15,13 +15,14 @@ fn main() {
     env_logger::init();
 
     let css_content = include_str!("../../assets/css/gist1059266.css").to_string();
+    println!("Tokenizing:\n{}\n", css_content);
 
     // let mut stream = infra::InputStream::new()
     let mut tokenizer = css::parser::CSSParser::new(css_content);
 
     tokenizer.tokenize();
 
-    println!("CSS Tokens: {:#?}", tokenizer.tokens());
+    println!("CSS Tokens: {:#?}", tokenizer.tokens);
 
     // let url_target = String::from("https://old.arson.dev/");
     // println!("Parsing target: {}", url_target);

@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use crate::infra::{self, *};
 
 #[derive(Debug, Clone)]
@@ -73,24 +75,22 @@ pub fn preprocess(input: &String) -> String {
 }
 
 pub struct CSSParser {
-    stream: InputStream,
-
-    _tokens: Vec<CSSToken>,
+    stream: InputStream<char>,
+    pub tokens: InputStream<CSSToken>,
 }
 
 impl CSSParser {
     pub fn new(data: String) -> CSSParser {
         let preprocessed_data = preprocess(&data);
-        let stream = InputStream::new(preprocessed_data);
+        let chars = preprocessed_data.chars().collect::<Vec<char>>();
+        let slice = &chars[..];
+
+        let stream = InputStream::new(slice);
 
         CSSParser {
             stream,
-            _tokens: Vec::new(),
+            tokens: InputStream::new(Vec::new().as_slice()),
         }
-    }
-
-    pub fn tokens(&self) -> &Vec<CSSToken> {
-        &self._tokens
     }
 
     /// Assumes neither the first nor the second code point has been consumed.
@@ -438,10 +438,11 @@ impl CSSParser {
                         if self.stream.peek().is_some_and(|ch| ch.is_ascii_digit()) {
                             self.stream.reconsume();
                             return self.consume_numeric();
-                        } else if self.stream.peek_range(1, 2).is_some_and(|s| {
-                            s.chars().nth(0).unwrap_or('\0') == '\u{002D}'
-                                && s.chars().nth(1).unwrap_or('\0') == '\u{003E}'
-                        }) {
+                        } else if self
+                            .stream
+                            .peek_range(1, 2)
+                            .is_some_and(|s| s == &['\u{002D}', '\u{003E}'])
+                        {
                             self.stream.consume();
                             self.stream.consume();
 
@@ -471,7 +472,7 @@ impl CSSParser {
                         if self
                             .stream
                             .peek_range(1, 3)
-                            .is_some_and(|s| s == "\u{0021}\u{002D}\u{002D}")
+                            .is_some_and(|s| s == &['\u{0021}', '\u{002D}', '\u{002D}'])
                         {
                             self.stream.consume();
                             self.stream.consume();
@@ -528,13 +529,30 @@ impl CSSParser {
     pub fn tokenize(&mut self) {
         loop {
             let token = self.consume();
-            self._tokens.push(token.clone());
+            self.tokens.push(token.clone());
 
             if let CSSToken::EOF = token {
                 break;
             }
         }
     }
+
+    // pub fn consume_list_of_rules(&mut self, top_level: bool) {
+    //     let mut rules = Vec::new();
+
+    //     loop {
+    //         match self._tokens.pop_front() {
+    //             Some(CSSToken::Whitespace) => continue,
+    //             None | Some(CSSToken::EOF) => return rules,
+    //             Some(CSSToken::CDO | CSSToken::CDC) => {
+    //                 if top_level {
+    //                     continue;
+    //                 } else {
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
 
     pub fn parse(&mut self) {
         // Parsing logic goes here

@@ -117,7 +117,7 @@ fn map_character_reference(code: u32) -> u32 {
 }
 
 pub struct Parser<'a> {
-    stream: &'a mut InputStream,
+    stream: &'a mut InputStream<char>,
 
     state: ParserState,
     prev_state: ParserState,

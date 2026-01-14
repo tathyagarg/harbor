@@ -112,8 +112,10 @@ fn verify_html_element_structure(html: &Rc<RefCell<Element>>, target: &ElementSt
 
 pub fn parse_html_path_to_document(path: &str) -> Document {
     let html_content = std::fs::read_to_string(path).unwrap();
+    let chars = html_content.chars().collect::<Vec<char>>();
+    let slice = chars.as_slice();
 
-    let mut stream = harbor::infra::InputStream::new(html_content);
+    let mut stream = harbor::infra::InputStream::new(slice);
     let mut parser = harbor::html5::parse::Parser::new(&mut stream);
 
     parser.tokenize();

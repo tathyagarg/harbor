@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 pub fn is_leading_surrogate(code: u32) -> bool {
     (0xD800..=0xDBFF).contains(&code)
 }
@@ -29,17 +31,44 @@ pub fn is_valid_escape(first: char, second: Option<char>) -> bool {
     }
 }
 
-pub fn would_start_ident(chars: String) -> bool {
-    let mut chars_iter = chars.chars();
+pub fn would_start_ident(chars: &[char]) -> bool {
+    if chars.is_empty() {
+        return false;
+    }
 
-    match chars_iter.next() {
-        Some('\u{002D}') => match chars_iter.next() {
-            Some(second) if char_is_ident_start(second) || second == '\u{002D}' => true,
-            Some(second) if is_valid_escape(second, chars_iter.next()) => true,
-            _ => false,
-        },
-        Some(first) if char_is_ident_start(first) => true,
-        Some('\u{005C}') => return is_valid_escape('\u{005C}', chars_iter.next()),
+    match chars[0] {
+        '\u{002D}' => {
+            if chars.len() < 2 {
+                return false;
+            }
+            match chars[1] {
+                second if char_is_ident_start(second) || second == '\u{002D}' => true,
+                second
+                    if is_valid_escape(
+                        second,
+                        if chars.len() < 3 {
+                            None
+                        } else {
+                            Some(chars[2])
+                        },
+                    ) =>
+                {
+                    true
+                }
+                _ => false,
+            }
+        }
+        first if char_is_ident_start(first) => true,
+        '\u{005C}' => {
+            return is_valid_escape(
+                '\u{005C}',
+                if chars.len() < 2 {
+                    None
+                } else {
+                    Some(chars[1])
+                },
+            );
+        }
         _ => false,
     }
 }
@@ -59,8 +88,8 @@ pub fn char_is_non_printable(ch: char) -> bool {
         || (code & 0xFFFE) == 0xFFFE && code >= 0xFFFE && code <= 0x10FFFF
 }
 
-pub struct InputStream {
-    input: Vec<char>,
+pub struct InputStream<T> {
+    input: Vec<T>,
     pos: usize,
     is_reconsume: bool,
 
@@ -69,10 +98,13 @@ pub struct InputStream {
     is_started: bool,
 }
 
-impl InputStream {
-    pub fn new(data: String) -> InputStream {
+impl<T> InputStream<T>
+where
+    T: Clone,
+{
+    pub fn new(data: &[T]) -> InputStream<T> {
         InputStream {
-            input: data.chars().collect::<Vec<char>>(),
+            input: data.to_vec(),
             pos: 0,
             is_reconsume: false,
             is_eof: false,
@@ -80,11 +112,11 @@ impl InputStream {
         }
     }
 
-    pub fn current(&self) -> char {
-        self.input[self.pos]
+    pub fn current(&self) -> T {
+        self.input[self.pos].clone()
     }
 
-    pub fn peek(&self) -> Option<char> {
+    pub fn peek(&self) -> Option<T> {
         if self.is_reconsume {
             return Some(self.current());
         }
@@ -93,30 +125,28 @@ impl InputStream {
             return None;
         }
 
-        Some(self.input[self.pos + 1])
+        Some(self.input[self.pos + 1].clone())
     }
 
-    pub fn peek_nth(&self, n: usize) -> Option<char> {
+    pub fn peek_nth(&self, n: usize) -> Option<T> {
         let diff = if self.is_reconsume { 0 } else { 1 };
 
         if self.pos + diff + n >= self.input.len() {
             return None;
         }
 
-        Some(self.input[self.pos + diff + n])
+        Some(self.input[self.pos + diff + n].clone())
     }
 
-    pub fn peek_range(&self, start: usize, n: usize) -> Option<String> {
+    pub fn peek_range(&self, start: usize, n: usize) -> Option<&[T]> {
         if self.pos + start + n >= self.input.len() {
             return None;
         }
-        let data_string = self.input[self.pos + start..self.pos + start + n]
-            .iter()
-            .collect::<String>();
+        let data_string = &self.input[self.pos + start..self.pos + start + n];
         Some(data_string)
     }
 
-    fn advance(&mut self) -> Option<char> {
+    fn advance(&mut self) -> Option<T> {
         if self.pos + 1 >= self.input.len() {
             self.is_eof = true;
             return None;
@@ -130,7 +160,7 @@ impl InputStream {
         Some(self.current())
     }
 
-    pub fn consume(&mut self) -> Option<char> {
+    pub fn consume(&mut self) -> Option<T> {
         if self.is_reconsume {
             self.is_reconsume = false;
             Some(self.current())
@@ -139,10 +169,16 @@ impl InputStream {
         }
     }
 
+    pub fn push(&mut self, item: T) {
+        self.input.push(item);
+    }
+
     pub fn reconsume(&mut self) {
         self.is_reconsume = true;
     }
+}
 
+impl InputStream<char> {
     pub fn matches(
         &self,
         text: &str,
@@ -170,5 +206,14 @@ impl InputStream {
         } else {
             data.eq_ignore_ascii_case(text)
         }
+    }
+}
+
+impl<T> Debug for InputStream<T>
+where
+    T: Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_list().entries(self.input.iter()).finish()
     }
 }
