@@ -1,10 +1,85 @@
 use std::{cell::RefCell, rc::Weak};
 
 use crate::{
-    css::parser::CSSToken,
+    css::{
+        parser::{ComponentValue, preprocess},
+        tokenize::CSSToken,
+    },
     html5::dom::{Document, Element},
     http::url::{Serializable, URL},
 };
+
+fn normalize_string_to_tokens(input: String) -> Vec<CSSToken> {
+    let filtered = preprocess(&input);
+    // let tokens =
+
+    todo!()
+}
+
+fn parse_list_of_declarations(inp: String) {}
+
+pub struct CSSDeclaration {
+    /// The property name of the declaration.
+    pub property_name: String,
+
+    /// The value of the declaration represented as a list of component values.
+    pub value: Vec<ComponentValue>,
+
+    /// Either set or unset. Can be changed.
+    pub important: bool,
+
+    /// Set if the property name is defined to be case-sensitive according to its
+    /// specification, otherwise unset.
+    pub case_sensitive: bool,
+}
+
+pub struct CSSDeclarationBlock {
+    /// Set if the object is a computed style declaration, rather than a specified style.
+    /// Unless otherwise stated it is unset.
+    pub _computed: bool,
+
+    /// The CSS declarations associated with the object.
+    pub _declarations: Vec<CSSDeclaration>,
+
+    /// The CSS rule that the CSS declaration block is associated with, if any, or null otherwise.
+    pub _parent_rule: Option<Box<CSSRule>>,
+
+    /// The Element that the CSS declaration block is associated with, if any, or null otherwise.
+    pub _owner_element: Option<Weak<RefCell<Element>>>,
+
+    /// Unset by default. Set when the CSS declaration block is updating the owner node’s style
+    /// attribute.
+    pub _updating: bool,
+}
+
+impl CSSDeclarationBlock {
+    pub fn new(owner_element: Option<Weak<RefCell<Element>>>) -> Self {
+        let mut block = CSSDeclarationBlock {
+            _computed: false,
+            _declarations: Vec::new(),
+            _parent_rule: None,
+            _owner_element: owner_element,
+            _updating: false,
+        };
+
+        if block._owner_element.is_none() || block._computed {
+            return block;
+        }
+
+        let value = block
+            ._owner_element
+            .as_ref()
+            .and_then(|weak_elem| weak_elem.upgrade())
+            .map(|elem| {
+                elem.borrow()
+                    .get_attribute("style")
+                    .map(|attr_val| attr_val.to_string())
+                    .unwrap_or_default()
+            });
+
+        todo!()
+    }
+}
 
 pub enum CSSRuleType {
     Unknown = 0,
@@ -139,7 +214,7 @@ pub struct CSSStyleSheet {
     _stylesheet_base_url: Option<String>,
 }
 
-trait StyleSheet {
+pub trait StyleSheet {
     fn _type(&self) -> &String;
     fn href(&self) -> &Option<String>;
 
@@ -204,7 +279,7 @@ impl StyleSheet for CSSStyleSheet {
 }
 
 #[derive(Default)]
-struct CSSStyleSheetInit {
+pub struct CSSStyleSheetInit {
     base_url: Option<String>,
     media: Option<MediaList>,
     disabled: Option<bool>,

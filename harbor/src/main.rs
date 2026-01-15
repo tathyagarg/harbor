@@ -1,6 +1,9 @@
 use std::{collections::HashMap, ops::Deref, rc::Rc};
 
-use crate::{css::layout::Layout, http::url::Serializable};
+use crate::{
+    css::{layout::Layout, parser::preprocess, tokenize::tokenize},
+    http::url::Serializable,
+};
 
 mod css;
 mod font;
@@ -14,15 +17,22 @@ use winit::event_loop::EventLoop;
 fn main() {
     env_logger::init();
 
-    let css_content = include_str!("../../assets/css/gist1059266.css").to_string();
+    let css_content = preprocess(&include_str!("../../assets/css/gist1059266.css").to_string());
+    let char_slice = css_content.chars().collect::<Vec<char>>();
+    let slice = &char_slice[..];
+
     println!("Tokenizing:\n{}\n", css_content);
 
-    // let mut stream = infra::InputStream::new()
-    let mut tokenizer = css::parser::CSSParser::new(css_content);
+    let mut stream = infra::InputStream::new(slice);
+    let tokens = tokenize(&mut stream);
 
-    tokenizer.tokenize();
+    println!("CSS Tokens: {:#?}", tokens);
 
-    println!("CSS Tokens: {:#?}", tokenizer.tokens);
+    // let mut tokenizer = css::parser::CSSParser::new(css_content);
+
+    // tokenizer.tokenize();
+
+    // println!("CSS Tokens: {:#?}", tokenizer.tokens);
 
     // let url_target = String::from("https://old.arson.dev/");
     // println!("Parsing target: {}", url_target);
