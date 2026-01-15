@@ -1,7 +1,4 @@
-use std::{
-    cell::{Ref, RefCell},
-    rc::Weak,
-};
+use std::{cell::RefCell, rc::Weak};
 
 use crate::{
     css::parser::CSSToken,
@@ -9,7 +6,79 @@ use crate::{
     http::url::{Serializable, URL},
 };
 
-pub struct CSSRule;
+pub enum CSSRuleType {
+    Unknown = 0,
+    Style = 1,
+    Charset = 2,
+    Import = 3,
+    Media = 4,
+    FontFace = 5,
+    Page = 6,
+    Keyframes = 7,
+    Keyframe = 8,
+    Margin = 9,
+    Namespace = 10,
+    CounterStyle = 11,
+    Supports = 12,
+    FontFeatureValues = 14,
+    Viewport = 15,
+}
+
+pub struct CSSRule {
+    /// A non-negative integer associated with a particular type of rule.
+    /// This item is initialized when a rule is created and cannot change.
+    pub _type: CSSRuleType,
+
+    /// A text representation of the rule suitable for direct use in a style sheet.
+    /// This item is initialized when a rule is created and can be changed.
+    _text: String,
+
+    /// A reference to an enclosing CSS rule or null. If the rule has an enclosing rule when
+    /// it is created, then this item is initialized to the enclosing rule; otherwise it is null.
+    /// It can be changed to null.
+    _parent_rule: Option<Box<CSSRule>>,
+
+    /// A reference to a parent CSS style sheet or null. This item is initialized to reference
+    /// an associated style sheet when the rule is created. It can be changed to null.
+    _parent_style_sheet: Option<Weak<RefCell<CSSStyleSheet>>>,
+
+    /// A list of child CSS rules. The list can be mutated.
+    pub _css_rules: Vec<CSSRule>,
+}
+
+pub trait CSSRuleExt {
+    fn text(&self) -> &String;
+
+    fn parent_rule(&self) -> &Option<Box<CSSRule>>;
+    fn parent_style_sheet(&self) -> &Option<Weak<RefCell<CSSStyleSheet>>>;
+
+    fn _type(&self) -> &CSSRuleType;
+}
+
+impl CSSRuleExt for CSSRule {
+    fn text(&self) -> &String {
+        &self._text
+    }
+
+    fn parent_rule(&self) -> &Option<Box<CSSRule>> {
+        &self._parent_rule
+    }
+
+    fn parent_style_sheet(&self) -> &Option<Weak<RefCell<CSSStyleSheet>>> {
+        &self._parent_style_sheet
+    }
+
+    fn _type(&self) -> &CSSRuleType {
+        &self._type
+    }
+}
+
+pub trait CSSStyleRule {
+    fn selector_text(&self) -> &String;
+
+    // TODO: Change to proper CSSStyleDeclaration
+    fn style(&self) -> &Vec<(String, String)>;
+}
 
 pub struct MediaList;
 
@@ -141,13 +210,15 @@ struct CSSStyleSheetInit {
     disabled: Option<bool>,
 }
 
-trait CSSStyleSheetExt {
+pub trait CSSStyleSheetExt {
     fn new(options: Option<CSSStyleSheetInit>, document: Weak<RefCell<Document>>) -> Self;
 
     fn owner_rule(&self) -> &Option<CSSRule>;
-    fn css_rules(&self) -> &Vec<CSSRule>;
 
-    fn insert_rule(&mut self, rule: String, index: Option<usize>) -> Result<usize, String>;
+    fn css_rules(&self) -> &Vec<CSSRule>;
+    fn css_rules_mut(&mut self) -> &mut Vec<CSSRule>;
+
+    fn insert_rule(&mut self, rule: Vec<CSSToken>, index: Option<usize>) -> Result<usize, String>;
     fn delete_rule(&mut self, index: usize) -> Result<(), String>;
 
     fn replace(&mut self, text: String) -> Result<(), String>;
@@ -186,13 +257,18 @@ impl CSSStyleSheetExt for CSSStyleSheet {
         &self._css_rules
     }
 
-    fn insert_rule(&mut self, rule: String, index: Option<usize>) -> Result<usize, String> {
+    fn css_rules_mut(&mut self) -> &mut Vec<CSSRule> {
+        &mut self._css_rules
+    }
+
+    fn insert_rule(&mut self, rule: Vec<CSSToken>, index: Option<usize>) -> Result<usize, String> {
         // Placeholder implementation
         let idx = index.unwrap_or(self._css_rules.len());
         if idx > self._css_rules.len() {
             return Err("Index out of bounds".to_string());
         }
-        self._css_rules.insert(idx, CSSRule);
+        todo!("Parse CSSToken vector into CSSRule and insert into stylesheet");
+        // self._css_rules.insert(idx, CSSRule);
         Ok(idx)
     }
 
@@ -209,6 +285,16 @@ impl CSSStyleSheetExt for CSSStyleSheet {
         self._css_rules.clear();
         // In a real implementation, parse `text` and populate `_css_rules`
         Ok(())
+    }
+}
+
+impl CSSStyleSheet {
+    pub fn set_location_url(&mut self, location: URL) {
+        self._location = Some(location.serialize());
+    }
+
+    pub fn set_location(&mut self, location: String) {
+        self._location = Some(location);
     }
 }
 

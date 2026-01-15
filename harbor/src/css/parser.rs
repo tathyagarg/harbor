@@ -1,14 +1,43 @@
-use std::collections::VecDeque;
+use std::{cell::RefCell, collections::VecDeque, rc::Weak};
 
-use crate::infra::{self, *};
+use crate::{
+    css::models::{CSSStyleSheet, CSSStyleSheetExt},
+    html5::dom::Document,
+    infra::{self, *},
+};
 
-#[derive(Debug, Clone)]
+struct Function(String, Vec<ComponentValue>);
+struct SimpleBlock(CSSToken, Vec<ComponentValue>);
+
+enum ComponentValue {
+    Token(CSSToken),
+    Function(Function),
+    SimpleBlock(SimpleBlock),
+}
+
+struct QualifiedRule {
+    prelude: Vec<ComponentValue>,
+    block: SimpleBlock,
+}
+
+struct AtRule {
+    name: String,
+    prelude: Vec<ComponentValue>,
+    block: Option<SimpleBlock>,
+}
+
+enum Rule {
+    QualifiedRule(QualifiedRule),
+    AtRule(AtRule),
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum HashType {
     ID,
     Unrestricted,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum NumberType {
     Integer,
     Number,
@@ -52,6 +81,74 @@ pub enum CSSToken {
     LeftCurlyBracket,
     RightCurlyBracket,
     EOF,
+}
+
+impl CSSToken {
+    pub fn string_value(&self) -> String {
+        match self {
+            CSSToken::Ident(value)
+            | CSSToken::Function(value)
+            | CSSToken::AtKeyword(value)
+            | CSSToken::Hash { value, .. }
+            | CSSToken::String(value)
+            | CSSToken::URL(value) => value.clone(),
+            _ => String::new(),
+        }
+    }
+}
+
+impl PartialEq for CSSToken {
+    fn eq(&self, other: &Self) -> bool {
+        if matches!(
+            self,
+            CSSToken::Number { .. } | CSSToken::Percentage(_) | CSSToken::Dimension { .. }
+        ) && matches!(
+            other,
+            CSSToken::Number { .. } | CSSToken::Percentage(_) | CSSToken::Dimension { .. }
+        ) {
+            false
+        } else if let CSSToken::Hash {
+            value: value_a,
+            hash_type: hash_type_a,
+        } = self
+            && let CSSToken::Hash {
+                value: value_b,
+                hash_type: hash_type_b,
+            } = other
+        {
+            value_a == value_b && hash_type_a == hash_type_b
+        } else if let CSSToken::String(value_a) = self
+            && let CSSToken::String(value_b) = other
+        {
+            value_a == value_b
+        } else if let CSSToken::Ident(value_a) = self
+            && let CSSToken::Ident(value_b) = other
+        {
+            value_a == value_b
+        } else if let CSSToken::Function(value_a) = self
+            && let CSSToken::Function(value_b) = other
+        {
+            value_a == value_b
+        } else if let CSSToken::URL(value_a) = self
+            && let CSSToken::URL(value_b) = other
+        {
+            value_a == value_b
+        } else if let CSSToken::AtKeyword(value_a) = self
+            && let CSSToken::AtKeyword(value_b) = other
+        {
+            value_a == value_b
+        } else if let CSSToken::Delim(value_a) = self
+            && let CSSToken::Delim(value_b) = other
+        {
+            value_a == value_b
+        } else {
+            std::mem::discriminant(self) == std::mem::discriminant(other)
+        }
+    }
+
+    fn ne(&self, other: &Self) -> bool {
+        !self.eq(other)
+    }
 }
 
 pub fn preprocess(input: &String) -> String {
@@ -537,24 +634,135 @@ impl CSSParser {
         }
     }
 
-    // pub fn consume_list_of_rules(&mut self, top_level: bool) {
-    //     let mut rules = Vec::new();
+    fn consume_component_value(&mut self) -> ComponentValue {
+        match self.tokens.consume() {
+            Some(token @ CSSToken::LeftCurlyBracket)
+            | Some(token @ CSSToken::LeftSquareBracket)
+            | Some(token @ CSSToken::LeftParenthesis) => {
+                let simple_block = self.consume_simple_block();
+                ComponentValue::SimpleBlock(simple_block)
+            }
+            Some(CSSToken::Function(_)) => {
+                self.tokens.reconsume();
+                todo!("Consume a function");
+            }
+            Some(token) => ComponentValue::Token(token),
+            None => panic!("No more tokens to consume"),
+        }
+    }
 
-    //     loop {
-    //         match self._tokens.pop_front() {
-    //             Some(CSSToken::Whitespace) => continue,
-    //             None | Some(CSSToken::EOF) => return rules,
-    //             Some(CSSToken::CDO | CSSToken::CDC) => {
-    //                 if top_level {
-    //                     continue;
-    //                 } else {
-    //                 }
-    //             }
-    //         }
-    //     }
-    // }
+    fn consume_simple_block(&mut self) -> SimpleBlock {
+        let starting_token = self.tokens.current();
+        let ending_token = match starting_token {
+            CSSToken::LeftCurlyBracket => CSSToken::RightCurlyBracket,
+            CSSToken::LeftSquareBracket => CSSToken::RightSquareBracket,
+            CSSToken::LeftParenthesis => CSSToken::RightParenthesis,
+            _ => panic!("Invalid starting token for simple block"),
+        };
 
-    pub fn parse(&mut self) {
-        // Parsing logic goes here
+        let mut simple_block = SimpleBlock(starting_token.clone(), Vec::new());
+
+        loop {
+            match self.tokens.consume() {
+                None => return simple_block,
+                Some(token) if token == ending_token => return simple_block,
+                Some(_) => {
+                    self.tokens.reconsume();
+                    let component_value = self.consume_component_value();
+
+                    simple_block.1.push(component_value);
+                }
+            }
+        }
+    }
+
+    fn consume_a_qualified_rule(&mut self) -> Option<QualifiedRule> {
+        let mut qualified_rule = QualifiedRule {
+            prelude: Vec::new(),
+            block: SimpleBlock(CSSToken::LeftCurlyBracket, Vec::new()),
+        };
+
+        loop {
+            match self.tokens.consume() {
+                None => return None,
+                Some(CSSToken::LeftCurlyBracket) => {
+                    qualified_rule.block = self.consume_simple_block();
+                    return Some(qualified_rule);
+                }
+                _ => {
+                    self.tokens.reconsume();
+                    let component_value = self.consume_component_value();
+                    qualified_rule.prelude.push(component_value);
+                }
+            }
+        }
+    }
+
+    fn consume_at_rule(&mut self) -> AtRule {
+        let mut at_rule = AtRule {
+            name: String::new(),
+            prelude: Vec::new(),
+            block: None,
+        };
+
+        at_rule.name = match self.tokens.consume() {
+            Some(name) if !name.string_value().is_empty() => name.string_value(),
+            _ => panic!("At-rule must have a name"),
+        };
+
+        loop {
+            match self.tokens.consume() {
+                None => return at_rule,
+                Some(CSSToken::Semicolon) => return at_rule,
+                Some(CSSToken::LeftCurlyBracket) => {
+                    at_rule.block = Some(self.consume_simple_block());
+                    return at_rule;
+                }
+                _ => {
+                    self.tokens.reconsume();
+                    let component_value = self.consume_component_value();
+                    at_rule.prelude.push(component_value);
+                }
+            }
+        }
+    }
+
+    fn consume_list_of_rules(&mut self, top_level: bool) -> Vec<Rule> {
+        let mut rules = Vec::new();
+
+        loop {
+            match self.tokens.consume() {
+                Some(CSSToken::Whitespace) => continue,
+                None | Some(CSSToken::EOF) => return rules,
+                Some(CSSToken::CDO | CSSToken::CDC) => {
+                    if top_level {
+                        continue;
+                    } else {
+                        self.tokens.reconsume();
+                        if let Some(qualified_rule) = self.consume_a_qualified_rule() {
+                            rules.push(Rule::QualifiedRule(qualified_rule));
+                        }
+                    }
+                }
+                Some(CSSToken::AtKeyword(_)) => {
+                    self.tokens.reconsume();
+                    let at_rule = self.consume_at_rule();
+                    rules.push(Rule::AtRule(at_rule));
+                }
+                _ => {
+                    self.tokens.reconsume();
+                    if let Some(qualified_rule) = self.consume_a_qualified_rule() {
+                        rules.push(Rule::QualifiedRule(qualified_rule));
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn parse(&mut self, document: Weak<RefCell<Document>>, location: Option<String>) {
+        let mut stylesheet = CSSStyleSheet::new(None, document);
+        stylesheet.set_location(location.unwrap_or_default());
+
+        *stylesheet.css_rules_mut() = self.consume_list_of_rules(true);
     }
 }
