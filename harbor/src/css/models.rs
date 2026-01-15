@@ -2,21 +2,18 @@ use std::{cell::RefCell, rc::Weak};
 
 use crate::{
     css::{
-        parser::{ComponentValue, preprocess},
-        tokenize::CSSToken,
+        parser::{AtRule, ComponentValue, preprocess},
+        tokenize::{CSSToken, tokenize_from_string},
     },
     html5::dom::{Document, Element},
     http::url::{Serializable, URL},
+    infra::InputStream,
 };
 
-fn normalize_string_to_tokens(input: String) -> Vec<CSSToken> {
-    let filtered = preprocess(&input);
-    // let tokens =
-
-    todo!()
+pub enum DeclarationOrAtRule {
+    Declaration(CSSDeclaration),
+    AtRule(AtRule),
 }
-
-fn parse_list_of_declarations(inp: String) {}
 
 pub struct CSSDeclaration {
     /// The property name of the declaration.
@@ -31,6 +28,17 @@ pub struct CSSDeclaration {
     /// Set if the property name is defined to be case-sensitive according to its
     /// specification, otherwise unset.
     pub case_sensitive: bool,
+}
+
+impl CSSDeclaration {
+    pub fn new(name: String, value: Vec<ComponentValue>) -> Self {
+        CSSDeclaration {
+            property_name: name,
+            value,
+            important: false,
+            case_sensitive: false,
+        }
+    }
 }
 
 pub struct CSSDeclarationBlock {

@@ -556,3 +556,11 @@ pub fn tokenize(stream: &mut InputStream<char>) -> Vec<CSSToken> {
 
     tokens
 }
+
+pub fn tokenize_from_string(input: String) -> Vec<CSSToken> {
+    let char_slice = input.chars().collect::<Vec<char>>();
+    let slice = &char_slice[..];
+
+    let mut stream = InputStream::new(slice);
+    tokenize(&mut stream)
+}
