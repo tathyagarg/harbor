@@ -217,3 +217,7 @@ where
         f.debug_list().entries(self.input.iter()).finish()
     }
 }
+
+pub trait Serializable {
+    fn serialize(&self) -> String;
+}

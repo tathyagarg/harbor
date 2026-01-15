@@ -4,7 +4,10 @@ use std::{
     time::Instant,
 };
 
-use crate::http::{self, url::Serializable};
+use crate::{
+    http::{self},
+    infra::Serializable,
+};
 
 pub struct DnsResolver {
     resolved_urls: HashMap<(http::url::Host, u16), (SocketAddr, Instant)>,

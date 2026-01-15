@@ -4,7 +4,7 @@ use std::net::{SocketAddr, TcpStream};
 use std::sync::Arc;
 
 use crate::http;
-use crate::http::url::Serializable;
+use crate::infra::Serializable;
 
 pub const MINIMUM_CHUNK_LENGTH: usize = 8;
 pub const CHUNK_LENGTH: usize = 512;

@@ -4,11 +4,40 @@ use crate::{
     css::{
         parser::{AtRule, ComponentValue, preprocess},
         tokenize::{CSSToken, tokenize_from_string},
+        values::angles::{is_angle_unit, to_canonical_angle},
     },
     html5::dom::{Document, Element},
-    http::url::{Serializable, URL},
-    infra::InputStream,
+    http::url::URL,
+    infra::{InputStream, Serializable},
 };
+
+impl Serializable for ComponentValue {
+    fn serialize(&self) -> String {
+        match self {
+            ComponentValue::Token(CSSToken::Ident(keyword)) => keyword.to_ascii_lowercase(),
+            ComponentValue::Token(CSSToken::Dimension { value, unit, .. })
+                if is_angle_unit(unit.as_str()) =>
+            {
+                let deg_value = to_canonical_angle(*value, unit);
+                format!("{}deg", deg_value.unwrap_or(*value))
+            }
+            _ => todo!(),
+        }
+    }
+}
+
+/// https://www.w3.org/TR/selectors-4/#structure
+/// A selector represents a particular pattern of element(s) in a tree structure.
+/// The term selector can refer to a simple selector, compound selector, complex selector,
+/// or selector list
+///
+/// NOTE:
+/// Selector List is TBI
+pub enum Selector {
+    Simple(String),
+    Compound(Vec<Selector>),
+    Complex(Vec<Selector>),
+}
 
 pub enum DeclarationOrAtRule {
     Declaration(CSSDeclaration),
@@ -41,6 +70,26 @@ impl CSSDeclaration {
     }
 }
 
+impl Serializable for CSSDeclaration {
+    fn serialize(&self) -> String {
+        let mut s = String::new();
+        s.push_str(&self.property_name);
+        s.push_str(": ");
+        for cv in &self.value {
+            s.push_str(&cv.serialize());
+        }
+
+        if self.important {
+            s.push_str(" !important");
+        }
+
+        s.push(';');
+
+        s
+    }
+}
+
+/// https://www.w3.org/TR/cssom-1/#css-declaration-block
 pub struct CSSDeclarationBlock {
     /// Set if the object is a computed style declaration, rather than a specified style.
     /// Unless otherwise stated it is unset.
@@ -50,7 +99,7 @@ pub struct CSSDeclarationBlock {
     pub _declarations: Vec<CSSDeclaration>,
 
     /// The CSS rule that the CSS declaration block is associated with, if any, or null otherwise.
-    pub _parent_rule: Option<Box<CSSRule>>,
+    pub _parent_rule: Option<Box<CSSRuleNode>>,
 
     /// The Element that the CSS declaration block is associated with, if any, or null otherwise.
     pub _owner_element: Option<Weak<RefCell<Element>>>,
@@ -89,6 +138,26 @@ impl CSSDeclarationBlock {
     }
 }
 
+/// https://www.w3.org/TR/cssom-1/#the-cssstyledeclaration-interface
+pub trait CSSStyleDeclaration {
+    fn css_text(&self) -> String;
+    fn set_css_text(&mut self, text: String) -> Result<(), String>;
+}
+
+impl CSSStyleDeclaration for CSSDeclarationBlock {
+    fn css_text(&self) -> String {
+        if self._computed {
+            String::new();
+        }
+
+        todo!()
+    }
+
+    fn set_css_text(&mut self, text: String) -> Result<(), String> {
+        todo!("Parse CSS text and update declarations");
+    }
+}
+
 pub enum CSSRuleType {
     Unknown = 0,
     Style = 1,
@@ -107,7 +176,7 @@ pub enum CSSRuleType {
     Viewport = 15,
 }
 
-pub struct CSSRule {
+pub struct CSSRuleNode {
     /// A non-negative integer associated with a particular type of rule.
     /// This item is initialized when a rule is created and cannot change.
     pub _type: CSSRuleType,
@@ -119,31 +188,33 @@ pub struct CSSRule {
     /// A reference to an enclosing CSS rule or null. If the rule has an enclosing rule when
     /// it is created, then this item is initialized to the enclosing rule; otherwise it is null.
     /// It can be changed to null.
-    _parent_rule: Option<Box<CSSRule>>,
+    _parent_rule: Option<Box<CSSRuleNode>>,
 
     /// A reference to a parent CSS style sheet or null. This item is initialized to reference
     /// an associated style sheet when the rule is created. It can be changed to null.
     _parent_style_sheet: Option<Weak<RefCell<CSSStyleSheet>>>,
 
     /// A list of child CSS rules. The list can be mutated.
-    pub _css_rules: Vec<CSSRule>,
+    pub _css_rules: Vec<CSSRuleNode>,
+
+    pub payload: CSSRuleData,
 }
 
 pub trait CSSRuleExt {
     fn text(&self) -> &String;
 
-    fn parent_rule(&self) -> &Option<Box<CSSRule>>;
+    fn parent_rule(&self) -> &Option<Box<CSSRuleNode>>;
     fn parent_style_sheet(&self) -> &Option<Weak<RefCell<CSSStyleSheet>>>;
 
     fn _type(&self) -> &CSSRuleType;
 }
 
-impl CSSRuleExt for CSSRule {
+impl CSSRuleExt for CSSRuleNode {
     fn text(&self) -> &String {
         &self._text
     }
 
-    fn parent_rule(&self) -> &Option<Box<CSSRule>> {
+    fn parent_rule(&self) -> &Option<Box<CSSRuleNode>> {
         &self._parent_rule
     }
 
@@ -156,11 +227,14 @@ impl CSSRuleExt for CSSRule {
     }
 }
 
-pub trait CSSStyleRule {
-    fn selector_text(&self) -> &String;
+pub enum CSSRuleData {
+    Style(CSSStyleRuleData),
+}
 
-    // TODO: Change to proper CSSStyleDeclaration
-    fn style(&self) -> &Vec<(String, String)>;
+pub struct CSSStyleRuleData {
+    pub selectors: Vec<Selector>,
+
+    _style: CSSDeclaration,
 }
 
 pub struct MediaList;
@@ -184,7 +258,7 @@ pub struct CSSStyleSheet {
 
     /// Specified when created. The CSS rule in the parent CSS style sheet that caused the inclusion
     /// of the CSS style sheet or null if there is no associated rule.
-    _owner_rule: Option<CSSRule>,
+    _owner_rule: Option<CSSRuleNode>,
 
     /// Specified when created. The MediaList object associated with the CSS style sheet.
     _media: MediaList,
@@ -199,7 +273,7 @@ pub struct CSSStyleSheet {
     _disabled: bool,
 
     /// The CSS rules associated with the CSS style sheet.
-    _css_rules: Vec<CSSRule>,
+    _css_rules: Vec<CSSRuleNode>,
 
     /// Specified when created. Either set or unset. If it is set, the API allows reading and modifying
     /// of the CSS rules.
@@ -296,10 +370,10 @@ pub struct CSSStyleSheetInit {
 pub trait CSSStyleSheetExt {
     fn new(options: Option<CSSStyleSheetInit>, document: Weak<RefCell<Document>>) -> Self;
 
-    fn owner_rule(&self) -> &Option<CSSRule>;
+    fn owner_rule(&self) -> &Option<CSSRuleNode>;
 
-    fn css_rules(&self) -> &Vec<CSSRule>;
-    fn css_rules_mut(&mut self) -> &mut Vec<CSSRule>;
+    fn css_rules(&self) -> &Vec<CSSRuleNode>;
+    fn css_rules_mut(&mut self) -> &mut Vec<CSSRuleNode>;
 
     fn insert_rule(&mut self, rule: Vec<CSSToken>, index: Option<usize>) -> Result<usize, String>;
     fn delete_rule(&mut self, index: usize) -> Result<(), String>;
@@ -332,15 +406,15 @@ impl CSSStyleSheetExt for CSSStyleSheet {
         }
     }
 
-    fn owner_rule(&self) -> &Option<CSSRule> {
+    fn owner_rule(&self) -> &Option<CSSRuleNode> {
         &self._owner_rule
     }
 
-    fn css_rules(&self) -> &Vec<CSSRule> {
+    fn css_rules(&self) -> &Vec<CSSRuleNode> {
         &self._css_rules
     }
 
-    fn css_rules_mut(&mut self) -> &mut Vec<CSSRule> {
+    fn css_rules_mut(&mut self) -> &mut Vec<CSSRuleNode> {
         &mut self._css_rules
     }
 

@@ -5,9 +5,7 @@ use std::num::{IntErrorKind, ParseIntError};
 use encoding_rs;
 use idna;
 
-pub trait Serializable {
-    fn serialize(&self) -> String;
-}
+use crate::infra::Serializable;
 
 pub const FORBIDDEN_HOST_CODE_POINTS: [char; 17] = [
     '\u{0000}', '\u{0009}', '\u{000a}', '\u{000d}', '\u{0020}', '\u{0023}', '\u{002f}', '\u{003a}',

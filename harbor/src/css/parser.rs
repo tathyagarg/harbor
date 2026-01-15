@@ -2,7 +2,7 @@ use std::{cell::RefCell, rc::Weak};
 
 use crate::{
     css::{
-        models::{CSSDeclaration, CSSRule, CSSStyleSheet, CSSStyleSheetExt, DeclarationOrAtRule},
+        cssom::{CSSDeclaration, CSSStyleSheet, CSSStyleSheetExt, DeclarationOrAtRule},
         tokenize::{CSSToken, tokenize_from_string},
     },
     html5::dom::Document,
@@ -294,7 +294,28 @@ fn parse_list_of_declarations(inp: String) -> Vec<DeclarationOrAtRule> {
     consume_list_of_declarations(&mut stream)
 }
 
-pub fn parse(
+/// TODO: The specification:
+/// https://www.w3.org/TR/cssom-1/#parse-a-css-declaration-block
+/// In section 3.1, requires:
+/// > Let parsed declaration be the result of parsing declaration according to the appropriate CSS
+/// specifications, ...
+/// However, this is a LONG, and extremely tedious process which will require individual grammars
+/// for each CSS property. For now, we will just parse the declaration block into individual declarations
+/// without validating them.
+fn parse_css_declaration_block(input: String) -> Vec<CSSDeclaration> {
+    let declarations_or_at_rules = parse_list_of_declarations(input);
+    let mut declarations = Vec::new();
+
+    for item in declarations_or_at_rules {
+        if let DeclarationOrAtRule::Declaration(decl) = item {
+            declarations.push(decl);
+        }
+    }
+
+    declarations
+}
+
+pub fn parse_stylesheet(
     stream: &mut InputStream<CSSToken>,
     document: Weak<RefCell<Document>>,
     location: Option<String>,
