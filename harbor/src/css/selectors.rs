@@ -217,7 +217,6 @@ fn parse_type_selector(tokens: &mut InputStream<CSSToken>) -> Option<TypeSelecto
     let curr_tokens = tokens.clone();
 
     if let Some(wq_name) = parse_wq_name(tokens) {
-        println!("peek: {:?}", tokens.peek());
         return Some(TypeSelector::WQName(wq_name));
     }
 

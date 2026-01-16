@@ -480,7 +480,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn tokenize(&mut self) {
+    pub fn parse(&mut self) {
         while !self.stream.is_eof {
             self.step();
         }

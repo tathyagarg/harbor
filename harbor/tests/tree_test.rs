@@ -29,7 +29,7 @@ fn test_css000() {
     let mut stream = infra::InputStream::new(slice);
     let mut tokenizer = html5::parse::Parser::new(&mut stream);
 
-    tokenizer.tokenize();
+    tokenizer.parse();
 
     common::verify_element_structure(
         tokenizer.document.document().borrow().deref(),

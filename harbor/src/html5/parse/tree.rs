@@ -1,12 +1,19 @@
-use crate::html5::{
-    self,
-    dom::*,
-    parse::{ElementOrMarker, ParseError, Parser, ParserState},
-    tag_groups::*,
+use crate::{
+    css::{
+        parser::{parse_stylesheet, preprocess},
+        tokenize::tokenize,
+    },
+    html5::{
+        self,
+        dom::*,
+        parse::{ElementOrMarker, ParseError, Parser, ParserState},
+        tag_groups::*,
+    },
+    infra::InputStream,
 };
 
-use std::cell::RefCell;
 use std::rc::Rc;
+use std::{cell::RefCell, ops::Deref};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Tag {
@@ -1080,8 +1087,38 @@ impl InsertMode {
             Token::EndTag(ref tag) if tag.name.as_str() == "script" => {
                 todo!("Handle script end tag correctly");
             }
-            Token::EndTag(_) => {
-                parser.open_elements_stack.pop();
+            Token::EndTag(ref tag) => {
+                let popped_elem = parser.open_elements_stack.pop().unwrap();
+                if tag.name == "style" {
+                    let popped_borrow = popped_elem.borrow();
+                    let popped_node = popped_borrow.node().borrow();
+                    let first_child = popped_node.first_child();
+                    if let NodeKind::Text(el) = &first_child.unwrap().borrow().deref() {
+                        let el_borrow = el.borrow();
+                        let css_content = el_borrow.data().to_string();
+
+                        let processed = preprocess(&css_content);
+                        let char_slice = processed.chars().collect::<Vec<char>>();
+                        let slice = &char_slice[..];
+
+                        let mut stream = InputStream::new(slice);
+                        let tokens = tokenize(&mut stream);
+
+                        let mut tok_stream = InputStream::new(&tokens[..]);
+                        let parsed = parse_stylesheet(
+                            &mut tok_stream,
+                            Rc::downgrade(&parser.document.document),
+                            None,
+                        );
+
+                        parser
+                            .document
+                            .document
+                            .borrow_mut()
+                            .push_stylesheet(parsed);
+                    }
+                }
+
                 parser.insertion_mode = parser.original_insertion_mode.clone().unwrap();
             }
             _ => {
@@ -1261,7 +1298,7 @@ impl InsertMode {
             let mut node_index = adjusted_furthest_block_pos.unwrap();
             let last_node_index = adjusted_furthest_block_pos.unwrap();
 
-            let mut node = Rc::clone(parser.open_elements_stack.nth(node_index).as_ref().unwrap());
+            // let mut node = Rc::clone(parser.open_elements_stack.nth(node_index).as_ref().unwrap());
             let mut last_node = Rc::clone(
                 parser
                     .open_elements_stack
@@ -1276,7 +1313,8 @@ impl InsertMode {
                 inner_loop_counter += 1;
 
                 node_index -= 1;
-                node = Rc::clone(parser.open_elements_stack.nth(node_index).as_ref().unwrap());
+                let mut node =
+                    Rc::clone(parser.open_elements_stack.nth(node_index).as_ref().unwrap());
 
                 if Rc::ptr_eq(&node, &formatting_element) {
                     break;

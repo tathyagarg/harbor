@@ -18,14 +18,19 @@ use winit::event_loop::EventLoop;
 fn main() {
     env_logger::init();
 
-    let html_content = include_str!("../../assets/html/css002.html");
+    let html_content = include_str!("../../assets/html/custom001.html");
     let html_chars = html_content.chars().collect::<Vec<char>>();
     let html_slice = &html_chars[..];
 
     let mut stream = InputStream::new(html_slice);
-    let mut tokenizer = html5::parse::Parser::new(&mut stream);
+    let mut parser = html5::parse::Parser::new(&mut stream);
 
-    tokenizer.tokenize();
+    parser.parse();
+
+    println!(
+        "Parsed HTML Document: {:#?}",
+        parser.document.document.borrow().deref()
+    );
 
     let css_content = preprocess(&include_str!("../../assets/css/gist1059266.css").to_string());
     let char_slice = css_content.chars().collect::<Vec<char>>();
@@ -39,7 +44,7 @@ fn main() {
     let mut tok_stream = InputStream::new(&tokens[..]);
     let parsed = parse_stylesheet(
         &mut tok_stream,
-        Rc::downgrade(&tokenizer.document.document),
+        Rc::downgrade(&parser.document.document),
         None,
     );
 

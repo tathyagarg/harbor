@@ -118,7 +118,7 @@ pub fn parse_html_path_to_document(path: &str) -> Document {
     let mut stream = harbor::infra::InputStream::new(slice);
     let mut parser = harbor::html5::parse::Parser::new(&mut stream);
 
-    parser.tokenize();
+    parser.parse();
 
     parser.document.document().borrow().clone()
 }

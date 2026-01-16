@@ -1,7 +1,11 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
 
-use std::{cell::RefCell, fmt::Debug, rc::Weak};
+use std::{
+    cell::RefCell,
+    fmt::Debug,
+    rc::{Rc, Weak},
+};
 
 use crate::{
     css::{
@@ -636,13 +640,36 @@ impl CSSStyleSheet {
     }
 }
 
-// impl CSSStyleSheet {
-//     fn parse(
-//         input: Vec<CSSToken>,
-//         document: Weak<RefCell<Document>>,
-//         location: Option<URL>,
-//     ) -> Self {
-//         let mut sheet = CSSStyleSheet::new(None, document);
-//         sheet._location = location.map(|url| url.serialize());
-//     }
-// }
+#[derive(Debug, Clone)]
+pub struct StyleSheetList {
+    pub style_sheets: Vec<Rc<RefCell<CSSStyleSheet>>>,
+}
+
+impl StyleSheetList {
+    pub fn item(&self, index: usize) -> Option<Rc<RefCell<CSSStyleSheet>>> {
+        self.style_sheets.get(index).cloned()
+    }
+
+    pub fn length(&self) -> usize {
+        self.style_sheets.len()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct DocumentOrShadowRootStyle {
+    pub style_sheets: StyleSheetList,
+    // TODO: Implement adopted style sheets
+    // pub adopted_style_sheets: Vec<Rc<RefCell<CSSStyleSheet>>>,
+}
+
+impl PartialEq for DocumentOrShadowRootStyle {
+    fn eq(&self, other: &Self) -> bool {
+        false
+    }
+
+    fn ne(&self, other: &Self) -> bool {
+        !self.eq(other)
+    }
+}
+
+impl Eq for DocumentOrShadowRootStyle {}

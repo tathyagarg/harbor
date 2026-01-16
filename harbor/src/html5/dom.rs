@@ -3,6 +3,7 @@ use std::ops::Deref;
 use std::rc::Weak;
 use std::{cell::RefCell, rc::Rc};
 
+use crate::css::cssom::{CSSStyleSheet, DocumentOrShadowRootStyle, StyleSheetList};
 use crate::infra::Serializable;
 use crate::{
     html5::{HTML_NAMESPACE, parse::Token, tag_groups::*},
@@ -1250,12 +1251,18 @@ pub struct Document {
     _implementation: DOMImplementation,
 
     parser_cannot_change_mode: bool,
+
+    document_or_shadow_root_style: DocumentOrShadowRootStyle,
 }
 
 impl Debug for Document {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Document")
             .field("_node", &self._node)
+            .field(
+                "document_or_shadow_root_style",
+                &self.document_or_shadow_root_style,
+            )
             .finish()
     }
 }
@@ -1290,6 +1297,12 @@ impl Default for Document {
             _implementation: DOMImplementation {},
 
             parser_cannot_change_mode: false,
+
+            document_or_shadow_root_style: DocumentOrShadowRootStyle {
+                style_sheets: StyleSheetList {
+                    style_sheets: vec![],
+                },
+            },
         };
 
         document._node.borrow_mut().node_document =
@@ -1423,5 +1436,12 @@ impl Document {
         }
 
         nodes
+    }
+
+    pub fn push_stylesheet(&mut self, sheet: CSSStyleSheet) {
+        self.document_or_shadow_root_style
+            .style_sheets
+            .style_sheets
+            .push(Rc::new(RefCell::new(sheet)));
     }
 }
