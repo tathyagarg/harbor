@@ -2,7 +2,7 @@ use std::{collections::HashMap, ops::Deref, rc::Rc};
 
 use crate::{
     css::{layout::Layout, parser::preprocess, tokenize::tokenize},
-    http::url::Serializable,
+    infra::InputStream,
 };
 
 mod css;
@@ -12,10 +12,20 @@ mod http;
 mod infra;
 mod render;
 
+use crate::css::parser::parse_stylesheet;
 use winit::event_loop::EventLoop;
 
 fn main() {
     env_logger::init();
+
+    let html_content = include_str!("../../assets/html/css002.html");
+    let html_chars = html_content.chars().collect::<Vec<char>>();
+    let html_slice = &html_chars[..];
+
+    let mut stream = InputStream::new(html_slice);
+    let mut tokenizer = html5::parse::Parser::new(&mut stream);
+
+    tokenizer.tokenize();
 
     let css_content = preprocess(&include_str!("../../assets/css/gist1059266.css").to_string());
     let char_slice = css_content.chars().collect::<Vec<char>>();
@@ -23,10 +33,18 @@ fn main() {
 
     println!("Tokenizing:\n{}\n", css_content);
 
-    let mut stream = infra::InputStream::new(slice);
+    let mut stream = InputStream::new(slice);
     let tokens = tokenize(&mut stream);
 
+    let mut tok_stream = InputStream::new(&tokens[..]);
+    let parsed = parse_stylesheet(
+        &mut tok_stream,
+        Rc::downgrade(&tokenizer.document.document),
+        None,
+    );
+
     println!("CSS Tokens: {:#?}", tokens);
+    println!("Parsed Stylesheet: {:#?}", parsed);
 
     // let mut tokenizer = css::parser::CSSParser::new(css_content);
 

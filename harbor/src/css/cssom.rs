@@ -1,14 +1,18 @@
+#![allow(dead_code)]
+#![allow(unused_variables)]
+
 use std::{cell::RefCell, rc::Weak};
 
 use crate::{
     css::{
-        parser::{AtRule, ComponentValue, preprocess},
-        tokenize::{CSSToken, tokenize_from_string},
+        colors::is_color,
+        parser::{AtRule, ComponentValue, parse_css_declaration_block},
+        tokenize::CSSToken,
         values::angles::{is_angle_unit, to_canonical_angle},
     },
     html5::dom::{Document, Element},
     http::url::URL,
-    infra::{InputStream, Serializable},
+    infra::Serializable,
 };
 
 impl Serializable for ComponentValue {
@@ -21,6 +25,8 @@ impl Serializable for ComponentValue {
                 let deg_value = to_canonical_angle(*value, unit);
                 format!("{}deg", deg_value.unwrap_or(*value))
             }
+            comp if is_color(comp) => comp.serialize(),
+            // ComponentValue::Function(Function(name, args)) if is_color_function(name)
             _ => todo!(),
         }
     }
@@ -33,6 +39,7 @@ impl Serializable for ComponentValue {
 ///
 /// NOTE:
 /// Selector List is TBI
+#[derive(Clone)]
 pub enum Selector {
     Simple(String),
     Compound(Vec<Selector>),
@@ -44,6 +51,7 @@ pub enum DeclarationOrAtRule {
     AtRule(AtRule),
 }
 
+#[derive(Clone)]
 pub struct CSSDeclaration {
     /// The property name of the declaration.
     pub property_name: String,
@@ -99,7 +107,7 @@ pub struct CSSDeclarationBlock {
     pub _declarations: Vec<CSSDeclaration>,
 
     /// The CSS rule that the CSS declaration block is associated with, if any, or null otherwise.
-    pub _parent_rule: Option<Box<CSSRuleNode>>,
+    pub _parent_rule: Option<Box<dyn CSSRuleExt>>,
 
     /// The Element that the CSS declaration block is associated with, if any, or null otherwise.
     pub _owner_element: Option<Weak<RefCell<Element>>>,
@@ -134,7 +142,12 @@ impl CSSDeclarationBlock {
                     .unwrap_or_default()
             });
 
-        todo!()
+        if value.is_some() {
+            let declarations = parse_css_declaration_block(value.unwrap());
+            block._declarations = declarations;
+        }
+
+        block
     }
 }
 
@@ -147,7 +160,7 @@ pub trait CSSStyleDeclaration {
 impl CSSStyleDeclaration for CSSDeclarationBlock {
     fn css_text(&self) -> String {
         if self._computed {
-            String::new();
+            return String::new();
         }
 
         todo!()
@@ -158,6 +171,7 @@ impl CSSStyleDeclaration for CSSDeclarationBlock {
     }
 }
 
+#[derive(Clone)]
 pub enum CSSRuleType {
     Unknown = 0,
     Style = 1,
@@ -176,7 +190,11 @@ pub enum CSSRuleType {
     Viewport = 15,
 }
 
-pub struct CSSRuleNode {
+#[derive(Clone)]
+pub struct CSSRuleNode<T>
+where
+    T: Clone,
+{
     /// A non-negative integer associated with a particular type of rule.
     /// This item is initialized when a rule is created and cannot change.
     pub _type: CSSRuleType,
@@ -188,33 +206,55 @@ pub struct CSSRuleNode {
     /// A reference to an enclosing CSS rule or null. If the rule has an enclosing rule when
     /// it is created, then this item is initialized to the enclosing rule; otherwise it is null.
     /// It can be changed to null.
-    _parent_rule: Option<Box<CSSRuleNode>>,
+    _parent_rule: Option<Box<dyn CSSRuleExt>>,
 
     /// A reference to a parent CSS style sheet or null. This item is initialized to reference
     /// an associated style sheet when the rule is created. It can be changed to null.
     _parent_style_sheet: Option<Weak<RefCell<CSSStyleSheet>>>,
 
     /// A list of child CSS rules. The list can be mutated.
-    pub _css_rules: Vec<CSSRuleNode>,
+    pub _css_rules: Vec<Box<dyn CSSRuleExt>>,
 
-    pub payload: CSSRuleData,
+    pub payload: T,
 }
 
-pub trait CSSRuleExt {
+pub trait CSSRuleExt: CSSRuleExtClone {
     fn text(&self) -> &String;
 
-    fn parent_rule(&self) -> &Option<Box<CSSRuleNode>>;
+    fn parent_rule(&self) -> &Option<Box<dyn CSSRuleExt>>;
     fn parent_style_sheet(&self) -> &Option<Weak<RefCell<CSSStyleSheet>>>;
 
     fn _type(&self) -> &CSSRuleType;
 }
 
-impl CSSRuleExt for CSSRuleNode {
+pub trait CSSRuleExtClone {
+    fn clone_box(&self) -> Box<dyn CSSRuleExt>;
+}
+
+impl<T> CSSRuleExtClone for CSSRuleNode<T>
+where
+    T: Clone + 'static,
+{
+    fn clone_box(&self) -> Box<dyn CSSRuleExt> {
+        Box::new(self.clone())
+    }
+}
+
+impl Clone for Box<dyn CSSRuleExt> {
+    fn clone(&self) -> Box<dyn CSSRuleExt> {
+        self.clone_box()
+    }
+}
+
+impl<T> CSSRuleExt for CSSRuleNode<T>
+where
+    T: Clone + 'static,
+{
     fn text(&self) -> &String {
         &self._text
     }
 
-    fn parent_rule(&self) -> &Option<Box<CSSRuleNode>> {
+    fn parent_rule(&self) -> &Option<Box<dyn CSSRuleExt>> {
         &self._parent_rule
     }
 
@@ -227,18 +267,58 @@ impl CSSRuleExt for CSSRuleNode {
     }
 }
 
-pub enum CSSRuleData {
-    Style(CSSStyleRuleData),
-}
-
+#[derive(Clone)]
 pub struct CSSStyleRuleData {
     pub selectors: Vec<Selector>,
 
-    _style: CSSDeclaration,
+    declarations: Vec<CSSDeclaration>,
 }
 
+impl CSSRuleNode<CSSStyleRuleData> {
+    pub fn selector_text(&self) -> String {
+        todo!("Serialize selectors to string");
+    }
+
+    pub fn set_selector_text(&mut self, text: String) -> Result<(), String> {
+        todo!("Parse selector text and update selectors");
+    }
+
+    pub fn style(&self) -> Box<dyn CSSStyleDeclaration> {
+        Box::new(CSSDeclarationBlock {
+            _computed: false,
+            _declarations: self.payload.declarations.clone(),
+            _parent_rule: Some(Box::new(self.clone())),
+            _owner_element: None,
+            _updating: false,
+        })
+    }
+}
+
+#[derive(Clone)]
+pub struct CSSImportRuleData {
+    _href: String,
+
+    _style_sheet: Box<CSSStyleSheet>,
+}
+
+impl CSSRuleNode<CSSImportRuleData> {
+    pub fn href(&self) -> &String {
+        &self.payload._href
+    }
+
+    pub fn style_sheet(&self) -> &Box<CSSStyleSheet> {
+        &self.payload._style_sheet
+    }
+
+    pub fn media(&self) -> &MediaList {
+        &self.payload._style_sheet._media
+    }
+}
+
+#[derive(Clone)]
 pub struct MediaList;
 
+#[derive(Clone)]
 pub struct CSSStyleSheet {
     /// The type of the stylesheet (e.g., "text/css").
     pub _type: String,
@@ -258,7 +338,7 @@ pub struct CSSStyleSheet {
 
     /// Specified when created. The CSS rule in the parent CSS style sheet that caused the inclusion
     /// of the CSS style sheet or null if there is no associated rule.
-    _owner_rule: Option<CSSRuleNode>,
+    _owner_rule: Option<Box<dyn CSSRuleExt>>,
 
     /// Specified when created. The MediaList object associated with the CSS style sheet.
     _media: MediaList,
@@ -273,7 +353,7 @@ pub struct CSSStyleSheet {
     _disabled: bool,
 
     /// The CSS rules associated with the CSS style sheet.
-    _css_rules: Vec<CSSRuleNode>,
+    _css_rules: Vec<Box<dyn CSSRuleExt>>,
 
     /// Specified when created. Either set or unset. If it is set, the API allows reading and modifying
     /// of the CSS rules.
@@ -347,8 +427,8 @@ impl StyleSheet for CSSStyleSheet {
     }
 
     fn set_media(&mut self, media: MediaList) {
-        todo!("Update underlying CSS rules to reflect media change");
         self._media = media;
+        todo!("Update underlying CSS rules to reflect media change");
     }
 
     fn disabled(&self) -> bool {
@@ -370,10 +450,10 @@ pub struct CSSStyleSheetInit {
 pub trait CSSStyleSheetExt {
     fn new(options: Option<CSSStyleSheetInit>, document: Weak<RefCell<Document>>) -> Self;
 
-    fn owner_rule(&self) -> &Option<CSSRuleNode>;
+    fn owner_rule(&self) -> &Option<Box<dyn CSSRuleExt>>;
 
-    fn css_rules(&self) -> &Vec<CSSRuleNode>;
-    fn css_rules_mut(&mut self) -> &mut Vec<CSSRuleNode>;
+    fn css_rules(&self) -> &Vec<Box<dyn CSSRuleExt>>;
+    fn css_rules_mut(&mut self) -> &mut Vec<Box<dyn CSSRuleExt>>;
 
     fn insert_rule(&mut self, rule: Vec<CSSToken>, index: Option<usize>) -> Result<usize, String>;
     fn delete_rule(&mut self, index: usize) -> Result<(), String>;
@@ -406,15 +486,15 @@ impl CSSStyleSheetExt for CSSStyleSheet {
         }
     }
 
-    fn owner_rule(&self) -> &Option<CSSRuleNode> {
+    fn owner_rule(&self) -> &Option<Box<dyn CSSRuleExt>> {
         &self._owner_rule
     }
 
-    fn css_rules(&self) -> &Vec<CSSRuleNode> {
+    fn css_rules(&self) -> &Vec<Box<dyn CSSRuleExt>> {
         &self._css_rules
     }
 
-    fn css_rules_mut(&mut self) -> &mut Vec<CSSRuleNode> {
+    fn css_rules_mut(&mut self) -> &mut Vec<Box<dyn CSSRuleExt>> {
         &mut self._css_rules
     }
 
@@ -424,9 +504,11 @@ impl CSSStyleSheetExt for CSSStyleSheet {
         if idx > self._css_rules.len() {
             return Err("Index out of bounds".to_string());
         }
-        todo!("Parse CSSToken vector into CSSRule and insert into stylesheet");
+
         // self._css_rules.insert(idx, CSSRule);
-        Ok(idx)
+        // Ok(idx)
+
+        todo!("Parse CSSToken vector into CSSRule and insert into stylesheet");
     }
 
     fn delete_rule(&mut self, index: usize) -> Result<(), String> {

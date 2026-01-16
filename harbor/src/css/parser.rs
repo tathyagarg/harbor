@@ -9,30 +9,33 @@ use crate::{
     infra::{self, *},
 };
 
-#[derive(Clone, PartialEq)]
-pub struct Function(String, Vec<ComponentValue>);
+#[derive(Debug, Clone, PartialEq)]
+pub struct Function(pub String, pub Vec<ComponentValue>);
 
-#[derive(Clone, PartialEq)]
-pub struct SimpleBlock(CSSToken, Vec<ComponentValue>);
+#[derive(Debug, Clone, PartialEq)]
+pub struct SimpleBlock(pub CSSToken, pub Vec<ComponentValue>);
 
-#[derive(Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ComponentValue {
     Token(CSSToken),
     Function(Function),
     SimpleBlock(SimpleBlock),
 }
 
+#[derive(Debug)]
 struct QualifiedRule {
     prelude: Vec<ComponentValue>,
     block: SimpleBlock,
 }
 
+#[derive(Debug)]
 pub struct AtRule {
     name: String,
     prelude: Vec<ComponentValue>,
     block: Option<SimpleBlock>,
 }
 
+#[derive(Debug)]
 enum Rule {
     QualifiedRule(QualifiedRule),
     AtRule(AtRule),
@@ -58,6 +61,29 @@ pub fn preprocess(input: &String) -> String {
     result
 }
 
+fn consume_function(stream: &mut InputStream<CSSToken>) -> Function {
+    let name_token = stream.current();
+
+    let name = match name_token {
+        CSSToken::Function(func_name) => func_name,
+        _ => panic!("Expected function token"),
+    };
+
+    let mut function = Function(name, Vec::new());
+
+    loop {
+        match stream.consume() {
+            None => return function,
+            Some(CSSToken::RightParenthesis) => return function,
+            Some(_) => {
+                stream.reconsume();
+                let component_value = consume_component_value(stream);
+                function.1.push(component_value);
+            }
+        }
+    }
+}
+
 fn normalize_string_to_tokens(input: String) -> Vec<CSSToken> {
     let filtered = preprocess(&input);
     tokenize_from_string(filtered)
@@ -65,15 +91,15 @@ fn normalize_string_to_tokens(input: String) -> Vec<CSSToken> {
 
 fn consume_component_value(stream: &mut InputStream<CSSToken>) -> ComponentValue {
     match stream.consume() {
-        Some(token @ CSSToken::LeftCurlyBracket)
-        | Some(token @ CSSToken::LeftSquareBracket)
-        | Some(token @ CSSToken::LeftParenthesis) => {
+        Some(
+            CSSToken::LeftCurlyBracket | CSSToken::LeftSquareBracket | CSSToken::LeftParenthesis,
+        ) => {
             let simple_block = consume_simple_block(stream);
             ComponentValue::SimpleBlock(simple_block)
         }
         Some(CSSToken::Function(_)) => {
-            stream.reconsume();
-            todo!("Consume a function");
+            let function = consume_function(stream);
+            ComponentValue::Function(function)
         }
         Some(token) => ComponentValue::Token(token),
         None => panic!("No more tokens to consume"),
@@ -302,7 +328,7 @@ fn parse_list_of_declarations(inp: String) -> Vec<DeclarationOrAtRule> {
 /// However, this is a LONG, and extremely tedious process which will require individual grammars
 /// for each CSS property. For now, we will just parse the declaration block into individual declarations
 /// without validating them.
-fn parse_css_declaration_block(input: String) -> Vec<CSSDeclaration> {
+pub fn parse_css_declaration_block(input: String) -> Vec<CSSDeclaration> {
     let declarations_or_at_rules = parse_list_of_declarations(input);
     let mut declarations = Vec::new();
 
@@ -322,6 +348,8 @@ pub fn parse_stylesheet(
 ) {
     let mut stylesheet = CSSStyleSheet::new(None, document);
     stylesheet.set_location(location.unwrap_or_default());
+
+    println!("List: {:#?}", consume_list_of_rules(stream, true))
 
     // *stylesheet.css_rules_mut() = consume_list_of_rules(streamtrue);
 }

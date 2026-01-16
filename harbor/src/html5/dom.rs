@@ -3,9 +3,10 @@ use std::ops::Deref;
 use std::rc::Weak;
 use std::{cell::RefCell, rc::Rc};
 
+use crate::infra::Serializable;
 use crate::{
     html5::{HTML_NAMESPACE, parse::Token, tag_groups::*},
-    http::{self, url::Serializable},
+    http::{self},
 };
 
 type DOMString = String;
