@@ -15,16 +15,19 @@ pub enum NumberType {
     Number,
 }
 
+#[derive(Debug, Clone)]
+pub struct HashToken {
+    pub value: String,
+    pub hash_type: HashType,
+}
+
 /// https://www.w3.org/TR/css-syntax-3/#tokenization
 #[derive(Debug, Clone)]
 pub enum CSSToken {
     Ident(String),
     Function(String),
     AtKeyword(String),
-    Hash {
-        value: String,
-        hash_type: HashType,
-    },
+    Hash(HashToken),
     String(String),
     BadString,
     URL(String),
@@ -61,7 +64,7 @@ impl CSSToken {
             CSSToken::Ident(value)
             | CSSToken::Function(value)
             | CSSToken::AtKeyword(value)
-            | CSSToken::Hash { value, .. }
+            | CSSToken::Hash(HashToken { value, .. })
             | CSSToken::String(value)
             | CSSToken::URL(value) => value.clone(),
             _ => String::new(),
@@ -79,14 +82,14 @@ impl PartialEq for CSSToken {
             CSSToken::Number { .. } | CSSToken::Percentage(_) | CSSToken::Dimension { .. }
         ) {
             false
-        } else if let CSSToken::Hash {
+        } else if let CSSToken::Hash(HashToken {
             value: value_a,
             hash_type: hash_type_a,
-        } = self
-            && let CSSToken::Hash {
+        }) = self
+            && let CSSToken::Hash(HashToken {
                 value: value_b,
                 hash_type: hash_type_b,
-            } = other
+            }) = other
         {
             value_a == value_b && hash_type_a == hash_type_b
         } else if let CSSToken::String(value_a) = self
@@ -416,7 +419,7 @@ fn consume(stream: &mut InputStream<char>) -> CSSToken {
                     if stream.peek().is_some_and(|ch| char_is_ident(ch))
                         || stream_is_valid_escape(stream)
                     {
-                        let mut hash = CSSToken::Hash {
+                        let mut hash = HashToken {
                             value: String::new(),
                             hash_type: HashType::Unrestricted,
                         };
@@ -425,19 +428,14 @@ fn consume(stream: &mut InputStream<char>) -> CSSToken {
                             .peek_range(1, 3)
                             .is_some_and(|s| would_start_ident(s))
                         {
-                            if let CSSToken::Hash { hash_type, .. } = &mut hash {
-                                *hash_type = HashType::ID;
-                            }
+                            hash.hash_type = HashType::ID;
                         }
 
                         let value = consume_ident_seq(stream);
-                        return CSSToken::Hash {
+                        return CSSToken::Hash(HashToken {
                             value,
-                            hash_type: match hash {
-                                CSSToken::Hash { hash_type, .. } => hash_type,
-                                _ => HashType::Unrestricted,
-                            },
-                        };
+                            hash_type: hash.hash_type,
+                        });
                     }
 
                     return CSSToken::Delim(ch);

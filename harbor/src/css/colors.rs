@@ -1,6 +1,6 @@
 use crate::css::{
     parser::{ComponentValue, Function},
-    tokenize::CSSToken,
+    tokenize::{CSSToken, HashToken},
 };
 
 /// Name              Light Mode   Dark Mode
@@ -297,7 +297,7 @@ pub fn is_color(token: &ComponentValue) -> bool {
         // <named-color>
         ComponentValue::Token(CSSToken::Ident(name)) if get_named_color(name).is_some() => true,
         // <hex-color>
-        ComponentValue::Token(CSSToken::Hash{ value: val, .. }) => match val.len() {
+        ComponentValue::Token(CSSToken::Hash(HashToken{ value: val, .. })) => match val.len() {
             // #RRGGBB, #RGB, #RRGGBBAA, #RGBA
             3 | 6 | 4 | 8 => val.chars().all(|c| c.is_ascii_hexdigit()),
             _ => false,

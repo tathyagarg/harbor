@@ -6,7 +6,7 @@ use crate::{
         tokenize::{CSSToken, tokenize_from_string},
     },
     html5::dom::Document,
-    infra::{self, *},
+    infra::*,
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -51,7 +51,7 @@ pub fn preprocess(input: &String) -> String {
     let mut result = String::new();
 
     for ch in step_1.chars() {
-        if infra::is_surrogate(ch as u32) {
+        if is_surrogate(ch as u32) {
             result.push('\u{FFFD}');
         } else {
             result.push(ch);
@@ -60,6 +60,8 @@ pub fn preprocess(input: &String) -> String {
 
     result
 }
+
+fn parse_selector_list(tokens: Vec<CSSToken>) {}
 
 fn consume_function(stream: &mut InputStream<CSSToken>) -> Function {
     let name_token = stream.current();

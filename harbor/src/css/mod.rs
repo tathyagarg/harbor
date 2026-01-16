@@ -3,5 +3,6 @@ pub mod colors;
 pub mod cssom;
 pub mod layout;
 pub mod parser;
+pub mod selectors;
 pub mod tokenize;
 pub mod values;

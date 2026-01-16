@@ -7,6 +7,7 @@ use crate::{
     css::{
         colors::is_color,
         parser::{AtRule, ComponentValue, parse_css_declaration_block},
+        selectors::Selector,
         tokenize::CSSToken,
         values::angles::{is_angle_unit, to_canonical_angle},
     },
@@ -30,20 +31,6 @@ impl Serializable for ComponentValue {
             _ => todo!(),
         }
     }
-}
-
-/// https://www.w3.org/TR/selectors-4/#structure
-/// A selector represents a particular pattern of element(s) in a tree structure.
-/// The term selector can refer to a simple selector, compound selector, complex selector,
-/// or selector list
-///
-/// NOTE:
-/// Selector List is TBI
-#[derive(Clone)]
-pub enum Selector {
-    Simple(String),
-    Compound(Vec<Selector>),
-    Complex(Vec<Selector>),
 }
 
 pub enum DeclarationOrAtRule {
@@ -312,6 +299,86 @@ impl CSSRuleNode<CSSImportRuleData> {
 
     pub fn media(&self) -> &MediaList {
         &self.payload._style_sheet._media
+    }
+}
+
+#[derive(Clone)]
+pub struct CSSGroupingRuleData {}
+
+pub trait CSSGroupingRuleExt {
+    fn css_rules(&self) -> &Vec<Box<dyn CSSRuleExt>>;
+
+    fn insert_rule(
+        &mut self,
+        rule: Vec<Box<dyn CSSRuleExt>>,
+        index: Option<usize>,
+    ) -> Result<usize, String>;
+
+    fn delete_rule(&mut self, index: usize) -> Result<(), String>;
+}
+
+impl CSSGroupingRuleExt for CSSRuleNode<CSSGroupingRuleData> {
+    fn css_rules(&self) -> &Vec<Box<dyn CSSRuleExt>> {
+        &self._css_rules
+    }
+
+    fn insert_rule(
+        &mut self,
+        rule: Vec<Box<dyn CSSRuleExt>>,
+        index: Option<usize>,
+    ) -> Result<usize, String> {
+        eprintln!(
+            "Inserting rule into grouping rule: Ensure compliance with spec: https://www.w3.org/TR/cssom-1/#insert-a-css-rule"
+        );
+        let idx = index.unwrap_or(self._css_rules.len());
+        if idx > self._css_rules.len() {
+            return Err("Index out of bounds".to_string());
+        }
+
+        for r in rule {
+            self._css_rules.insert(idx, r);
+        }
+
+        Ok(idx)
+    }
+
+    fn delete_rule(&mut self, index: usize) -> Result<(), String> {
+        if index >= self._css_rules.len() {
+            return Err("Index out of bounds".to_string());
+        }
+        self._css_rules.remove(index);
+        Ok(())
+    }
+}
+
+// TODO: Implement CSSMediaRule
+// https://www.w3.org/TR/css-conditional-3/#the-cssmediarule-interface
+
+// TODO: Implement CSSPageRule
+// https://www.w3.org/TR/cssom-1/#the-csspagerule-interface
+// https://www.w3.org/TR/css-page-3/#page-selectors
+
+// TODO: Implement CSSMarginRule
+// https://www.w3.org/TR/cssom-1/#the-cssmarginrule-interface
+
+#[derive(Clone)]
+pub struct CSSNamespaceRuleData {
+    _prefix: Option<String>,
+
+    _namespace_uri: String,
+}
+
+impl CSSRuleNode<CSSNamespaceRuleData> {
+    pub fn prefix(&self) -> String {
+        self.payload
+            ._prefix
+            .as_ref()
+            .unwrap_or(&String::new())
+            .clone()
+    }
+
+    pub fn namespace_uri(&self) -> &String {
+        &self.payload._namespace_uri
     }
 }
 
