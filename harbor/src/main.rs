@@ -43,7 +43,6 @@ fn main() {
         None,
     );
 
-    println!("CSS Tokens: {:#?}", tokens);
     println!("Parsed Stylesheet: {:#?}", parsed);
 
     // let mut tokenizer = css::parser::CSSParser::new(css_content);

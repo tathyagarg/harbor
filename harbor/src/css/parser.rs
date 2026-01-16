@@ -2,7 +2,10 @@ use std::{cell::RefCell, rc::Weak};
 
 use crate::{
     css::{
-        cssom::{CSSDeclaration, CSSStyleSheet, CSSStyleSheetExt, DeclarationOrAtRule},
+        cssom::{
+            CSSDeclaration, CSSRuleExt, CSSRuleNode, CSSRuleType, CSSStyleRuleData, CSSStyleSheet,
+            CSSStyleSheetExt, DeclarationOrAtRule,
+        },
         selectors::parse_tokens_as_selector_list,
         tokenize::{CSSToken, tokenize_from_string},
     },
@@ -247,6 +250,10 @@ fn consume_declaration_from_cvs(cvs: &mut InputStream<ComponentValue>) -> Option
                 .take(2)
                 .collect::<Vec<_>>();
 
+            if last2.len() < 2 {
+                return Some(declaration);
+            }
+
             let (i1, last) = last2[0].clone();
             let (i2, second_last) = last2[1].clone();
 
@@ -348,9 +355,11 @@ pub fn parse_stylesheet(
     stream: &mut InputStream<CSSToken>,
     document: Weak<RefCell<Document>>,
     location: Option<String>,
-) {
+) -> CSSStyleSheet {
     let mut stylesheet = CSSStyleSheet::new(None, document);
     stylesheet.set_location(location.unwrap_or_default());
+
+    let mut rules = Vec::<Box<dyn CSSRuleExt>>::new();
 
     for rule in consume_list_of_rules(stream, true) {
         match rule {
@@ -371,11 +380,72 @@ pub fn parse_stylesheet(
                     })
                     .collect::<Vec<CSSToken>>();
 
-                let selector = parse_tokens_as_selector_list(prelude_to_tokens);
-                println!("Qualified Rule Selector: {:#?}", selector);
+                let selectors =
+                    parse_tokens_as_selector_list(prelude_to_tokens).unwrap_or(Vec::new());
+
+                let tokens = &qualified_rule
+                    .block
+                    .1
+                    .into_iter()
+                    .filter_map(|cv| {
+                        if let ComponentValue::Token(token) = cv {
+                            Some(vec![token])
+                        } else if let ComponentValue::Function(func) = cv {
+                            let mut tokens = vec![CSSToken::Function(func.0)];
+                            for arg in func.1 {
+                                if let ComponentValue::Token(t) = arg {
+                                    tokens.push(t);
+                                }
+                            }
+                            tokens.push(CSSToken::RightParenthesis);
+                            Some(tokens)
+                        } else if let ComponentValue::SimpleBlock(block) = cv {
+                            let mut tokens = vec![block.0.clone()];
+                            for item in block.1 {
+                                if let ComponentValue::Token(t) = item {
+                                    tokens.push(t);
+                                }
+                            }
+                            let ending_token = match block.0 {
+                                CSSToken::LeftCurlyBracket => CSSToken::RightCurlyBracket,
+                                CSSToken::LeftSquareBracket => CSSToken::RightSquareBracket,
+                                CSSToken::LeftParenthesis => CSSToken::RightParenthesis,
+                                _ => panic!("Invalid starting token for simple block"),
+                            };
+                            tokens.push(ending_token);
+                            Some(tokens)
+                        } else {
+                            None
+                        }
+                    })
+                    .flatten()
+                    .collect::<Vec<CSSToken>>();
+
+                let declarations = consume_list_of_declarations(&mut InputStream::new(&tokens))
+                    .iter()
+                    .filter_map(|item| {
+                        if let DeclarationOrAtRule::Declaration(decl) = item {
+                            Some(decl.clone())
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<CSSDeclaration>>();
+
+                let style_rule = CSSRuleNode::<CSSStyleRuleData>::new(
+                    CSSRuleType::Style,
+                    String::new(),
+                    None,
+                    None,
+                    CSSStyleRuleData::new(selectors, declarations),
+                );
+
+                rules.push(Box::new(style_rule) as Box<dyn CSSRuleExt>);
             }
         }
     }
 
-    // *stylesheet.css_rules_mut() = consume_list_of_rules(streamtrue);
+    *stylesheet.css_rules_mut() = rules;
+
+    stylesheet
 }

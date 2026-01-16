@@ -1,13 +1,13 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
 
-use std::{cell::RefCell, rc::Weak};
+use std::{cell::RefCell, fmt::Debug, rc::Weak};
 
 use crate::{
     css::{
         colors::is_color,
         parser::{AtRule, ComponentValue, parse_css_declaration_block},
-        selectors::Selector,
+        selectors::{Selector, SelectorList},
         tokenize::CSSToken,
         values::angles::{is_angle_unit, to_canonical_angle},
     },
@@ -33,12 +33,13 @@ impl Serializable for ComponentValue {
     }
 }
 
+#[derive(Debug)]
 pub enum DeclarationOrAtRule {
     Declaration(CSSDeclaration),
     AtRule(AtRule),
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct CSSDeclaration {
     /// The property name of the declaration.
     pub property_name: String,
@@ -158,7 +159,7 @@ impl CSSStyleDeclaration for CSSDeclarationBlock {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum CSSRuleType {
     Unknown = 0,
     Style = 1,
@@ -177,7 +178,7 @@ pub enum CSSRuleType {
     Viewport = 15,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct CSSRuleNode<T>
 where
     T: Clone,
@@ -205,7 +206,7 @@ where
     pub payload: T,
 }
 
-pub trait CSSRuleExt: CSSRuleExtClone {
+pub trait CSSRuleExt: CSSRuleExtClone + Debug {
     fn text(&self) -> &String;
 
     fn parent_rule(&self) -> &Option<Box<dyn CSSRuleExt>>;
@@ -220,7 +221,7 @@ pub trait CSSRuleExtClone {
 
 impl<T> CSSRuleExtClone for CSSRuleNode<T>
 where
-    T: Clone + 'static,
+    T: Debug + Clone + 'static,
 {
     fn clone_box(&self) -> Box<dyn CSSRuleExt> {
         Box::new(self.clone())
@@ -235,7 +236,7 @@ impl Clone for Box<dyn CSSRuleExt> {
 
 impl<T> CSSRuleExt for CSSRuleNode<T>
 where
-    T: Clone + 'static,
+    T: Debug + Clone + 'static,
 {
     fn text(&self) -> &String {
         &self._text
@@ -254,11 +255,42 @@ where
     }
 }
 
-#[derive(Clone)]
+impl<T> CSSRuleNode<T>
+where
+    T: Clone,
+{
+    pub fn new(
+        rule_type: CSSRuleType,
+        text: String,
+        parent_rule: Option<Box<dyn CSSRuleExt>>,
+        parent_style_sheet: Option<Weak<RefCell<CSSStyleSheet>>>,
+        payload: T,
+    ) -> Self {
+        CSSRuleNode {
+            _type: rule_type,
+            _text: text,
+            _parent_rule: parent_rule,
+            _parent_style_sheet: parent_style_sheet,
+            _css_rules: Vec::new(),
+            payload,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct CSSStyleRuleData {
-    pub selectors: Vec<Selector>,
+    pub selectors: SelectorList,
 
     declarations: Vec<CSSDeclaration>,
+}
+
+impl CSSStyleRuleData {
+    pub fn new(selectors: SelectorList, declarations: Vec<CSSDeclaration>) -> Self {
+        CSSStyleRuleData {
+            selectors,
+            declarations,
+        }
+    }
 }
 
 impl CSSRuleNode<CSSStyleRuleData> {
@@ -382,10 +414,10 @@ impl CSSRuleNode<CSSNamespaceRuleData> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct MediaList;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct CSSStyleSheet {
     /// The type of the stylesheet (e.g., "text/css").
     pub _type: String,

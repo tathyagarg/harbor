@@ -23,14 +23,14 @@ pub enum Selector {
 ///
 /// NOTE:
 /// Ends with a `|` in the grammar, but we don't need to store that
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct NSPrefix {
     /// NOTE: Should be taken from ident token value or may be `'*'`
     pub prefix: Option<String>,
 }
 
 /// https://www.w3.org/TR/selectors-4/#typedef-wq-name
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WQName {
     pub namespace: Option<NSPrefix>,
 
@@ -38,7 +38,7 @@ pub struct WQName {
     pub local_name: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum TypeSelector {
     WQName(WQName),
 
@@ -49,7 +49,7 @@ pub enum TypeSelector {
 
 pub type UniversalSelector = TypeSelector;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum AttributeSelector {
     Exists(WQName),
     /// NOTE: .2 is canonically [ <ident-token> | <string-token> ]
@@ -57,7 +57,7 @@ pub enum AttributeSelector {
     WithMatcher(WQName, AttrMatcher, String, Option<AttrModifier>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum AttrMatcher {
     Equal,          // =
     Includes,       // ~=
@@ -67,7 +67,7 @@ pub enum AttrMatcher {
     SubstringMatch, // *=
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum AttrModifier {
     CaseInsensitive, // i
     CaseSensitive,   // s
@@ -80,7 +80,7 @@ pub type IDSelector = HashToken;
 pub type ClassSelector = String;
 
 /// NOTE: Prefixed `:` is implied
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum PseudoClassSelector {
     Raw(String),
 
@@ -94,7 +94,7 @@ pub enum PseudoClassSelector {
 /// NOTE: Prefixed `::` is implied
 type PseudoElementSelector = PseudoClassSelector;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum SubclassSelector {
     IDSelector(IDSelector),
     ClassSelector(ClassSelector),
@@ -109,14 +109,14 @@ pub enum SimpleSelector {
     SubclassSelector(SubclassSelector),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CompoundSelector {
     pub type_selector: Option<TypeSelector>,
     pub subclass_selectors: Vec<SubclassSelector>,
     pub pseudo_selectors: Vec<(PseudoElementSelector, Vec<PseudoClassSelector>)>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Combinator {
     Child,        // >
     NextSibling,  // +
@@ -126,7 +126,7 @@ pub enum Combinator {
                   // Tables Combinator is TBI
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ComplexSelector {
     pub compound: CompoundSelector,
     pub combinators: Vec<(Combinator, CompoundSelector)>,
@@ -404,9 +404,6 @@ fn parse_id_selector(tokens: &mut InputStream<CSSToken>) -> Option<IDSelector> {
 
 /// <class-selector> = '.' <ident-token>
 fn parse_class_selector(tokens: &mut InputStream<CSSToken>) -> Option<ClassSelector> {
-    println!("Parsing class selector, peek: {:?}", tokens.peek());
-    println!("Peek nth 2: {:?}", tokens.peek_nth(1));
-
     if let Some(CSSToken::Delim('.')) = tokens.peek()
         && let Some(CSSToken::Ident(ident)) = tokens.peek_nth(1)
     {
@@ -570,8 +567,6 @@ pub fn parse_tokens_as_selector_list(tokens: Vec<CSSToken>) -> Option<SelectorLi
         .into_iter()
         .filter(|t| !matches!(t, CSSToken::Whitespace))
         .collect::<Vec<_>>();
-
-    println!("Filtered Tokens: {:?}", filtered_tokens);
 
     let mut tokens_stream = InputStream::new(&filtered_tokens[..]);
 
