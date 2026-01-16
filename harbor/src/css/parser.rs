@@ -3,6 +3,7 @@ use std::{cell::RefCell, rc::Weak};
 use crate::{
     css::{
         cssom::{CSSDeclaration, CSSStyleSheet, CSSStyleSheetExt, DeclarationOrAtRule},
+        selectors::parse_tokens_as_selector_list,
         tokenize::{CSSToken, tokenize_from_string},
     },
     html5::dom::Document,
@@ -351,7 +352,30 @@ pub fn parse_stylesheet(
     let mut stylesheet = CSSStyleSheet::new(None, document);
     stylesheet.set_location(location.unwrap_or_default());
 
-    println!("List: {:#?}", consume_list_of_rules(stream, true))
+    for rule in consume_list_of_rules(stream, true) {
+        match rule {
+            Rule::AtRule(at_rule) => {
+                println!("At-Rule: {:#?}", at_rule);
+            }
+            Rule::QualifiedRule(qualified_rule) => {
+                let prelude = qualified_rule.prelude;
+
+                let prelude_to_tokens = prelude
+                    .into_iter()
+                    .filter_map(|cv| {
+                        if let ComponentValue::Token(token) = cv {
+                            Some(token)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<CSSToken>>();
+
+                let selector = parse_tokens_as_selector_list(prelude_to_tokens);
+                println!("Qualified Rule Selector: {:#?}", selector);
+            }
+        }
+    }
 
     // *stylesheet.css_rules_mut() = consume_list_of_rules(streamtrue);
 }

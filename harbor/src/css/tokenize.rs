@@ -541,6 +541,7 @@ fn consume(stream: &mut InputStream<char>) -> CSSToken {
 }
 
 pub fn tokenize(stream: &mut InputStream<char>) -> Vec<CSSToken> {
+    println!("Starting tokenization...");
     let mut tokens = Vec::new();
 
     loop {

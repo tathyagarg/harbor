@@ -88,6 +88,7 @@ pub fn char_is_non_printable(ch: char) -> bool {
         || (code & 0xFFFE) == 0xFFFE && code >= 0xFFFE && code <= 0x10FFFF
 }
 
+#[derive(Clone)]
 pub struct InputStream<T> {
     input: Vec<T>,
     pos: usize,
@@ -121,6 +122,10 @@ where
             return Some(self.current());
         }
 
+        if !self.is_started {
+            return Some(self.current());
+        }
+
         if self.pos + 1 >= self.input.len() {
             return None;
         }
@@ -130,6 +135,14 @@ where
 
     pub fn peek_nth(&self, n: usize) -> Option<T> {
         let diff = if self.is_reconsume { 0 } else { 1 };
+
+        if !self.is_started {
+            if self.pos + diff + n - 1 >= self.input.len() {
+                return None;
+            }
+
+            return Some(self.input[self.pos + diff + n - 1].clone());
+        }
 
         if self.pos + diff + n >= self.input.len() {
             return None;
@@ -148,6 +161,7 @@ where
 
     fn advance(&mut self) -> Option<T> {
         if self.pos + 1 >= self.input.len() {
+            self.is_started = true;
             self.is_eof = true;
             return None;
         }
