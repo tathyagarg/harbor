@@ -1,18 +1,20 @@
-use std::{collections::HashMap, ops::Deref, rc::Rc};
+use std::{collections::HashMap, ops::Deref, rc::Rc, sync::LazyLock};
 
 use crate::{
     css::{layout::Layout, parser::preprocess, tokenize::tokenize},
     infra::InputStream,
 };
 
-mod css;
-mod font;
-mod html5;
-mod http;
-mod infra;
-mod render;
+pub mod css;
+pub mod font;
+pub mod globals;
+pub mod html5;
+pub mod http;
+pub mod infra;
+pub mod render;
 
 use crate::css::parser::parse_stylesheet;
+use crate::font::ttf::ParsedTableDirectory;
 use winit::event_loop::EventLoop;
 
 fn main() {
@@ -26,11 +28,6 @@ fn main() {
     let mut parser = html5::parse::Parser::new(&mut stream);
 
     parser.parse();
-
-    println!(
-        "Parsed HTML Document: {:#?}",
-        parser.document.document.borrow().deref()
-    );
 
     // let mut tokenizer = css::parser::CSSParser::new(css_content);
 
@@ -73,14 +70,9 @@ fn main() {
 
     // println!("Layout Tree: {:#?}", layout.root_box);
 
-    let fira_code = font::parse_ttf(include_bytes!("../../assets/fonts/FiraCode.ttf"));
-    let times =
-        &font::parse_ttc(include_bytes!("../../assets/fonts/Times.ttc")).table_directories[0];
-    let sfns = font::parse_ttf(include_bytes!("../../assets/fonts/SFNS.ttf"));
-
-    layout.register_font("Times New Roman", times.complete());
-    layout.register_font("FiraCode", fira_code.complete());
-    layout.register_font("SFNS", sfns.complete());
+    // layout.register_font("Times New Roman", times.complete());
+    // layout.register_font("FiraCode", fira_code.complete());
+    // layout.register_font("SFNS", sfns.complete());
 
     let event_loop = EventLoop::with_user_event().build().unwrap();
     event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);

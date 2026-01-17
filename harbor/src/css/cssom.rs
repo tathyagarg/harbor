@@ -692,6 +692,7 @@ impl Eq for DocumentOrShadowRootStyle {}
 #[derive(Default, Clone, Debug)]
 pub struct ComputedStyle {
     pub color: Color,
+    pub background_color: Color,
 }
 
 impl PartialEq for ComputedStyle {

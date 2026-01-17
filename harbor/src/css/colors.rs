@@ -318,22 +318,41 @@ pub fn is_color_function(name: &str) -> bool {
     )
 }
 
-pub fn hex_to_rgb(hex: &str) -> [f32; 3] {
+pub fn hex_to_rgb(hex: &str) -> UsedColor {
     let hex = hex.trim_start_matches('#');
-    let (r, g, b) = match hex.len() {
+    let (r, g, b, a) = match hex.len() {
         3 => (
             u8::from_str_radix(&hex[0..1].repeat(2), 16).unwrap_or(0),
             u8::from_str_radix(&hex[1..2].repeat(2), 16).unwrap_or(0),
             u8::from_str_radix(&hex[2..3].repeat(2), 16).unwrap_or(0),
+            100.0,
+        ),
+        4 => (
+            u8::from_str_radix(&hex[0..1].repeat(2), 16).unwrap_or(0),
+            u8::from_str_radix(&hex[1..2].repeat(2), 16).unwrap_or(0),
+            u8::from_str_radix(&hex[2..3].repeat(2), 16).unwrap_or(0),
+            u8::from_str_radix(&hex[3..4].repeat(2), 16).unwrap_or(0) as f32 * 100.0 / 255.0,
         ),
         6 => (
             u8::from_str_radix(&hex[0..2], 16).unwrap_or(0),
             u8::from_str_radix(&hex[2..4], 16).unwrap_or(0),
             u8::from_str_radix(&hex[4..6], 16).unwrap_or(0),
+            100.0,
         ),
-        _ => (0, 0, 0),
+        8 => (
+            u8::from_str_radix(&hex[0..2], 16).unwrap_or(0),
+            u8::from_str_radix(&hex[2..4], 16).unwrap_or(0),
+            u8::from_str_radix(&hex[4..6], 16).unwrap_or(0),
+            u8::from_str_radix(&hex[6..8], 16).unwrap_or(0) as f32 * 100.0 / 255.0,
+        ),
+        _ => (0, 0, 0, 100.0),
     };
-    [r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0]
+    [
+        r as f32 / 255.0,
+        g as f32 / 255.0,
+        b as f32 / 255.0,
+        a / 100.0,
+    ]
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -350,6 +369,10 @@ impl Default for Color {
 }
 
 impl Color {
+    pub fn transparent() -> Self {
+        Color::Hex(String::from("#00000000"))
+    }
+
     pub fn parse_from_cv(cvs: &Vec<ComponentValue>) -> Option<Color> {
         if cvs.len() != 1 {
             return None;
@@ -369,13 +392,13 @@ impl Color {
         }
     }
 
-    pub fn used(&self) -> [f32; 3] {
+    pub fn used(&self) -> [f32; 4] {
         match self {
             Color::Named(name) => {
                 if let Some(hex) = get_named_color(name) {
                     hex_to_rgb(hex)
                 } else {
-                    [0.0, 0.0, 0.0]
+                    [0.0, 0.0, 0.0, 0.0]
                 }
             }
             Color::Hex(hex) => hex_to_rgb(hex),
@@ -385,3 +408,5 @@ impl Color {
         }
     }
 }
+
+pub type UsedColor = [f32; 4];

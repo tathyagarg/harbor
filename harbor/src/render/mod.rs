@@ -15,10 +15,12 @@ use winit::window::{Window, WindowId};
 use wgpu;
 
 use crate::css::r#box::{Box, BoxType};
+use crate::css::colors::UsedColor;
 use crate::css::layout::Layout;
 use crate::font::ttf::ParsedTableDirectory;
 use crate::html5::dom::Document;
 
+pub mod shapes;
 pub mod text;
 
 /// Converts RGBA values (0-255 for RGB, 0-100 for A) to wgpu::Color
@@ -106,7 +108,7 @@ impl TextRenderer {
     pub fn vertices(
         &mut self,
         text: String,
-        color: [f32; 3],
+        color: UsedColor,
         font_size: f32,
         position: (u32, u32),
     ) -> Vec<text::Vertex> {
@@ -161,7 +163,7 @@ impl TextRenderer {
         &mut self,
         device: &wgpu::Device,
         text: String,
-        color: [f32; 3],
+        color: UsedColor,
         font_size: f32,
         position: (u32, u32),
     ) {
@@ -208,7 +210,8 @@ pub struct WindowState {
 
     msaa_view: wgpu::TextureView,
 
-    render_pipeline: wgpu::RenderPipeline,
+    line_render_pipeline: wgpu::RenderPipeline,
+    fill_render_pipeline: wgpu::RenderPipeline,
 
     vertex_buffer: wgpu::Buffer,
     number_of_vertices: u32,
@@ -222,6 +225,128 @@ pub struct WindowState {
 }
 
 impl WindowState {
+    pub fn render_box(
+        &mut self,
+        layout_box: Box,
+        position: (f64, f64),
+        render_pass: &mut wgpu::RenderPass,
+    ) {
+        match layout_box._box_type {
+            BoxType::Block => {
+                render_pass.set_pipeline(&self.fill_render_pipeline);
+                if layout_box.associated_style.background_color.used()[3] > 0.0 {
+                    let bg_color = layout_box.associated_style.background_color.used();
+
+                    let window_size = self.window.inner_size();
+
+                    // println!("Box: {:#?}", layout_box);
+
+                    let pixel_x = layout_box.position().0 as f32 + position.0 as f32;
+                    let pixel_y = layout_box.position().1 as f32 + position.1 as f32;
+
+                    let x_pos = (pixel_x / window_size.width as f32) * 2.0 - 1.0;
+                    let y_pos = -((pixel_y / window_size.height as f32) * 2.0 - 1.0);
+
+                    let pixel_w = layout_box.content_edges().horizontal() as f32;
+                    let pixel_h = layout_box.content_edges().vertical() as f32;
+
+                    let width = (pixel_w / window_size.width as f32) * 2.0;
+                    let height = (pixel_h / window_size.height as f32) * 2.0;
+
+                    let verts = shapes::rectangle_at(x_pos, y_pos, width, height, bg_color);
+
+                    // println!("verts: {:#?}", verts);
+
+                    let bg_vertex_buffer =
+                        self.device
+                            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                                label: Some("Background Vertex Buffer"),
+                                contents: bytemuck::cast_slice(&verts),
+                                usage: wgpu::BufferUsages::VERTEX,
+                            });
+
+                    render_pass.set_vertex_buffer(0, bg_vertex_buffer.slice(..));
+                    render_pass.draw(0..verts.len() as u32, 0..1);
+                }
+            }
+            BoxType::Inline => {
+                render_pass.set_pipeline(&self.line_render_pipeline);
+                if layout_box.associated_node.is_some() {
+                    let node = layout_box.associated_node.as_ref().unwrap();
+
+                    match node.borrow().deref() {
+                        crate::html5::dom::NodeKind::Text(text_node) => {
+                            let text_content = text_node.borrow().data().to_string();
+
+                            if text_content.trim().is_empty() {
+                                return;
+                            }
+
+                            self.layout
+                                ._renderers
+                                .get_mut(
+                                    &layout_box
+                                        ._font_family
+                                        .clone()
+                                        .unwrap_or("Times New Roman".to_string()),
+                                )
+                                .and_then(|renderer_option| {
+                                    if let Some(renderer) = renderer_option {
+                                        let font_size =
+                                            layout_box._font_size.unwrap_or(16.0) as f32;
+
+                                        let verts = renderer.vertices(
+                                            text_content.clone(),
+                                            layout_box.associated_style.color.used(),
+                                            font_size,
+                                            (position.0 as u32, position.1 as u32),
+                                        );
+
+                                        if !verts.is_empty() {
+                                            renderer.update_vertex_buffer(
+                                                &self.device,
+                                                text_content.clone(),
+                                                layout_box.associated_style.color.used(),
+                                                font_size,
+                                                (position.0 as u32, position.1 as u32),
+                                            );
+
+                                            let key = (
+                                                text_content.clone(),
+                                                position.0 as u32,
+                                                position.1 as u32,
+                                                font_size as u32,
+                                            );
+
+                                            if let Some((buffer, count)) =
+                                                renderer.outline_vertex_buffers.get(&key)
+                                            {
+                                                render_pass.set_vertex_buffer(0, buffer.slice(..));
+                                                render_pass.draw(0..*count as u32, 0..1);
+                                            }
+                                        }
+                                    }
+
+                                    Some(())
+                                });
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            _ => {}
+        }
+
+        for child in &layout_box.children {
+            let new_position = (
+                layout_box.position().0 + position.0,
+                layout_box.position().1 + position.1,
+            );
+
+            self.render_box(child.borrow().clone(), new_position, render_pass);
+        }
+    }
+
     pub fn render(&mut self) {
         self.window.request_redraw();
 
@@ -267,118 +392,9 @@ impl WindowState {
                 timestamp_writes: None,
             });
 
-            _render_pass.set_pipeline(&self.render_pipeline);
-
-            if self.number_of_vertices > 0 {
-                _render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-                _render_pass.draw(0..self.number_of_vertices, 0..1);
-            }
-
-            fn render_box(
-                layout_box: Box,
-                position: (f64, f64),
-                layout: &mut Layout,
-                device: &wgpu::Device,
-                queue: &wgpu::Queue,
-                render_pass: &mut wgpu::RenderPass<'_>,
-            ) {
-                match layout_box._box_type {
-                    BoxType::Block => {}
-                    BoxType::Inline => {
-                        if layout_box.associated_node.is_some() {
-                            let node = layout_box.associated_node.as_ref().unwrap();
-
-                            match node.borrow().deref() {
-                                crate::html5::dom::NodeKind::Text(text_node) => {
-                                    let text_content = text_node.borrow().data().to_string();
-
-                                    if text_content.trim().is_empty() {
-                                        return;
-                                    }
-
-                                    layout
-                                        ._renderers
-                                        .get_mut(
-                                            &layout_box
-                                                ._font_family
-                                                .clone()
-                                                .unwrap_or("Times New Roman".to_string()),
-                                        )
-                                        .and_then(|renderer_option| {
-                                            if let Some(renderer) = renderer_option {
-                                                let font_size =
-                                                    layout_box._font_size.unwrap_or(16.0) as f32;
-
-                                                let verts = renderer.vertices(
-                                                    text_content.clone(),
-                                                    layout_box.associated_style.color.used(),
-                                                    font_size,
-                                                    (position.0 as u32, position.1 as u32),
-                                                );
-
-                                                if !verts.is_empty() {
-                                                    renderer.update_vertex_buffer(
-                                                        device,
-                                                        text_content.clone(),
-                                                        layout_box.associated_style.color.used(),
-                                                        font_size,
-                                                        (position.0 as u32, position.1 as u32),
-                                                    );
-
-                                                    let key = (
-                                                        text_content.clone(),
-                                                        position.0 as u32,
-                                                        position.1 as u32,
-                                                        font_size as u32,
-                                                    );
-
-                                                    if let Some((buffer, count)) =
-                                                        renderer.outline_vertex_buffers.get(&key)
-                                                    {
-                                                        render_pass
-                                                            .set_vertex_buffer(0, buffer.slice(..));
-                                                        render_pass.draw(0..*count as u32, 0..1);
-                                                    }
-                                                }
-                                            }
-
-                                            Some(())
-                                        });
-                                }
-                                _ => {}
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-
-                for child in &layout_box.children {
-                    let new_position = (
-                        layout_box.position().0 + position.0,
-                        layout_box.position().1 + position.1,
-                    );
-
-                    render_box(
-                        child.borrow().clone(),
-                        new_position,
-                        layout,
-                        device,
-                        queue,
-                        render_pass,
-                    );
-                }
-            }
-
             let root_box = self.layout.root_box.as_ref().unwrap().borrow().clone();
 
-            render_box(
-                root_box,
-                (0.0, 0.0),
-                &mut self.layout,
-                &self.device,
-                &self.queue,
-                &mut _render_pass,
-            );
+            self.render_box(root_box, (0.0, 0.0), &mut _render_pass);
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
@@ -467,7 +483,7 @@ impl WindowState {
                 push_constant_ranges: &[],
             });
 
-        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        let line_render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Render Pipeline"),
             layout: Some(&render_pipeline_layout),
             vertex: wgpu::VertexState {
@@ -481,7 +497,18 @@ impl WindowState {
                 entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: config.format,
-                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                    blend: Some(wgpu::BlendState {
+                        color: wgpu::BlendComponent {
+                            src_factor: wgpu::BlendFactor::SrcAlpha,
+                            dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                            operation: wgpu::BlendOperation::Add,
+                        },
+                        alpha: wgpu::BlendComponent {
+                            src_factor: wgpu::BlendFactor::One,
+                            dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                            operation: wgpu::BlendOperation::Add,
+                        },
+                    }),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
@@ -491,6 +518,55 @@ impl WindowState {
                 strip_index_format: None,
                 front_face: wgpu::FrontFace::Ccw,
                 cull_mode: Some(wgpu::Face::Back),
+                unclipped_depth: false,
+                polygon_mode: wgpu::PolygonMode::Fill,
+                conservative: false,
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState {
+                count: 4,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            multiview: None,
+            cache: None,
+        });
+
+        let fill_render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Fill Render Pipeline"),
+            layout: Some(&render_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs_main"),
+                buffers: &[text::Vertex::desc()],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("fs_main"),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: config.format,
+                    blend: Some(wgpu::BlendState {
+                        color: wgpu::BlendComponent {
+                            src_factor: wgpu::BlendFactor::SrcAlpha,
+                            dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                            operation: wgpu::BlendOperation::Add,
+                        },
+                        alpha: wgpu::BlendComponent {
+                            src_factor: wgpu::BlendFactor::One,
+                            dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                            operation: wgpu::BlendOperation::Add,
+                        },
+                    }),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: None,
                 unclipped_depth: false,
                 polygon_mode: wgpu::PolygonMode::Fill,
                 conservative: false,
@@ -527,7 +603,8 @@ impl WindowState {
             config,
             msaa_view,
             layout: populated_layout,
-            render_pipeline,
+            line_render_pipeline,
+            fill_render_pipeline,
             vertex_buffer,
             number_of_vertices,
             is_surface_configured: false,

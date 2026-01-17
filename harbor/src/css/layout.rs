@@ -1,10 +1,12 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::ops::{Deref, DerefMut};
+use std::ops::DerefMut;
 use std::rc::Rc;
 
 use crate::font::ttf::ParsedTableDirectory;
 use crate::render::TextRenderer;
+
+use crate::globals::FONTS;
 
 use crate::css::r#box;
 use crate::html5::dom::Document;
@@ -60,7 +62,7 @@ impl Layout {
     }
 
     pub fn populate_renderers(&mut self, window_size: (f32, f32)) {
-        for (font_name, font) in &self.available_fonts {
+        for (font_name, font) in FONTS.iter() {
             let renderer = TextRenderer::new()
                 .with_font(font.clone())
                 .with_window_size(window_size)

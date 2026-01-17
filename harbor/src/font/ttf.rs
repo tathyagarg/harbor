@@ -3,6 +3,7 @@
 
 use std::fmt::Debug;
 
+use crate::css::colors::UsedColor;
 use crate::font::otf_dtypes::*;
 use crate::font::tables::glyf::{CompositeGlyphFlags, GlyphDataType, Point};
 use crate::font::tables::os2::OS2Table;
@@ -741,7 +742,7 @@ impl ParsedTableDirectory {
     pub fn rasterize(
         &self,
         text: &str,
-        color: [f32; 3],
+        color: UsedColor,
         scale: f32,
         precision: f32,
         origin: (f32, f32),

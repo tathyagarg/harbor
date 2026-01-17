@@ -1,15 +1,18 @@
 use std::fmt::Debug;
 
-use crate::font::{
-    otf_dtypes::int16,
-    tables::glyf::{GlyphTransform, Point},
+use crate::{
+    css::colors::UsedColor,
+    font::{
+        otf_dtypes::int16,
+        tables::glyf::{GlyphTransform, Point},
+    },
 };
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Vertex {
     pub position: [f32; 3],
-    pub color: [f32; 3],
+    pub color: UsedColor,
 }
 
 impl Vertex {
@@ -37,7 +40,7 @@ impl Vertex {
         origin: (f32, f32),
         scale: f32,
         window_size: (f32, f32),
-        color: [f32; 3],
+        color: UsedColor,
     ) -> Vertex {
         let vertex_position = point.vertex_position(origin, scale);
 

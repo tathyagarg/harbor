@@ -10,9 +10,13 @@ use std::{
 use crate::{
     css::{
         colors::Color,
-        cssom::{CSSRuleNode, CSSRuleType, CSSStyleRuleData, CSSStyleSheetExt, ComputedStyle},
+        cssom::{
+            CSSDeclaration, CSSRuleNode, CSSRuleType, CSSStyleRuleData, CSSStyleSheetExt,
+            ComputedStyle,
+        },
         selectors::MatchesElement,
     },
+    globals::FONTS,
     html5::dom::{Document, Element, NodeKind},
 };
 
@@ -150,8 +154,8 @@ impl Debug for Box {
             // .field("border", &self._border)
             // .field("margin", &self._margin)
             .field("box_type", &self._box_type)
-            .field("position_x", &self._position_x.unwrap_or(-1.0))
-            .field("position_y", &self._position_y.unwrap_or(-1.0))
+            .field("position_x", &self._position_x.unwrap_or(-67.0))
+            .field("position_y", &self._position_y.unwrap_or(-67.0))
             .field("children_count", &self.children.len())
             .field("children", &self.children)
             .field(
@@ -314,8 +318,6 @@ impl Box {
                     }
                 } * mag;
 
-                println!("Font size for {}: {}", element.local_name, font_size);
-
                 let line_height = font_size * 1.2;
 
                 let this_box = Rc::new(RefCell::new(Box {
@@ -462,11 +464,27 @@ impl Box {
                     return (0.0, 0.0);
                 }
 
+                let font = FONTS.get(
+                    &self
+                        ._font_family
+                        .clone()
+                        .unwrap_or_else(|| "Times New Roman".to_string()),
+                );
+                let scale = self._font_size.unwrap_or(16.0) / font.unwrap().units_per_em() as f64;
+
                 let mut new_data = String::new();
                 for ch in text_node_rc.borrow().data().trim().chars() {
                     if ch != '\n' && ch != '\r' && ch != '\t' {
                         new_data.push(ch);
-                        pen_x += 7.0;
+                        let aw = font
+                            .and_then(|font| {
+                                font.advance_width(font.glyph_index(ch as u32).unwrap() as usize)
+                                    // .map(|aw| aw as f64 * self._font_size.unwrap_or(16.0))
+                                    .map(|aw| aw as f64 * scale)
+                            })
+                            .unwrap_or(8.0);
+
+                        pen_x += aw;
                     } else {
                         // TODO: handle pre
                     }
@@ -520,15 +538,6 @@ fn compute_element_styles(
     element: &mut Element,
     parents: Option<&Vec<&Element>>,
 ) {
-    println!(
-        "Element: {}, Parents: {:?}",
-        element.local_name,
-        parents.map(|v| v
-            .iter()
-            .map(|e| e.local_name.as_str())
-            .collect::<Vec<&str>>())
-    );
-
     let style_sheets = document.style_sheets();
 
     for stylesheet in style_sheets.style_sheets.iter() {
@@ -545,18 +554,7 @@ fn compute_element_styles(
                                 let style = element.style_mut();
 
                                 for declaration in style_rule.declarations() {
-                                    match declaration.property_name.as_str() {
-                                        "color" => {
-                                            style.color = Color::parse_from_cv(&declaration.value)
-                                                .unwrap_or(Color::default());
-                                        }
-                                        _ => {
-                                            todo!(
-                                                "Implement handling for property: {}",
-                                                declaration.property_name
-                                            );
-                                        }
-                                    }
+                                    handle_declaration(declaration, style);
                                 }
                             }
                         }
@@ -578,6 +576,24 @@ fn compute_element_styles(
         if let NodeKind::Element(child_element_rc) = child.deref() {
             let mut child_element = child_element_rc.borrow_mut();
             compute_element_styles(document, &mut child_element, Some(&new_parents));
+        }
+    }
+}
+
+fn handle_declaration(declaration: &CSSDeclaration, style: &mut ComputedStyle) {
+    match declaration.property_name.as_str() {
+        "color" => {
+            style.color = Color::parse_from_cv(&declaration.value).unwrap_or(Color::default());
+        }
+        "background-color" => {
+            style.background_color =
+                Color::parse_from_cv(&declaration.value).unwrap_or(Color::transparent());
+        }
+        _ => {
+            todo!(
+                "Implement handling for property: {}",
+                declaration.property_name
+            );
         }
     }
 }
