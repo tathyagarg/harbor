@@ -160,21 +160,25 @@ where
     }
 
     fn advance(&mut self) -> Option<T> {
-        if self.pos + 1 >= self.input.len() {
-            self.is_started = true;
-            self.is_eof = true;
-            return None;
-        }
-
         if !self.is_started {
             self.is_started = true;
             return Some(self.current());
         }
+
+        if self.pos + 1 >= self.input.len() {
+            self.is_eof = true;
+            return None;
+        }
+
         self.pos += 1;
         Some(self.current())
     }
 
     pub fn consume(&mut self) -> Option<T> {
+        if self.is_eof {
+            return None;
+        }
+
         if self.is_reconsume {
             self.is_reconsume = false;
             Some(self.current())

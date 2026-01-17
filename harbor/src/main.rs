@@ -32,24 +32,6 @@ fn main() {
         parser.document.document.borrow().deref()
     );
 
-    let css_content = preprocess(&include_str!("../../assets/css/gist1059266.css").to_string());
-    let char_slice = css_content.chars().collect::<Vec<char>>();
-    let slice = &char_slice[..];
-
-    println!("Tokenizing:\n{}\n", css_content);
-
-    let mut stream = InputStream::new(slice);
-    let tokens = tokenize(&mut stream);
-
-    let mut tok_stream = InputStream::new(&tokens[..]);
-    let parsed = parse_stylesheet(
-        &mut tok_stream,
-        Rc::downgrade(&parser.document.document),
-        None,
-    );
-
-    println!("Parsed Stylesheet: {:#?}", parsed);
-
     // let mut tokenizer = css::parser::CSSParser::new(css_content);
 
     // tokenizer.tokenize();

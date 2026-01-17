@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+use std::{any::Any, fmt::Debug};
+
 use crate::{
     css::tokenize::{CSSToken, HashToken},
     infra::InputStream,
@@ -44,7 +46,7 @@ pub enum TypeSelector {
 
     /// NOTE: Represents `<prefix>|*` in the grammar
     /// `'*'` is implied
-    Prefixed(NSPrefix),
+    Prefixed(Option<NSPrefix>),
 }
 
 pub type UniversalSelector = TypeSelector;
@@ -79,6 +81,12 @@ pub type IDSelector = HashToken;
 /// Prefixed `.` is implied
 pub type ClassSelector = String;
 
+#[derive(Debug, Clone)]
+pub enum PseudoClassArgs {
+    SelectorList(ComplexSelectorList),
+    Raw(Vec<CSSToken>),
+}
+
 /// NOTE: Prefixed `:` is implied
 #[derive(Debug, Clone)]
 pub enum PseudoClassSelector {
@@ -88,7 +96,7 @@ pub enum PseudoClassSelector {
     /// .0 taken from value of CSSToken::Function
     /// .1 is anything
     /// Implied end with `)`
-    Function(String, Vec<CSSToken>),
+    Function(String, PseudoClassArgs),
 }
 
 /// NOTE: Prefixed `::` is implied
@@ -126,10 +134,106 @@ pub enum Combinator {
                   // Tables Combinator is TBI
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ComplexSelector {
     pub compound: CompoundSelector,
     pub combinators: Vec<(Combinator, CompoundSelector)>,
+}
+
+pub trait Specificity {
+    fn specificity(&self) -> (u32, u32, u32);
+}
+
+impl Specificity for CompoundSelector {
+    fn specificity(&self) -> (u32, u32, u32) {
+        let mut a = 0;
+        let mut b = 0;
+        let mut c = 0;
+
+        // Type selector or universal selector
+        if let Some(TypeSelector::WQName(_)) = &self.type_selector {
+            c += 1;
+        }
+
+        // Subclass selectors
+        for subclass in &self.subclass_selectors {
+            match subclass {
+                SubclassSelector::IDSelector(_) => {
+                    a += 1;
+                }
+                SubclassSelector::ClassSelector(_) | SubclassSelector::AttributeSelector(_) => {
+                    b += 1;
+                }
+
+                SubclassSelector::PseudoClassSelector(pseudo) => match pseudo {
+                    PseudoClassSelector::Raw(_) => {
+                        b += 1;
+                    }
+                    PseudoClassSelector::Function(name, args) => match name.as_str() {
+                        "is" | "not" => {
+                            if let PseudoClassArgs::SelectorList(selector_list) = args {
+                                // Find the maximum specificity among the selectors in the list
+                                let mut max_specificity = (0, 0, 0);
+
+                                for selector in selector_list.iter() {
+                                    let specificity = selector.specificity();
+                                    if specificity > max_specificity {
+                                        max_specificity = specificity;
+                                    }
+                                }
+
+                                a += max_specificity.0;
+                                b += max_specificity.1;
+                                c += max_specificity.2;
+                            } else {
+                                panic!("Expected SelectorList for 'is' or 'not' pseudo-class");
+                            }
+                        }
+                        _ => b += 1,
+                    },
+                },
+                SubclassSelector::PseudoElementSelector(_) => {
+                    c += 1;
+                }
+            }
+        }
+
+        (a, b, c)
+    }
+}
+
+impl Specificity for ComplexSelector {
+    fn specificity(&self) -> (u32, u32, u32) {
+        let mut a = 0;
+        let mut b = 0;
+        let mut c = 0;
+
+        // Calculate specificity for the first compound selector
+        let (a1, b1, c1) = self.compound.specificity();
+        a += a1;
+        b += b1;
+        c += c1;
+
+        // Calculate specificity for each combinator and its compound selector
+        for (_, compound) in &self.combinators {
+            let (a2, b2, c2) = compound.specificity();
+            a += a2;
+            b += b2;
+            c += c2;
+        }
+
+        (a, b, c)
+    }
+}
+
+impl Debug for ComplexSelector {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ComplexSelector")
+            .field("compound", &self.compound)
+            .field("combinators", &self.combinators)
+            .field("specificity", &self.specificity())
+            .finish()
+    }
 }
 
 pub type ComplexSelectorList = Vec<ComplexSelector>;
@@ -218,9 +322,8 @@ fn parse_type_selector(tokens: &mut InputStream<CSSToken>) -> Option<TypeSelecto
 
     if let Some(wq_name) = parse_wq_name(tokens) {
         return Some(TypeSelector::WQName(wq_name));
-    }
-
-    if let Some(ns_prefix) = parse_ns_prefix(tokens) {
+    } else {
+        let ns_prefix = parse_ns_prefix(tokens);
         if let Some(CSSToken::Delim('*')) = tokens.peek() {
             tokens.consume();
 
@@ -340,7 +443,47 @@ fn parse_pseudo_class_selector(tokens: &mut InputStream<CSSToken>) -> Option<Pse
                 }
             }
 
-            return Some(PseudoClassSelector::Function(name, args));
+            println!("Matching {}", name);
+            match name.as_str() {
+                "where" | "is" => {
+                    let parsed_args = parse_forgiving_selector_list(
+                        &mut InputStream::new(&args[..]),
+                        Some(CSSToken::RightParenthesis),
+                    );
+
+                    return Some(PseudoClassSelector::Function(
+                        name,
+                        PseudoClassArgs::SelectorList(parsed_args.unwrap_or_default()),
+                    ));
+                }
+                "not" => {
+                    let parsed_args = parse_complex_selector_list(&mut InputStream::new(&args[..]));
+
+                    return Some(PseudoClassSelector::Function(
+                        name,
+                        PseudoClassArgs::SelectorList(parsed_args.unwrap_or_default()),
+                    ));
+                }
+                "has" | "defined" | "dir" | "lang" | "any-link" | "link" | "visited"
+                | "local-link" | "target" | "target-within" | "scope" | "hover" | "active"
+                | "focus" | "focus-within" | "focus-visible" | "current" | "past" | "future"
+                | "playing" | "paused" | "empty" | "blank" | "nth-child" | "nth-last-child"
+                | "nth-of-type" | "nth-last-of-type" | "first-child" | "last-child"
+                | "first-of-type" | "last-of-type" | "only-child" | "only-of-type" | "root"
+                | "checked" | "indeterminate" | "default" | "valid" | "invalid" | "in-range"
+                | "out-of-range" | "required" | "optional" | "read-only" | "read-write" => {
+                    todo!(
+                        "Parsing for pseudo-class function '{}' is not yet implemented",
+                        name
+                    );
+                }
+                _ => {
+                    return Some(PseudoClassSelector::Function(
+                        name,
+                        PseudoClassArgs::Raw(args),
+                    ));
+                }
+            }
         }
     }
 
@@ -532,6 +675,10 @@ fn parse_complex_selector(tokens: &mut InputStream<CSSToken>) -> Option<ComplexS
     })
 }
 
+fn flatten_complex_selector(complex_selector: ComplexSelector) -> Vec<ComplexSelector> {
+    vec![complex_selector]
+}
+
 /// <complex-selector-list> = <complex-selector>#
 fn parse_complex_selector_list(tokens: &mut InputStream<CSSToken>) -> Option<ComplexSelectorList> {
     let mut selectors = Vec::new();
@@ -548,6 +695,46 @@ fn parse_complex_selector_list(tokens: &mut InputStream<CSSToken>) -> Option<Com
         selectors.push(selector.unwrap());
 
         last_save = tokens.clone();
+
+        if let Some(CSSToken::Comma) = tokens.peek() {
+            tokens.consume(); // Consume the comma
+        } else {
+            break; // No more selectors
+        }
+    }
+
+    Some(selectors)
+}
+
+fn parse_forgiving_selector_list(
+    tokens: &mut InputStream<CSSToken>,
+    end: Option<CSSToken>,
+) -> Option<SelectorList> {
+    let mut selectors = Vec::new();
+
+    loop {
+        let selector = parse_complex_selector(tokens);
+        if selector.is_none() {
+            while let Some(token) = tokens.consume() {
+                if let CSSToken::Comma = token {
+                    break;
+                }
+
+                if let Some(ref end_token) = end {
+                    if &token == end_token {
+                        break;
+                    }
+                }
+            }
+
+            if tokens.is_eof {
+                break;
+            }
+
+            continue;
+        }
+
+        selectors.push(selector.unwrap());
 
         if let Some(CSSToken::Comma) = tokens.peek() {
             tokens.consume(); // Consume the comma
