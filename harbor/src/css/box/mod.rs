@@ -10,7 +10,7 @@ use std::{
 use crate::{
     css::{
         colors::Color,
-        cssom::{CSSRuleNode, CSSRuleType, CSSStyleRuleData, CSSStyleSheetExt},
+        cssom::{CSSRuleNode, CSSRuleType, CSSStyleRuleData, CSSStyleSheetExt, ComputedStyle},
         selectors::MatchesElement,
     },
     html5::dom::{Document, Element, NodeKind},
@@ -137,6 +137,8 @@ pub struct Box {
     pub _line_height: Option<f64>,
 
     pub associated_node: Option<Rc<RefCell<NodeKind>>>,
+
+    pub associated_style: ComputedStyle,
 }
 
 impl Debug for Box {
@@ -167,6 +169,7 @@ impl Debug for Box {
                     })
                     .unwrap_or_else(|| "None".to_string()),
             )
+            .field("associated_style", &self.associated_style)
             .finish()
     }
 }
@@ -245,7 +248,6 @@ impl Box {
 
     pub fn build_doc_box_tree(doc: &mut Document) -> Option<Rc<RefCell<Box>>> {
         compute_doc_styles(doc);
-        println!("Document: {:#?}", doc);
 
         // For now, create a simple box for the document root
         let mut root_box = Box {
@@ -265,6 +267,8 @@ impl Box {
             _line_height: None,
 
             associated_node: None,
+
+            associated_style: ComputedStyle::default(),
         };
 
         let doc_borrowed = doc._node.borrow();
@@ -292,6 +296,8 @@ impl Box {
                     _ => BoxType::Block,
                 };
 
+                let mag = 7.5;
+
                 let font_size = match element.local_name.as_str() {
                     "h1" => 32.0,
                     "h2" => 24.0,
@@ -303,10 +309,12 @@ impl Box {
                         parent
                             .and_then(|weak_box| weak_box.upgrade())
                             .and_then(|parent_box_rc| parent_box_rc.borrow()._font_size)
-                            .unwrap_or(16.0 * 2.5)
-                            / 2.5
+                            .unwrap_or(16.0 * mag)
+                            / mag
                     }
-                } * 2.5;
+                } * mag;
+
+                println!("Font size for {}: {}", element.local_name, font_size);
 
                 let line_height = font_size * 1.2;
 
@@ -327,6 +335,8 @@ impl Box {
                     _line_height: Some(line_height),
 
                     associated_node: Some(Rc::clone(tree)),
+
+                    associated_style: element.style().clone(),
                 }));
 
                 for child in element._node.borrow().child_nodes().iter() {
@@ -368,6 +378,12 @@ impl Box {
                     ),
 
                     associated_node: Some(Rc::clone(tree)),
+
+                    associated_style: parent
+                        .and_then(|weak_box| weak_box.upgrade())
+                        .map_or(ComputedStyle::default(), |parent_box_rc| {
+                            parent_box_rc.borrow().associated_style.clone()
+                        }),
                 }));
 
                 Some(text_box)
@@ -531,7 +547,8 @@ fn compute_element_styles(
                                 for declaration in style_rule.declarations() {
                                     match declaration.property_name.as_str() {
                                         "color" => {
-                                            style.color = Color::parse_from_cv(&declaration.value);
+                                            style.color = Color::parse_from_cv(&declaration.value)
+                                                .unwrap_or(Color::default());
                                         }
                                         _ => {
                                             todo!(

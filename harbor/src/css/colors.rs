@@ -318,11 +318,35 @@ pub fn is_color_function(name: &str) -> bool {
     )
 }
 
+pub fn hex_to_rgb(hex: &str) -> [f32; 3] {
+    let hex = hex.trim_start_matches('#');
+    let (r, g, b) = match hex.len() {
+        3 => (
+            u8::from_str_radix(&hex[0..1].repeat(2), 16).unwrap_or(0),
+            u8::from_str_radix(&hex[1..2].repeat(2), 16).unwrap_or(0),
+            u8::from_str_radix(&hex[2..3].repeat(2), 16).unwrap_or(0),
+        ),
+        6 => (
+            u8::from_str_radix(&hex[0..2], 16).unwrap_or(0),
+            u8::from_str_radix(&hex[2..4], 16).unwrap_or(0),
+            u8::from_str_radix(&hex[4..6], 16).unwrap_or(0),
+        ),
+        _ => (0, 0, 0),
+    };
+    [r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0]
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Color {
-    Named(&'static str),
+    Named(String),
     Hex(String),
     Function(Function),
+}
+
+impl Default for Color {
+    fn default() -> Self {
+        Color::Named(String::from("black"))
+    }
 }
 
 impl Color {
@@ -333,7 +357,7 @@ impl Color {
 
         match &cvs[0] {
             ComponentValue::Token(CSSToken::Ident(name)) if get_named_color(name).is_some() => {
-                Some(Color::Named(get_named_color(name).unwrap()))
+                Some(Color::Named(name.clone()))
             }
             ComponentValue::Token(CSSToken::Hash(HashToken { value: val, .. })) => {
                 Some(Color::Hex(val.clone()))
@@ -342,6 +366,22 @@ impl Color {
                 Some(Color::Function(func.clone()))
             }
             _ => None,
+        }
+    }
+
+    pub fn used(&self) -> [f32; 3] {
+        match self {
+            Color::Named(name) => {
+                if let Some(hex) = get_named_color(name) {
+                    hex_to_rgb(hex)
+                } else {
+                    [0.0, 0.0, 0.0]
+                }
+            }
+            Color::Hex(hex) => hex_to_rgb(hex),
+            Color::Function(func) => {
+                todo!("Color functions not implemented yet: {:?}", func)
+            }
         }
     }
 }

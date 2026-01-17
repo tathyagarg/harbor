@@ -106,6 +106,7 @@ impl TextRenderer {
     pub fn vertices(
         &mut self,
         text: String,
+        color: [f32; 3],
         font_size: f32,
         position: (u32, u32),
     ) -> Vec<text::Vertex> {
@@ -136,6 +137,7 @@ impl TextRenderer {
 
         let verts = font.rasterize(
             text.as_str(),
+            color,
             scale,
             800.0 / font_size,
             float_position,
@@ -159,10 +161,11 @@ impl TextRenderer {
         &mut self,
         device: &wgpu::Device,
         text: String,
+        color: [f32; 3],
         font_size: f32,
         position: (u32, u32),
     ) {
-        let verts = self.vertices(text.clone(), font_size, position);
+        let verts = self.vertices(text.clone(), color, font_size, position);
 
         let key = (text, position.0, position.1, font_size as u32);
 
@@ -308,6 +311,7 @@ impl WindowState {
 
                                                 let verts = renderer.vertices(
                                                     text_content.clone(),
+                                                    layout_box.associated_style.color.used(),
                                                     font_size,
                                                     (position.0 as u32, position.1 as u32),
                                                 );
@@ -316,6 +320,7 @@ impl WindowState {
                                                     renderer.update_vertex_buffer(
                                                         device,
                                                         text_content.clone(),
+                                                        layout_box.associated_style.color.used(),
                                                         font_size,
                                                         (position.0 as u32, position.1 as u32),
                                                     );

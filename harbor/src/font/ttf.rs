@@ -741,6 +741,7 @@ impl ParsedTableDirectory {
     pub fn rasterize(
         &self,
         text: &str,
+        color: [f32; 3],
         scale: f32,
         precision: f32,
         origin: (f32, f32),
@@ -759,13 +760,7 @@ impl ParsedTableDirectory {
                 self.make_glyph_vertices(glyph_index as usize, precision, &mut glyph_points);
 
                 vertices.extend(glyph_points.iter().map(|point| {
-                    Vertex::clipped_from_point(
-                        point,
-                        (pen_x, pen_y),
-                        scale,
-                        window_size,
-                        [0.0, 0.0, 0.0],
-                    )
+                    Vertex::clipped_from_point(point, (pen_x, pen_y), scale, window_size, color)
                 }));
 
                 if let Some(aw) = self.advance_width(glyph_index as usize) {
