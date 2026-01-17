@@ -7,7 +7,14 @@ use std::{
     rc::{Rc, Weak},
 };
 
-use crate::html5::dom::{Document, NodeKind};
+use crate::{
+    css::{
+        colors::Color,
+        cssom::{CSSRuleNode, CSSRuleType, CSSStyleRuleData, CSSStyleSheetExt},
+        selectors::MatchesElement,
+    },
+    html5::dom::{Document, Element, NodeKind},
+};
 
 /// Represents the edges of a box: top, right, bottom, left
 #[derive(Debug, Clone, Copy)]
@@ -236,7 +243,10 @@ impl Box {
         )
     }
 
-    pub fn build_doc_box_tree(doc: &Document) -> Option<Rc<RefCell<Box>>> {
+    pub fn build_doc_box_tree(doc: &mut Document) -> Option<Rc<RefCell<Box>>> {
+        compute_doc_styles(doc);
+        println!("Document: {:#?}", doc);
+
         // For now, create a simple box for the document root
         let mut root_box = Box {
             _content_width: 800.0,
@@ -476,5 +486,81 @@ impl Box {
         self._content_height = pen_y - start_y;
 
         (total_width, pen_y - start_y)
+    }
+}
+
+fn compute_doc_styles(doc: &mut Document) {
+    for node_rc in doc._node.borrow().child_nodes().iter() {
+        let node = node_rc.borrow();
+        if let NodeKind::Element(element_rc) = node.deref() {
+            let mut element = element_rc.borrow_mut();
+            compute_element_styles(doc, &mut element, None);
+        }
+    }
+}
+
+fn compute_element_styles(
+    document: &Document,
+    element: &mut Element,
+    parents: Option<&Vec<&Element>>,
+) {
+    println!(
+        "Element: {}, Parents: {:?}",
+        element.local_name,
+        parents.map(|v| v
+            .iter()
+            .map(|e| e.local_name.as_str())
+            .collect::<Vec<&str>>())
+    );
+
+    let style_sheets = document.style_sheets();
+
+    for stylesheet in style_sheets.style_sheets.iter() {
+        for rule in stylesheet.borrow().css_rules().iter() {
+            match rule.deref()._type() {
+                CSSRuleType::Style => {
+                    if let Some(style_rule) = rule
+                        .deref()
+                        .as_any()
+                        .downcast_ref::<CSSRuleNode<CSSStyleRuleData>>()
+                    {
+                        for selector in style_rule.selectors() {
+                            if selector.matches(element, parents) {
+                                let style = element.style_mut();
+
+                                for declaration in style_rule.declarations() {
+                                    match declaration.property_name.as_str() {
+                                        "color" => {
+                                            style.color = Color::parse_from_cv(&declaration.value);
+                                        }
+                                        _ => {
+                                            todo!(
+                                                "Implement handling for property: {}",
+                                                declaration.property_name
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    let mut new_parents = match parents {
+        Some(p) => p.clone(),
+        None => vec![],
+    };
+    new_parents.push(element);
+
+    for child_rc in element._node.borrow().child_nodes().iter() {
+        let child = child_rc.borrow();
+        if let NodeKind::Element(child_element_rc) = child.deref() {
+            let mut child_element = child_element_rc.borrow_mut();
+            compute_element_styles(document, &mut child_element, Some(&new_parents));
+        }
     }
 }

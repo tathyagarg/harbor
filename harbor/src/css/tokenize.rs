@@ -522,17 +522,14 @@ fn consume(stream: &mut InputStream<char>) -> CSSToken {
                 '\u{007B}' => return CSSToken::LeftCurlyBracket,
                 '\u{007D}' => return CSSToken::RightCurlyBracket,
                 ch if ch.is_ascii_digit() => {
-                    println!("digit");
                     stream.reconsume();
                     return consume_numeric(stream);
                 }
                 ch if char_is_ident(ch) => {
-                    println!("ident?");
                     stream.reconsume();
                     return consume_ident_like(stream);
                 }
                 _ => {
-                    println!("Unknown character encountered: {}", ch);
                     return CSSToken::Delim(ch);
                 }
             }

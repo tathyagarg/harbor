@@ -2,6 +2,7 @@
 #![allow(unused_variables)]
 
 use std::{
+    any::Any,
     cell::RefCell,
     fmt::Debug,
     rc::{Rc, Weak},
@@ -9,7 +10,7 @@ use std::{
 
 use crate::{
     css::{
-        colors::is_color,
+        colors::{Color, is_color},
         parser::{AtRule, ComponentValue, parse_css_declaration_block},
         selectors::{Selector, SelectorList},
         tokenize::CSSToken,
@@ -217,6 +218,8 @@ pub trait CSSRuleExt: CSSRuleExtClone + Debug {
     fn parent_style_sheet(&self) -> &Option<Weak<RefCell<CSSStyleSheet>>>;
 
     fn _type(&self) -> &CSSRuleType;
+
+    fn as_any(&self) -> &dyn Any;
 }
 
 pub trait CSSRuleExtClone {
@@ -256,6 +259,10 @@ where
 
     fn _type(&self) -> &CSSRuleType {
         &self._type
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
@@ -314,6 +321,14 @@ impl CSSRuleNode<CSSStyleRuleData> {
             _owner_element: None,
             _updating: false,
         })
+    }
+
+    pub fn selectors(&self) -> &SelectorList {
+        &self.payload.selectors
+    }
+
+    pub fn declarations(&self) -> &Vec<CSSDeclaration> {
+        &self.payload.declarations
     }
 }
 
@@ -673,3 +688,20 @@ impl PartialEq for DocumentOrShadowRootStyle {
 }
 
 impl Eq for DocumentOrShadowRootStyle {}
+
+#[derive(Default, Clone, Debug)]
+pub struct ComputedStyle {
+    pub color: Option<Color>,
+}
+
+impl PartialEq for ComputedStyle {
+    fn eq(&self, other: &Self) -> bool {
+        true
+    }
+
+    fn ne(&self, other: &Self) -> bool {
+        !self.eq(other)
+    }
+}
+
+impl Eq for ComputedStyle {}

@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 
 use crate::font::ttf::ParsedTableDirectory;
@@ -32,9 +32,9 @@ impl Layout {
     }
 
     pub fn make_tree(&mut self) {
-        let document = self.document.borrow();
+        let mut document = self.document.borrow_mut();
 
-        let root_node = document.deref();
+        let root_node = document.deref_mut();
         let root_box = r#box::Box::build_doc_box_tree(root_node);
         self.root_box = root_box;
     }

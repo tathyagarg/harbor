@@ -317,3 +317,31 @@ pub fn is_color_function(name: &str) -> bool {
         "rgb" | "rgba" | "hsl" | "hsla" | "hwb" | "lab" | "lch" | "oklab" | "oklch" | "color"
     )
 }
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Color {
+    Named(&'static str),
+    Hex(String),
+    Function(Function),
+}
+
+impl Color {
+    pub fn parse_from_cv(cvs: &Vec<ComponentValue>) -> Option<Color> {
+        if cvs.len() != 1 {
+            return None;
+        }
+
+        match &cvs[0] {
+            ComponentValue::Token(CSSToken::Ident(name)) if get_named_color(name).is_some() => {
+                Some(Color::Named(get_named_color(name).unwrap()))
+            }
+            ComponentValue::Token(CSSToken::Hash(HashToken { value: val, .. })) => {
+                Some(Color::Hex(val.clone()))
+            }
+            ComponentValue::Function(func) if is_color_function(&func.0) => {
+                Some(Color::Function(func.clone()))
+            }
+            _ => None,
+        }
+    }
+}

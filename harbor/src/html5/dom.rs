@@ -3,10 +3,7 @@ use std::ops::Deref;
 use std::rc::Weak;
 use std::{cell::RefCell, rc::Rc};
 
-use crate::css::cssom::{
-    CSSDeclarationBlock, CSSStyleDeclaration, CSSStyleSheet, DocumentOrShadowRootStyle,
-    StyleSheetList,
-};
+use crate::css::cssom::{CSSStyleSheet, ComputedStyle, DocumentOrShadowRootStyle, StyleSheetList};
 use crate::infra::Serializable;
 use crate::{
     html5::{HTML_NAMESPACE, parse::Token, tag_groups::*},
@@ -773,6 +770,8 @@ pub struct Element {
     attribute_list: Vec<Attr>,
 
     _token: Option<Token>,
+
+    _style: ComputedStyle,
 }
 
 impl Debug for Element {
@@ -782,6 +781,7 @@ impl Debug for Element {
             .field("attribute_list", &self.attribute_list)
             .field("_node", &self._node)
             .field("_token", &self._token)
+            .field("_style", &self._style)
             .finish()
     }
 }
@@ -1011,6 +1011,14 @@ impl Element {
         element.borrow_mut().attribute_list.push(attr);
     }
 
+    pub fn style(&self) -> &ComputedStyle {
+        &self._style
+    }
+
+    pub fn style_mut(&mut self) -> &mut ComputedStyle {
+        &mut self._style
+    }
+
     // pub fn push_attr_raw(&mut self, name: &str, value: &str) {
     //     let attr = Attr::new(
     //         None,
@@ -1074,6 +1082,7 @@ impl INode for Element {
             is_value: None,
             attribute_list: vec![],
             _token: None,
+            _style: ComputedStyle::default(),
         }
     }
 
@@ -1146,6 +1155,7 @@ impl IElement for Element {
             is_value: None,
             attribute_list: vec![],
             _token: None,
+            _style: ComputedStyle::default(),
         }
     }
 
@@ -1435,6 +1445,10 @@ impl Document {
         }
 
         nodes
+    }
+
+    pub fn style_sheets(&self) -> &StyleSheetList {
+        &self.document_or_shadow_root_style.style_sheets
     }
 
     pub fn push_stylesheet(&mut self, sheet: CSSStyleSheet) {

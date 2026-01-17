@@ -4,6 +4,7 @@ use std::fmt::Debug;
 
 use crate::{
     css::tokenize::{CSSToken, HashToken},
+    html5::dom::Element,
     infra::InputStream,
 };
 
@@ -142,6 +143,95 @@ pub struct ComplexSelector {
 
 pub trait Specificity {
     fn specificity(&self) -> (u32, u32, u32);
+}
+
+pub trait MatchesElement {
+    fn matches(&self, element: &Element, parents: Option<&Vec<&Element>>) -> bool;
+}
+
+impl MatchesElement for CompoundSelector {
+    fn matches(&self, element: &Element, parents: Option<&Vec<&Element>>) -> bool {
+        if let Some(type_selector) = &self.type_selector {
+            match type_selector {
+                TypeSelector::WQName(wq_name) => {
+                    // Match namespace if specified
+                    if let Some(ns_prefix) = &wq_name.namespace {
+                        if let Some(elem_ns) = &element.namespace {
+                            match &ns_prefix.prefix {
+                                Some(prefix) if prefix != "*" && prefix != elem_ns => {
+                                    return false;
+                                }
+                                _ => {}
+                            }
+                        } else {
+                            return false;
+                        }
+                    }
+
+                    // Match local name
+                    return if wq_name.local_name == "*" {
+                        true
+                    } else {
+                        element.local_name == wq_name.local_name
+                    };
+                }
+                TypeSelector::Prefixed(ns_prefix) => {
+                    // Match namespace if specified
+                    todo!("Implement matching for Prefixed TypeSelector");
+                }
+            }
+        } else {
+            for subclass in &self.subclass_selectors {
+                todo!("Implement matching for SubclassSelector: {:?}", subclass);
+            }
+
+            false
+        }
+    }
+}
+
+impl MatchesElement for ComplexSelector {
+    fn matches(&self, element: &Element, parents: Option<&Vec<&Element>>) -> bool {
+        // First, match the compound selector
+        if !self.compound.matches(element, parents) {
+            return false;
+        }
+
+        // Then, match combinators and their compound selectors
+        let mut current_element = element;
+        let mut current_parents = parents;
+
+        for (combinator, compound) in &self.combinators {
+            match combinator {
+                Combinator::Child => {
+                    if let Some(parents) = current_parents {
+                        if let Some(parent) = parents.first() {
+                            if !compound.matches(parent, None) {
+                                return false;
+                            }
+                            current_element = parent;
+                            current_parents = None; // Update as needed
+                        } else {
+                            return false;
+                        }
+                    } else {
+                        return false;
+                    }
+                }
+                Combinator::Descendant => {
+                    todo!("Implement Descendant combinator matching");
+                }
+                Combinator::NextSibling => {
+                    todo!("Implement NextSibling combinator matching");
+                }
+                Combinator::LaterSibling => {
+                    todo!("Implement LaterSibling combinator matching");
+                }
+            }
+        }
+
+        true
+    }
 }
 
 impl Specificity for CompoundSelector {

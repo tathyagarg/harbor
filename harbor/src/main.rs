@@ -67,40 +67,41 @@ fn main() {
 
     // tokenizer.tokenize();
 
-    // let mut layout = Layout::new(Rc::clone(&tokenizer.document.document()), (800.0, 600.0));
-    // layout.make_tree();
-    // layout.layout();
+    let mut layout = Layout::new(Rc::clone(&parser.document.document()), (800.0, 600.0));
+    layout.make_tree();
+    layout.layout();
 
     // println!("Layout Tree: {:#?}", layout.root_box);
 
-    // let fira_code = font::parse_ttf(include_bytes!("../../assets/fonts/FiraCode.ttf"));
-    // let times =
-    //     &font::parse_ttc(include_bytes!("../../assets/fonts/Times.ttc")).table_directories[0];
-    // let sfns = font::parse_ttf(include_bytes!("../../assets/fonts/SFNS.ttf"));
+    let fira_code = font::parse_ttf(include_bytes!("../../assets/fonts/FiraCode.ttf"));
+    let times =
+        &font::parse_ttc(include_bytes!("../../assets/fonts/Times.ttc")).table_directories[0];
+    let sfns = font::parse_ttf(include_bytes!("../../assets/fonts/SFNS.ttf"));
 
-    // layout.register_font("Times New Roman", times.complete());
-    // layout.register_font("FiraCode", fira_code.complete());
-    // layout.register_font("SFNS", sfns.complete());
+    layout.register_font("Times New Roman", times.complete());
+    layout.register_font("FiraCode", fira_code.complete());
+    layout.register_font("SFNS", sfns.complete());
 
-    // let event_loop = EventLoop::with_user_event().build().unwrap();
-    // event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
+    let event_loop = EventLoop::with_user_event().build().unwrap();
+    event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
 
-    // let mut app = render::App {
-    //     window_options: render::WindowOptions {
-    //         use_transparent: true,
-    //         background_color: wgpu::Color {
-    //             r: 1.0,
-    //             g: 1.0,
-    //             b: 1.0,
-    //             a: 0.0,
-    //         },
-    //     },
-    //     // font: ttf.clone(),
-    //     // text: "Hello, world!".to_string(),
-    //     // vertices: vec![],
-    //     state: None,
-    //     layout,
-    // };
+    let mut app = render::App {
+        window_options: render::WindowOptions {
+            use_transparent: true,
+            background_color: wgpu::Color {
+                r: 1.0,
+                g: 1.0,
+                b: 1.0,
+                a: 0.0,
+            },
+        },
+        // font: ttf.clone(),
+        // text: "Hello, world!".to_string(),
+        // vertices: vec![],
+        state: None,
+        document: parser.document.document.borrow().clone(),
+        layout,
+    };
 
-    // _ = event_loop.run_app(&mut app);
+    _ = event_loop.run_app(&mut app);
 }
