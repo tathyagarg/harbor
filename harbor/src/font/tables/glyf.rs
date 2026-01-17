@@ -7,7 +7,7 @@ use std::ops::BitAnd;
 
 use crate::font::otf_dtypes::*;
 use crate::font::tables::{ParseContext, TableTrait};
-use crate::render::Segment;
+use crate::render::text::Segment;
 
 #[repr(u8)]
 pub enum SimpleGlyphFlags {

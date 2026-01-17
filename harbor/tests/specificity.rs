@@ -53,3 +53,18 @@ fn test_specificity_06() {
 fn test_specificity_07() {
     assert_eq!(specificity_of("ul ol+li"), (0, 0, 3));
 }
+
+#[test]
+fn test_specificity_08() {
+    assert_eq!(specificity_of("h1 + *[rel=up]"), (0, 1, 1));
+}
+
+#[test]
+fn test_specificity_09() {
+    assert_eq!(specificity_of("ul ol li.red"), (0, 1, 3));
+}
+
+#[test]
+fn test_specificity_10() {
+    assert_eq!(specificity_of("li.red.level"), (0, 2, 1));
+}

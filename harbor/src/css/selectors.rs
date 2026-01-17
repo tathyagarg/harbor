@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use std::{any::Any, fmt::Debug};
+use std::fmt::Debug;
 
 use crate::{
     css::tokenize::{CSSToken, HashToken},

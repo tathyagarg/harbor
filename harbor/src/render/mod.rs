@@ -1,7 +1,6 @@
 // #![allow(warnings)]
 
 use std::collections::HashMap;
-use std::fmt::Debug;
 use std::ops::Deref;
 use std::sync::Arc;
 
@@ -9,7 +8,7 @@ use wgpu::util::DeviceExt;
 
 use winit::application::ApplicationHandler;
 use winit::event::{ElementState, KeyEvent, WindowEvent};
-use winit::event_loop::{ActiveEventLoop, EventLoop};
+use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{Window, WindowId};
 
@@ -17,10 +16,10 @@ use wgpu;
 
 use crate::css::r#box::{Box, BoxType};
 use crate::css::layout::Layout;
-use crate::font::otf_dtypes::int16;
-use crate::font::tables::glyf::{GlyphTransform, Point};
-use crate::font::ttf::{ParsedTableDirectory, TableDirectory};
-use crate::html5::dom::Text;
+use crate::font::ttf::ParsedTableDirectory;
+use crate::html5::dom::Document;
+
+pub mod text;
 
 /// Converts RGBA values (0-255 for RGB, 0-100 for A) to wgpu::Color
 /// A being 0-100 is because I was feeling quirky
@@ -58,7 +57,7 @@ impl TextRendererCreator {
         self.buffer = Some(
             device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("Vertex Buffer"),
-                contents: bytemuck::cast_slice(&[] as &[Vertex]),
+                contents: bytemuck::cast_slice(&[] as &[text::Vertex]),
                 usage: wgpu::BufferUsages::VERTEX,
             }),
         );
@@ -91,7 +90,7 @@ pub struct TextRenderer {
     /// When getting a value from the cache, if the required font-size matches the key but is not
     /// equal, the cache will not be used and new vertices will be generated. This will not update
     /// the cache.
-    pub vertex_cache: HashMap<(String, u32, u32, u32), (Vec<Vertex>, f32)>,
+    pub vertex_cache: HashMap<(String, u32, u32, u32), (Vec<text::Vertex>, f32)>,
 
     pub window_size: (f32, f32),
 
@@ -104,7 +103,12 @@ impl TextRenderer {
         TextRendererCreator::default()
     }
 
-    pub fn vertices(&mut self, text: String, font_size: f32, position: (u32, u32)) -> Vec<Vertex> {
+    pub fn vertices(
+        &mut self,
+        text: String,
+        font_size: f32,
+        position: (u32, u32),
+    ) -> Vec<text::Vertex> {
         let update_cache = if let Some((verts, cached_font_size)) =
             self.vertex_cache
                 .get(&(text.clone(), position.0, position.1, font_size as u32))
@@ -186,10 +190,10 @@ impl TextRenderer {
     }
 }
 
-/// State
+/// WindowState
 /// Holds all data about the WGPU state, along with the window
 #[allow(dead_code)]
-pub struct State {
+pub struct WindowState {
     /// Basic WGPU state variables
     surface: wgpu::Surface<'static>,
     adapter: wgpu::Adapter,
@@ -210,9 +214,11 @@ pub struct State {
 
     window: Arc<Window>,
     window_options: WindowOptions,
+
+    document: Document,
 }
 
-impl State {
+impl WindowState {
     pub fn render(&mut self) {
         self.window.request_redraw();
 
@@ -374,7 +380,12 @@ impl State {
         output.present();
     }
 
-    pub async fn new(window: Arc<Window>, window_options: WindowOptions, layout: Layout) -> Self {
+    pub async fn new(
+        window: Arc<Window>,
+        window_options: WindowOptions,
+        layout: Layout,
+        document: Document,
+    ) -> Self {
         let size = window.inner_size();
 
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
@@ -457,7 +468,7 @@ impl State {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: Some("vs_main"),
-                buffers: &[Vertex::desc()],
+                buffers: &[text::Vertex::desc()],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(wgpu::FragmentState {
@@ -491,7 +502,7 @@ impl State {
 
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(&[] as &[Vertex]),
+            contents: bytemuck::cast_slice(&[] as &[text::Vertex]),
             usage: wgpu::BufferUsages::VERTEX,
         });
 
@@ -516,6 +527,7 @@ impl State {
             number_of_vertices,
             is_surface_configured: false,
             window_options,
+            document,
         }
     }
 
@@ -564,12 +576,14 @@ pub struct WindowOptions {
 
 pub struct App {
     pub window_options: WindowOptions,
-    pub state: Option<State>,
+    pub state: Option<WindowState>,
 
     pub layout: Layout,
+
+    pub document: Document,
 }
 
-impl ApplicationHandler<State> for App {
+impl ApplicationHandler<WindowState> for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         #[allow(unused_mut)]
         let mut window_attributes = Window::default_attributes()
@@ -583,10 +597,11 @@ impl ApplicationHandler<State> for App {
 
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
 
-        self.state = Some(pollster::block_on(State::new(
+        self.state = Some(pollster::block_on(WindowState::new(
             window,
             self.window_options.clone(),
             self.layout.clone(),
+            self.document.clone(),
         )));
     }
 
@@ -623,197 +638,6 @@ impl ApplicationHandler<State> for App {
                 _ => {}
             },
             _ => {}
-        }
-    }
-}
-#[repr(C)]
-#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct Vertex {
-    pub position: [f32; 3],
-    pub color: [f32; 3],
-}
-
-impl Vertex {
-    fn desc() -> wgpu::VertexBufferLayout<'static> {
-        wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &[
-                wgpu::VertexAttribute {
-                    offset: 0,
-                    shader_location: 0,
-                    format: wgpu::VertexFormat::Float32x3,
-                },
-                wgpu::VertexAttribute {
-                    offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
-                    shader_location: 1,
-                    format: wgpu::VertexFormat::Float32x3,
-                },
-            ],
-        }
-    }
-
-    pub fn clipped_from_point(
-        point: &Point,
-        origin: (f32, f32),
-        scale: f32,
-        window_size: (f32, f32),
-        color: [f32; 3],
-    ) -> Vertex {
-        let vertex_position = point.vertex_position(origin, scale);
-
-        Vertex {
-            position: [
-                (vertex_position[0] / window_size.0) * 2.0 - 1.0,
-                1.0 - (vertex_position[1] / window_size.1) * 2.0,
-                vertex_position[2],
-            ],
-            color,
-        }
-    }
-
-    pub fn distance_to(&self, other: &Vertex) -> f32 {
-        let dx = self.position[0] - other.position[0];
-        let dy = self.position[1] - other.position[1];
-        let dz = self.position[2] - other.position[2];
-        (dx * dx + dy * dy + dz * dz).sqrt()
-    }
-
-    pub fn distance_to_line(&self, v1: &Vertex, v2: &Vertex) -> f32 {
-        let a = self.position[0] - v1.position[0];
-        let b = self.position[1] - v1.position[1];
-        let c = self.position[2] - v1.position[2];
-
-        let d = v2.position[0] - v1.position[0];
-        let e = v2.position[1] - v1.position[1];
-        let f = v2.position[2] - v1.position[2];
-
-        let dot = a * d + b * e + c * f;
-        let len_sq = d * d + e * e + f * f;
-        let param = if len_sq != 0.0 { dot / len_sq } else { -1.0 };
-
-        let (xx, yy, zz) = if param < 0.0 {
-            (v1.position[0], v1.position[1], v1.position[2])
-        } else if param > 1.0 {
-            (v2.position[0], v2.position[1], v2.position[2])
-        } else {
-            (
-                v1.position[0] + param * d,
-                v1.position[1] + param * e,
-                v1.position[2] + param * f,
-            )
-        };
-
-        let dx = self.position[0] - xx;
-        let dy = self.position[1] - yy;
-        let dz = self.position[2] - zz;
-
-        (dx * dx + dy * dy + dz * dz).sqrt()
-    }
-
-    pub fn to_clip(&self, width: f32, height: f32) -> Vertex {
-        Vertex {
-            position: [
-                (self.position[0] / width) * 2.0 - 1.0,
-                1.0 - (self.position[1] / height) * 2.0,
-                self.position[2],
-            ],
-            color: self.color,
-        }
-    }
-}
-
-pub struct VertexMaker {
-    origin: (f32, f32),
-    scale: f32,
-    window_size: (f32, f32),
-    color: [f32; 3],
-}
-
-impl VertexMaker {
-    pub fn new(origin: (f32, f32), scale: f32, window_size: (f32, f32), color: [f32; 3]) -> Self {
-        Self {
-            origin,
-            scale,
-            window_size,
-            color,
-        }
-    }
-
-    pub fn from_point(&self, point: &Point) -> Vertex {
-        Vertex::clipped_from_point(point, self.origin, self.scale, self.window_size, self.color)
-    }
-}
-
-#[derive(Clone)]
-pub enum Segment {
-    Line(Point, Point),
-    Quadratic(Point, Point, Point),
-}
-
-impl Debug for Segment {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Segment::Line(p0, p1) => f
-                .debug_struct("Line")
-                .field("p0", p0)
-                .field("p1", p1)
-                .finish(),
-            Segment::Quadratic(p0, c, p2) => f
-                .debug_struct("Quadratic")
-                .field("p0", p0)
-                .field("c", c)
-                .field("p2", p2)
-                .finish(),
-        }
-    }
-}
-
-impl Segment {
-    pub fn flatten(&self, out: &mut Vec<Point>, precision: f32) {
-        match self {
-            Segment::Line(p0, p1) => {
-                out.push(p0.clone());
-                out.push(p1.clone());
-            }
-            Segment::Quadratic(p0, c, p2) => {
-                if c.distance_to_line(p0, p2) < 5.0 {
-                    out.push(p0.clone());
-                    out.push(p2.clone());
-                } else {
-                    let mid1 = Point::midpoint(p0, c);
-                    let mid2 = Point::midpoint(c, p2);
-                    let mid = Point::midpoint(&mid1, &mid2);
-
-                    Segment::Quadratic(p0.clone(), mid1, mid.clone()).flatten(out, precision);
-                    Segment::Quadratic(mid, mid2, p2.clone()).flatten(out, precision);
-                }
-            }
-        }
-    }
-
-    pub fn transformed(&self, transform: Option<GlyphTransform>) -> Segment {
-        match self {
-            Segment::Line(p0, p1) => Segment::Line(
-                p0.transformed(transform.clone()),
-                p1.transformed(transform.clone()),
-            ),
-            Segment::Quadratic(p0, c, p2) => Segment::Quadratic(
-                p0.transformed(transform.clone()),
-                c.transformed(transform.clone()),
-                p2.transformed(transform.clone()),
-            ),
-        }
-    }
-
-    pub fn translate(&mut self, dx: int16, dy: int16) {
-        *self = match self {
-            Segment::Line(p0, p1) => Segment::Line(p0.translate(dx, dy), p1.translate(dx, dy)),
-            Segment::Quadratic(p0, c, p2) => Segment::Quadratic(
-                p0.translate(dx, dy),
-                c.translate(dx, dy),
-                p2.translate(dx, dy),
-            ),
         }
     }
 }

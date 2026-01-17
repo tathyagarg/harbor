@@ -79,7 +79,8 @@ pub fn char_is_whitespace(ch: char) -> bool {
 
 pub fn char_is_non_printable(ch: char) -> bool {
     let code = ch as u32;
-    (code >= 0x0000 && code <= 0x0008)
+    // implicit code > 0x0000
+    (code <= 0x0008)
         || code == 0x000B
         || (code >= 0x000E && code <= 0x001F)
         || code == 0x007F
@@ -187,9 +188,9 @@ where
         }
     }
 
-    pub fn push(&mut self, item: T) {
-        self.input.push(item);
-    }
+    // pub fn push(&mut self, item: T) {
+    //     self.input.push(item);
+    // }
 
     pub fn reconsume(&mut self) {
         self.is_reconsume = true;

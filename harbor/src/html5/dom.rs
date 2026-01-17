@@ -3,7 +3,10 @@ use std::ops::Deref;
 use std::rc::Weak;
 use std::{cell::RefCell, rc::Rc};
 
-use crate::css::cssom::{CSSStyleSheet, DocumentOrShadowRootStyle, StyleSheetList};
+use crate::css::cssom::{
+    CSSDeclarationBlock, CSSStyleDeclaration, CSSStyleSheet, DocumentOrShadowRootStyle,
+    StyleSheetList,
+};
 use crate::infra::Serializable;
 use crate::{
     html5::{HTML_NAMESPACE, parse::Token, tag_groups::*},
@@ -751,10 +754,6 @@ impl Attr {
 }
 
 pub type ElementID = String;
-
-pub enum ElementKind {
-    Element,
-}
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct Element {

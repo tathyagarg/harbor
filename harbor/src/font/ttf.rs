@@ -4,14 +4,13 @@
 use std::fmt::Debug;
 
 use crate::font::otf_dtypes::*;
-use crate::font::tables::cmap::CMAPSubtableTrait;
 use crate::font::tables::glyf::{CompositeGlyphFlags, GlyphDataType, Point};
 use crate::font::tables::os2::OS2Table;
 use crate::font::tables::{
     ParseContext, TableTrait, cmap, cvt, fpgm, gasp, glyf, hdmx, head, hhea, hmtx, loca, maxp,
     meta, name, os2, post, prep,
 };
-use crate::render::{Segment, Vertex, VertexMaker};
+use crate::render::text::{Segment, Vertex};
 
 #[derive(Clone)]
 pub enum TableRecordData {

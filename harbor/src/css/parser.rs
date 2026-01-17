@@ -65,8 +65,6 @@ pub fn preprocess(input: &String) -> String {
     result
 }
 
-fn parse_selector_list(tokens: Vec<CSSToken>) {}
-
 fn consume_function(stream: &mut InputStream<CSSToken>) -> Function {
     let name_token = stream.current();
 
