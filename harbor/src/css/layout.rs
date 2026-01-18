@@ -37,7 +37,7 @@ impl Layout {
         let mut document = self.document.borrow_mut();
 
         let root_node = document.deref_mut();
-        let root_box = r#box::Box::build_doc_box_tree(root_node);
+        let root_box = r#box::Box::build_doc_box_tree(root_node, self._window_size);
         self.root_box = root_box;
     }
 

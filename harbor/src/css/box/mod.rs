@@ -12,7 +12,7 @@ use crate::{
         colors::Color,
         cssom::{
             CSSDeclaration, CSSRuleNode, CSSRuleType, CSSStyleRuleData, CSSStyleSheetExt,
-            ComputedStyle,
+            ComputedStyle, WidthValue,
         },
         selectors::MatchesElement,
     },
@@ -250,13 +250,16 @@ impl Box {
         )
     }
 
-    pub fn build_doc_box_tree(doc: &mut Document) -> Option<Rc<RefCell<Box>>> {
+    pub fn build_doc_box_tree(
+        doc: &mut Document,
+        window_size: (f64, f64),
+    ) -> Option<Rc<RefCell<Box>>> {
         compute_doc_styles(doc);
 
         // For now, create a simple box for the document root
         let mut root_box = Box {
-            _content_width: 800.0,
-            _content_height: 600.0,
+            _content_width: window_size.0,
+            _content_height: window_size.1,
             _padding: Edges::empty(),
             _border: Edges::empty(),
             _margin: Edges::empty(),
@@ -442,6 +445,13 @@ impl Box {
         let total_height = cursor_y - start_y;
         self._content_height = total_height;
 
+        if !matches!(self.associated_style.width, WidthValue::Auto) {
+            self._content_width = self
+                .associated_style
+                .width
+                .resolve(container_width.unwrap_or(0.0));
+        }
+
         (self._content_width, total_height)
     }
 
@@ -544,23 +554,25 @@ fn compute_element_styles(
         for rule in stylesheet.borrow().css_rules().iter() {
             match rule.deref()._type() {
                 CSSRuleType::Style => {
-                    if let Some(style_rule) = rule
+                    let style_rule = rule
                         .deref()
                         .as_any()
                         .downcast_ref::<CSSRuleNode<CSSStyleRuleData>>()
-                    {
-                        for selector in style_rule.selectors() {
-                            if selector.matches(element, parents) {
-                                let style = element.style_mut();
+                        .unwrap();
 
-                                for declaration in style_rule.declarations() {
-                                    handle_declaration(declaration, style);
-                                }
+                    for selector in style_rule.selectors() {
+                        if selector.matches(element, parents) {
+                            let style = element.style_mut();
+
+                            for declaration in style_rule.declarations() {
+                                handle_declaration(declaration, style);
                             }
                         }
                     }
                 }
-                _ => {}
+                _ => {
+                    todo!("Handle other CSS rule types");
+                }
             }
         }
     }
@@ -588,6 +600,9 @@ fn handle_declaration(declaration: &CSSDeclaration, style: &mut ComputedStyle) {
         "background-color" => {
             style.background_color =
                 Color::parse_from_cv(&declaration.value).unwrap_or(Color::transparent());
+        }
+        "width" => {
+            style.width = WidthValue::from_cv(&declaration.value).unwrap_or_default();
         }
         _ => {
             todo!(

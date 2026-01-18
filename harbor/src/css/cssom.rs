@@ -13,7 +13,7 @@ use crate::{
         colors::{Color, is_color},
         parser::{AtRule, ComponentValue, parse_css_declaration_block},
         selectors::{Selector, SelectorList},
-        tokenize::CSSToken,
+        tokenize::{CSSToken, Dimension, Percentage},
         values::angles::{is_angle_unit, to_canonical_angle},
     },
     html5::dom::{Document, Element},
@@ -25,7 +25,7 @@ impl Serializable for ComponentValue {
     fn serialize(&self) -> String {
         match self {
             ComponentValue::Token(CSSToken::Ident(keyword)) => keyword.to_ascii_lowercase(),
-            ComponentValue::Token(CSSToken::Dimension { value, unit, .. })
+            ComponentValue::Token(CSSToken::Dimension(Dimension { value, unit, .. }))
                 if is_angle_unit(unit.as_str()) =>
             {
                 let deg_value = to_canonical_angle(*value, unit);
@@ -689,10 +689,62 @@ impl PartialEq for DocumentOrShadowRootStyle {
 
 impl Eq for DocumentOrShadowRootStyle {}
 
+#[derive(Default, Debug, Clone)]
+pub enum WidthValue {
+    Length(Dimension),
+    Percentage(Percentage),
+
+    #[default]
+    Auto,
+
+    MaxContent,
+    MinContent,
+    FitContent,
+    Stretch,
+}
+
+impl WidthValue {
+    pub fn from_cv(cvs: &Vec<ComponentValue>) -> Option<Self> {
+        assert!(cvs.len() == 1);
+
+        match &cvs[0] {
+            ComponentValue::Token(CSSToken::Ident(ident)) => match ident.as_str() {
+                "auto" => Some(WidthValue::Auto),
+                "max-content" => Some(WidthValue::MaxContent),
+                "min-content" => Some(WidthValue::MinContent),
+                "fit-content" => Some(WidthValue::FitContent),
+                "stretch" => Some(WidthValue::Stretch),
+                _ => None,
+            },
+            ComponentValue::Token(CSSToken::Dimension(dim)) => {
+                Some(WidthValue::Length(dim.clone()))
+            }
+            ComponentValue::Token(CSSToken::Percentage(perc)) => {
+                Some(WidthValue::Percentage(perc.clone()))
+            }
+            _ => None,
+        }
+    }
+
+    pub fn resolve(&self, parent_width: f64) -> f64 {
+        match self {
+            WidthValue::Length(dim) => match dim.unit.as_str() {
+                "px" => dim.value as f64,
+                _ => todo!("Handle other length units"),
+            },
+            WidthValue::Percentage(perc) => (*perc as f64 / 100.0) * parent_width,
+            WidthValue::Auto => parent_width,
+            _ => todo!("Handle other WidthValue variants"),
+        }
+    }
+}
+
 #[derive(Default, Clone, Debug)]
 pub struct ComputedStyle {
     pub color: Color,
     pub background_color: Color,
+
+    pub width: WidthValue,
 }
 
 impl PartialEq for ComputedStyle {

@@ -21,6 +21,15 @@ pub struct HashToken {
     pub hash_type: HashType,
 }
 
+#[derive(Debug, Clone)]
+pub struct Dimension {
+    pub value: f64,
+    pub number_type: NumberType,
+    pub unit: String,
+}
+
+pub type Percentage = f64;
+
 /// https://www.w3.org/TR/css-syntax-3/#tokenization
 #[derive(Debug, Clone)]
 pub enum CSSToken {
@@ -33,16 +42,9 @@ pub enum CSSToken {
     URL(String),
     BadURL,
     Delim(char),
-    Number {
-        value: f64,
-        number_type: NumberType,
-    },
-    Percentage(f64),
-    Dimension {
-        value: f64,
-        number_type: NumberType,
-        unit: String,
-    },
+    Number { value: f64, number_type: NumberType },
+    Percentage(Percentage),
+    Dimension(Dimension),
     Whitespace,
     CDO,
     CDC,
@@ -282,13 +284,13 @@ fn consume_numeric(stream: &mut InputStream<char>) -> CSSToken {
         .peek_range(1, 3)
         .is_some_and(|s| would_start_ident(s))
     {
-        let mut token = CSSToken::Dimension {
+        let mut token = CSSToken::Dimension(Dimension {
             value: number_value,
             number_type,
             unit: String::new(),
-        };
+        });
 
-        if let CSSToken::Dimension { unit, .. } = &mut token {
+        if let CSSToken::Dimension(Dimension { unit, .. }) = &mut token {
             *unit = consume_ident_seq(stream);
         }
 
