@@ -241,7 +241,7 @@ fn consume_number(stream: &mut InputStream<char>) -> (f64, NumberType) {
     }
 
     if stream.peek() == Some('.') {
-        if stream.peek_nth(2).is_some_and(|s| s.is_ascii_digit()) {
+        if stream.peek_nth(1).is_some_and(|s| s.is_ascii_digit()) {
             repr.push(stream.consume().unwrap()); // consume '.'
             repr.push(stream.consume().unwrap()); // consume digit
 
@@ -253,9 +253,9 @@ fn consume_number(stream: &mut InputStream<char>) -> (f64, NumberType) {
         }
 
         if stream.peek().is_some_and(|ch| ch == 'e' || ch == 'E') {
-            if stream.peek_nth(2).is_some_and(|c2| {
+            if stream.peek_nth(1).is_some_and(|c2| {
                 ((c2 == '+' || c2 == '-')
-                    && stream.peek_nth(3).is_some_and(|c3| c3.is_ascii_digit()))
+                    && stream.peek_nth(2).is_some_and(|c3| c3.is_ascii_digit()))
                     || c2.is_ascii_digit()
             }) {
                 repr.push(stream.consume().unwrap()); // consume 'e' or 'E'

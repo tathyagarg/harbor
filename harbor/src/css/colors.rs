@@ -355,6 +355,47 @@ pub fn hex_to_rgb(hex: &str) -> UsedColor {
     ]
 }
 
+mod functions {
+    use crate::css::{
+        colors::UsedColor,
+        parser::{ComponentValue, Function},
+        tokenize::CSSToken,
+    };
+
+    pub fn from_rgb(func: &Function) -> Option<UsedColor> {
+        if func.1.len() < 3 {
+            return None;
+        }
+
+        let mut components = [0.0, 0.0, 0.0, 1.0];
+        let mut index = 0;
+
+        for cv in &func.1 {
+            if index >= 4 {
+                break;
+            }
+
+            match cv {
+                ComponentValue::Token(CSSToken::Number { value, .. }) => {
+                    if index == 3 {
+                        components[index] = *value as f32;
+                    } else {
+                        components[index] = (*value as f32) / 255.0;
+                    }
+                    index += 1;
+                }
+                ComponentValue::Token(CSSToken::Percentage(perc)) => {
+                    components[index] = (*perc as f32) / 100.0;
+                    index += 1;
+                }
+                _ => {}
+            }
+        }
+
+        Some(components)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Color {
     Named(String),
@@ -373,7 +414,7 @@ impl Color {
         Color::Hex(String::from("#00000000"))
     }
 
-    pub fn parse_from_cv(cvs: &Vec<ComponentValue>) -> Option<Color> {
+    pub fn from_cvs(cvs: &[ComponentValue]) -> Option<Color> {
         if cvs.len() != 1 {
             return None;
         }
@@ -402,9 +443,18 @@ impl Color {
                 }
             }
             Color::Hex(hex) => hex_to_rgb(hex),
-            Color::Function(func) => {
-                todo!("Color functions not implemented yet: {:?}", func)
-            }
+            Color::Function(func) => match func.0.to_lowercase().as_str() {
+                "rgb" | "rgba" => functions::from_rgb(func).unwrap_or([0.0, 0.0, 0.0, 1.0]),
+                _ => [0.0, 0.0, 0.0, 1.0],
+            },
+        }
+    }
+
+    pub fn from_name(name: &str) -> Option<Self> {
+        if get_named_color(name).is_some() {
+            Some(Color::Named(name.to_string()))
+        } else {
+            None
         }
     }
 }

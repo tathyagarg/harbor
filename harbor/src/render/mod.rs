@@ -234,9 +234,9 @@ impl WindowState {
         match layout_box._box_type {
             BoxType::Block => {
                 render_pass.set_pipeline(&self.fill_render_pipeline);
-                if layout_box.associated_style.background_color.used()[3] > 0.0 {
-                    let bg_color = layout_box.associated_style.background_color.used();
+                let bg_color = layout_box.associated_style.background.color.used();
 
+                if bg_color[3] > 0.0 {
                     let window_size = self.window.inner_size();
 
                     // println!("Box: {:#?}", layout_box);

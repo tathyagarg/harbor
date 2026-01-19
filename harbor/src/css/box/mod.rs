@@ -12,9 +12,12 @@ use crate::{
         colors::Color,
         cssom::{
             CSSDeclaration, CSSRuleNode, CSSRuleType, CSSStyleRuleData, CSSStyleSheetExt,
-            ComputedStyle, WidthValue,
+            ComputedStyle,
         },
+        parser::ComponentValue,
+        properties::{Background, WidthValue},
         selectors::MatchesElement,
+        tokenize::CSSToken,
     },
     globals::FONTS,
     html5::dom::{Document, Element, NodeKind},
@@ -592,23 +595,27 @@ fn compute_element_styles(
     }
 }
 
+fn handle_background(declaration: &CSSDeclaration, style: &mut ComputedStyle) {
+    let bg = Background::from_cv(&declaration.value);
+    style.background = bg;
+}
+
 fn handle_declaration(declaration: &CSSDeclaration, style: &mut ComputedStyle) {
     match declaration.property_name.as_str() {
         "color" => {
-            style.color = Color::parse_from_cv(&declaration.value).unwrap_or(Color::default());
+            style.color = Color::from_cvs(&declaration.value[..]).unwrap_or(Color::default());
         }
-        "background-color" => {
-            style.background_color =
-                Color::parse_from_cv(&declaration.value).unwrap_or(Color::transparent());
+        "background" => {
+            handle_background(declaration, style);
         }
         "width" => {
             style.width = WidthValue::from_cv(&declaration.value).unwrap_or_default();
         }
         _ => {
-            todo!(
-                "Implement handling for property: {}",
-                declaration.property_name
-            );
+            // todo!(
+            //     "Implement handling for property: {}",
+            //     declaration.property_name
+            // );
         }
     }
 }
