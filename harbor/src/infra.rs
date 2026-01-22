@@ -195,6 +195,11 @@ where
     pub fn reconsume(&mut self) {
         self.is_reconsume = true;
     }
+
+    pub fn finish(&mut self) -> Vec<T> {
+        self.is_eof = true;
+        self.input.drain(self.pos..).collect()
+    }
 }
 
 impl InputStream<char> {

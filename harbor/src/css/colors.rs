@@ -1,6 +1,10 @@
-use crate::css::{
-    parser::{ComponentValue, Function},
-    tokenize::{CSSToken, HashToken},
+use crate::{
+    css::{
+        parser::{ComponentValue, Function},
+        properties::CSSParseable,
+        tokenize::{CSSToken, HashToken},
+    },
+    infra::InputStream,
 };
 
 /// Name              Light Mode   Dark Mode
@@ -396,6 +400,7 @@ mod functions {
     }
 }
 
+/// TODO: Make parse match spec
 #[derive(Debug, Clone, PartialEq)]
 pub enum Color {
     Named(String),
@@ -412,25 +417,6 @@ impl Default for Color {
 impl Color {
     pub fn transparent() -> Self {
         Color::Hex(String::from("#00000000"))
-    }
-
-    pub fn from_cvs(cvs: &[ComponentValue]) -> Option<Color> {
-        if cvs.len() != 1 {
-            return None;
-        }
-
-        match &cvs[0] {
-            ComponentValue::Token(CSSToken::Ident(name)) if get_named_color(name).is_some() => {
-                Some(Color::Named(name.clone()))
-            }
-            ComponentValue::Token(CSSToken::Hash(HashToken { value: val, .. })) => {
-                Some(Color::Hex(val.clone()))
-            }
-            ComponentValue::Function(func) if is_color_function(&func.0) => {
-                Some(Color::Function(func.clone()))
-            }
-            _ => None,
-        }
     }
 
     pub fn used(&self) -> [f32; 4] {
@@ -454,6 +440,30 @@ impl Color {
         if get_named_color(name).is_some() {
             Some(Color::Named(name.to_string()))
         } else {
+            None
+        }
+    }
+}
+
+impl CSSParseable for Color {
+    fn from_cv(cvs: &mut InputStream<ComponentValue>) -> Option<Self> {
+        if let Some(tok) = cvs.consume() {
+            match tok {
+                ComponentValue::Token(CSSToken::Ident(name))
+                    if get_named_color(&name).is_some() =>
+                {
+                    Some(Color::Named(name.clone()))
+                }
+                ComponentValue::Token(CSSToken::Hash(HashToken { value: val, .. })) => {
+                    Some(Color::Hex(val.clone()))
+                }
+                ComponentValue::Function(func) if is_color_function(&func.0) => {
+                    Some(Color::Function(func.clone()))
+                }
+                _ => None,
+            }
+        } else {
+            cvs.reconsume();
             None
         }
     }

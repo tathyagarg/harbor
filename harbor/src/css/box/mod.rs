@@ -15,12 +15,13 @@ use crate::{
             ComputedStyle,
         },
         parser::ComponentValue,
-        properties::{Background, WidthValue},
+        properties::{Background, CSSParseable, WidthValue},
         selectors::MatchesElement,
         tokenize::CSSToken,
     },
     globals::FONTS,
     html5::dom::{Document, Element, NodeKind},
+    infra::InputStream,
 };
 
 /// Represents the edges of a box: top, right, bottom, left
@@ -596,20 +597,26 @@ fn compute_element_styles(
 }
 
 fn handle_background(declaration: &CSSDeclaration, style: &mut ComputedStyle) {
-    let bg = Background::from_cv(&declaration.value);
-    style.background = bg;
+    let mut stream = InputStream::new(&declaration.value);
+
+    let bg = Background::from_cv(&mut stream);
+    if let Some(bg) = bg {
+        style.background = bg;
+    }
 }
 
 fn handle_declaration(declaration: &CSSDeclaration, style: &mut ComputedStyle) {
     match declaration.property_name.as_str() {
         "color" => {
-            style.color = Color::from_cvs(&declaration.value[..]).unwrap_or(Color::default());
+            let mut stream = InputStream::new(&declaration.value);
+            style.color = Color::from_cv(&mut stream).unwrap_or(Color::default());
         }
         "background" => {
             handle_background(declaration, style);
         }
         "width" => {
-            style.width = WidthValue::from_cv(&declaration.value).unwrap_or_default();
+            let mut stream = InputStream::new(&declaration.value);
+            style.width = WidthValue::from_cv(&mut stream).unwrap_or_default();
         }
         _ => {
             // todo!(
