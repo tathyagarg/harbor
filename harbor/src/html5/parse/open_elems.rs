@@ -1,5 +1,5 @@
 use crate::html5;
-use crate::html5::dom::{Element, IElement, INode, InsertLocation, NodeKind};
+use crate::html5::dom::{Element, IElement, InsertLocation, NodeKind};
 use crate::html5::parse::tree::Token;
 use crate::html5::tag_groups::*;
 use std::cell::RefCell;

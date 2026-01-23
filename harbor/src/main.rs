@@ -1,7 +1,7 @@
-use std::{collections::HashMap, ops::Deref, rc::Rc, sync::LazyLock};
+use std::rc::Rc;
 
 use crate::{
-    css::{layout::Layout, parser::preprocess, tokenize::tokenize},
+    css::{layout::Layout, tokenize::tokenize},
     infra::InputStream,
 };
 
@@ -14,7 +14,6 @@ pub mod infra;
 pub mod render;
 
 use crate::css::parser::parse_stylesheet;
-use crate::font::ttf::ParsedTableDirectory;
 use winit::event_loop::EventLoop;
 
 fn main() {

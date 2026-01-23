@@ -150,7 +150,7 @@ pub trait MatchesElement {
 }
 
 impl MatchesElement for CompoundSelector {
-    fn matches(&self, element: &Element, parents: Option<&Vec<&Element>>) -> bool {
+    fn matches(&self, element: &Element, _parents: Option<&Vec<&Element>>) -> bool {
         if let Some(type_selector) = &self.type_selector {
             match type_selector {
                 TypeSelector::WQName(wq_name) => {
@@ -175,7 +175,7 @@ impl MatchesElement for CompoundSelector {
                         element.local_name == wq_name.local_name
                     };
                 }
-                TypeSelector::Prefixed(ns_prefix) => {
+                TypeSelector::Prefixed(_ns_prefix) => {
                     // Match namespace if specified
                     todo!("Implement matching for Prefixed TypeSelector");
                 }
@@ -198,7 +198,6 @@ impl MatchesElement for ComplexSelector {
         }
 
         // Then, match combinators and their compound selectors
-        let mut current_element = element;
         let mut current_parents = parents;
 
         for (combinator, compound) in &self.combinators {
@@ -209,7 +208,6 @@ impl MatchesElement for ComplexSelector {
                             if !compound.matches(parent, None) {
                                 return false;
                             }
-                            current_element = parent;
                             current_parents = None; // Update as needed
                         } else {
                             return false;

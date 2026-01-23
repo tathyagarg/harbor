@@ -968,7 +968,7 @@ impl CSSParseable for FontWeight {
                     "lighter" => return Some(FontWeight::Lighter),
                     _ => {}
                 },
-                ComponentValue::Token(CSSToken::Number { value, number_type }) => {
+                ComponentValue::Token(CSSToken::Number { value, .. }) => {
                     return Some(FontWeight::Weight(value as u32));
                 }
                 _ => {}

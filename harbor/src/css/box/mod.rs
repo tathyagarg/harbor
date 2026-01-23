@@ -306,29 +306,26 @@ impl Box {
                     _ => BoxType::Block,
                 };
 
-                let font_size = element
-                    .style_mut()
-                    .font
-                    .resolve_font_size(
-                        parent
-                            .and_then(|weak_box| weak_box.upgrade())
-                            .and_then(|parent_box_rc| {
-                                match parent_box_rc.borrow().associated_style.font {
-                                    Font::Constructed(ref constructed) => {
-                                        constructed.resolved_font_size()
-                                    }
-                                    _ => None,
+                element.style_mut().font.resolve_font_size(
+                    parent
+                        .and_then(|weak_box| weak_box.upgrade())
+                        .and_then(|parent_box_rc| {
+                            match parent_box_rc.borrow().associated_style.font {
+                                Font::Constructed(ref constructed) => {
+                                    constructed.resolved_font_size()
                                 }
-                            })
-                            .unwrap_or(16.0),
-                    )
-                    .unwrap_or(16.0);
+                                _ => None,
+                            }
+                        })
+                        .unwrap_or(16.0),
+                );
 
-                let line_height = element
-                    .style()
-                    .font
-                    .resolved_line_height()
-                    .unwrap_or(font_size * 1.2);
+                // TODO: Figure out what to do with this
+                // let line_height = element
+                //     .style()
+                //     .font
+                //     .resolved_line_height()
+                //     .unwrap_or(font_size * 1.2);
 
                 // let font_size = match element.local_name.as_str() {
                 //     "h1" => 32.0,
@@ -356,7 +353,6 @@ impl Box {
                 // if let Font::Constructed(ref mut constructed) = element.style().font {
                 //     constructed.resolve_font_size(font_size);
                 // }
-
                 let this_box = Rc::new(RefCell::new(Box {
                     _content_width: 0.0,
                     _content_height: 0.0,

@@ -68,7 +68,7 @@ pub enum NodeKind {
 impl NodeKind {
     pub fn node(&self) -> Rc<RefCell<Node>> {
         match self {
-            NodeKind::Node(n) => panic!("NodeKind::Node does not contain a Rc<RefCell<Node>>"),
+            NodeKind::Node(_) => panic!("NodeKind::Node does not contain a Rc<RefCell<Node>>"),
             NodeKind::Element(e) => Rc::clone(&e.borrow()._node),
             NodeKind::Text(t) => Rc::clone(&t.borrow()._character_data._node),
             NodeKind::Comment(c) => Rc::clone(&c._character_data._node),

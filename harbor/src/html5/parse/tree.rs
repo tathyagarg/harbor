@@ -1129,14 +1129,14 @@ impl InsertMode {
         return true;
     }
 
-    fn handle_in_template(parser: &mut Parser, token: Token) -> bool {
+    fn handle_in_template(_parser: &mut Parser, _token: Token) -> bool {
         todo!("Implement in template insertion mode");
 
-        match token {
-            _ => {}
-        }
+        // match token {
+        //     _ => {}
+        // }
 
-        return true;
+        // return true;
     }
 
     /// Let subject be token's tag name.
