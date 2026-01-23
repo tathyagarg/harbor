@@ -2,3 +2,7 @@ target
 
 debug
 debug.rs
+
+.DS_Store
+
+flamegraph.svg

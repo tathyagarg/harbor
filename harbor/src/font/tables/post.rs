@@ -431,6 +431,10 @@ impl PostTable {
                 // The glyph names for indices 0-257 are predefined and not stored here.
                 // We only need to read the custom glyph names starting from index 258.
                 for _ in 0..version_specific_data.num_glyphs - 258 {
+                    if offset >= data.len() {
+                        break;
+                    }
+
                     let string_length = data[offset] as usize;
                     offset += 1;
 

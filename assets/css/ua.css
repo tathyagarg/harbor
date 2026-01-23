@@ -1,5 +1,6 @@
 html {
   font-size: 32px;
+  font-family: "Andika";
 }
 
 html, body, h1, h2, h3, ul, li, p, div {
@@ -13,6 +14,7 @@ span, a, em, strong {
 h1 {
   font-size: 2em;
   font-weight: bold;
+  font-style: italic;
 }
 
 h2 {

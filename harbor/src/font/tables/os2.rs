@@ -2,8 +2,10 @@
 #![allow(non_camel_case_types)]
 
 use std::fmt::Debug;
+use std::ops::BitAnd;
 
 use crate::font::otf_dtypes::*;
+use crate::font::tables::head::MacStyle;
 use crate::font::tables::{ParseContext, TableTrait};
 
 fn weight_to_string(weight: uint16) -> &'static str {
@@ -226,36 +228,58 @@ fn panose_to_string(panose: &[uint8; 10]) -> String {
     panose_str.join(", ")
 }
 
+#[repr(u16)]
+pub enum FSSelectionFlags {
+    Italic = 0x0001,
+    Underscore = 0x0002,
+    Negative = 0x0004,
+    Outlined = 0x0008,
+    Strikeout = 0x0010,
+    Bold = 0x0020,
+    Regular = 0x0040,
+    UseTypoMetrics = 0x0080,
+    WWS = 0x0100,
+    Oblique = 0x0200,
+}
+
+impl BitAnd<FSSelectionFlags> for u16 {
+    type Output = u16;
+
+    fn bitand(self, rhs: FSSelectionFlags) -> Self::Output {
+        self & (rhs as u16)
+    }
+}
+
 fn fs_selection_to_string(fs_selection: uint16, mac_style: uint16) -> String {
     let mut flags = Vec::new();
-    if fs_selection & 0x0001 != 0 && mac_style & 0x02 != 0 {
+    if fs_selection & FSSelectionFlags::Italic != 0 && mac_style & MacStyle::Italic != 0 {
         flags.push("Italic");
     }
-    if fs_selection & 0x0002 != 0 {
+    if fs_selection & FSSelectionFlags::Underscore != 0 {
         flags.push("Underscore");
     }
-    if fs_selection & 0x0004 != 0 {
+    if fs_selection & FSSelectionFlags::Negative != 0 {
         flags.push("Negative");
     }
-    if fs_selection & 0x0008 != 0 {
+    if fs_selection & FSSelectionFlags::Outlined != 0 {
         flags.push("Outlined");
     }
-    if fs_selection & 0x0010 != 0 {
+    if fs_selection & FSSelectionFlags::Strikeout != 0 {
         flags.push("Strikeout");
     }
-    if fs_selection & 0x0020 != 0 && mac_style & 0x01 != 0 {
+    if fs_selection & FSSelectionFlags::Bold != 0 && mac_style & MacStyle::Bold != 0 {
         flags.push("Bold");
     }
-    if fs_selection & 0x0040 != 0 {
+    if fs_selection & FSSelectionFlags::Regular != 0 {
         flags.push("Regular");
     }
-    if fs_selection & 0x0080 != 0 {
+    if fs_selection & FSSelectionFlags::UseTypoMetrics != 0 {
         flags.push("Use Typo Metrics");
     }
-    if fs_selection & 0x0100 != 0 {
+    if fs_selection & FSSelectionFlags::WWS != 0 {
         flags.push("WWS");
     }
-    if fs_selection & 0x0200 != 0 {
+    if fs_selection & FSSelectionFlags::Oblique != 0 {
         flags.push("Oblique");
     }
 
@@ -622,6 +646,20 @@ impl OS2Table {
             OS2Table::V4(table) | OS2Table::V3(table) | OS2Table::V2(table) => {
                 Some(table.us_weight_class)
             }
+            OS2Table::Interim(_) => None,
+        }
+    }
+
+    pub fn is_italic(&self) -> Option<bool> {
+        match self {
+            OS2Table::V5(table) => Some(
+                (table.fs_selection & FSSelectionFlags::Italic as uint16) != 0
+                    && (table._mac_style & MacStyle::Italic) != 0,
+            ),
+            OS2Table::V4(table) | OS2Table::V3(table) | OS2Table::V2(table) => Some(
+                (table.fs_selection & FSSelectionFlags::Italic as uint16) != 0
+                    && (table._mac_style & MacStyle::Italic) != 0,
+            ),
             OS2Table::Interim(_) => None,
         }
     }

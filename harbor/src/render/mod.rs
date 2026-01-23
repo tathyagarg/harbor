@@ -17,6 +17,7 @@ use wgpu;
 use crate::css::r#box::{Box, BoxType};
 use crate::css::colors::UsedColor;
 use crate::css::layout::Layout;
+use crate::css::properties::FontStyle;
 use crate::font::ttc::CompleteTTCData;
 use crate::font::ttf::ParsedTableDirectory;
 use crate::html5::dom::Document;
@@ -87,18 +88,18 @@ impl TextRendererCreator {
 pub struct TextRenderer {
     pub font: Option<CompleteTTCData>,
 
-    /// Key: (text, weight, x position, y position, font-size (rounded))
+    /// Key: (text, weight, italic, x position, y position, font-size (rounded))
     /// Value: (vertices, font-size)
     /// The font size in the key is rounded
     /// When getting a value from the cache, if the required font-size matches the key but is not
     /// equal, the cache will not be used and new vertices will be generated. This will not update
     /// the cache.
-    pub vertex_cache: HashMap<(String, u16, u32, u32, u32), (Vec<text::Vertex>, f32)>,
+    pub vertex_cache: HashMap<(String, u16, bool, u32, u32, u32), (Vec<text::Vertex>, f32)>,
 
     pub window_size: (f32, f32),
 
     _empty_buffer: Option<wgpu::Buffer>,
-    outline_vertex_buffers: HashMap<(String, u16, u32, u32, u32), (wgpu::Buffer, usize)>,
+    outline_vertex_buffers: HashMap<(String, u16, bool, u32, u32, u32), (wgpu::Buffer, usize)>,
 }
 
 impl TextRenderer {
@@ -110,6 +111,7 @@ impl TextRenderer {
         &mut self,
         text: String,
         weight: u16,
+        italic: bool,
         color: UsedColor,
         font_size: f32,
         position: (u32, u32),
@@ -117,6 +119,7 @@ impl TextRenderer {
         let update_cache = if let Some((verts, cached_font_size)) = self.vertex_cache.get(&(
             text.clone(),
             weight,
+            italic,
             position.0,
             position.1,
             font_size as u32,
@@ -130,12 +133,24 @@ impl TextRenderer {
             true
         };
 
-        let font = match &self.font {
+        let ttc = match &self.font {
             Some(f) => f,
             None => return vec![],
+        };
+
+        let font = if italic {
+            ttc.get_italic_font_by_weight(weight)
+        } else {
+            ttc.get_font_by_weight(weight)
         }
-        .get_font_by_weight(weight)
-        .unwrap_or_else(|| &self.font.as_ref().unwrap().table_directories()[0]);
+        .unwrap_or(ttc.get_regular_font().unwrap());
+
+        println!(
+            "Head table: {:#?}\nRequired: {} {:?}",
+            font.get_table_record(b"head"),
+            weight,
+            italic
+        );
 
         let scale = font_size / font.units_per_em() as f32;
 
@@ -158,6 +173,7 @@ impl TextRenderer {
                 (
                     text.clone(),
                     weight,
+                    italic,
                     position.0,
                     position.1,
                     font_size as u32,
@@ -168,6 +184,7 @@ impl TextRenderer {
             self.outline_vertex_buffers.remove(&(
                 text,
                 weight,
+                italic,
                 position.0,
                 position.1,
                 font_size as u32,
@@ -182,13 +199,21 @@ impl TextRenderer {
         device: &wgpu::Device,
         text: String,
         weight: u16,
+        italic: bool,
         color: UsedColor,
         font_size: f32,
         position: (u32, u32),
     ) {
-        let verts = self.vertices(text.clone(), weight, color, font_size, position);
+        let verts = self.vertices(text.clone(), weight, italic, color, font_size, position);
 
-        let key = (text, weight, position.0, position.1, font_size as u32);
+        let key = (
+            text,
+            weight,
+            italic,
+            position.0,
+            position.1,
+            font_size as u32,
+        );
 
         let existing_buffer = self.outline_vertex_buffers.get_mut(&key);
 
@@ -308,13 +333,13 @@ impl WindowState {
 
                             let family = layout_box.associated_style.font.family();
                             let mut font_iter = family.entries.iter();
-                            let mut renderer = loop {
+                            let renderer = loop {
                                 if let Some(font_family) = font_iter.next() {
                                     if let Some(renderer_option) =
                                         self.layout._renderers.get_mut(&font_family.value())
                                     {
                                         if let Some(renderer) = renderer_option {
-                                            break renderer.clone();
+                                            break renderer;
                                         }
                                     }
                                 } else {
@@ -323,7 +348,7 @@ impl WindowState {
                                         self.layout._renderers.get_mut("Times New Roman")
                                     {
                                         if let Some(renderer) = renderer_option {
-                                            break renderer.clone();
+                                            break renderer;
                                         }
                                     } else {
                                         return;
@@ -344,9 +369,15 @@ impl WindowState {
                                 .unwrap_or(400)
                                 as u16;
 
+                            let italic = matches!(
+                                layout_box.associated_style.font.style(),
+                                FontStyle::Italic
+                            );
+
                             let verts = renderer.vertices(
                                 text_content.clone(),
                                 font_weight,
+                                italic,
                                 layout_box.associated_style.color.used(),
                                 font_size,
                                 (adj_position.0 as u32, adj_position.1 as u32),
@@ -357,6 +388,7 @@ impl WindowState {
                                     &self.device,
                                     text_content.clone(),
                                     font_weight,
+                                    italic,
                                     layout_box.associated_style.color.used(),
                                     font_size,
                                     (adj_position.0 as u32, adj_position.1 as u32),
@@ -365,6 +397,7 @@ impl WindowState {
                                 let key = (
                                     text_content.clone(),
                                     font_weight,
+                                    italic,
                                     adj_position.0 as u32,
                                     adj_position.1 as u32,
                                     font_size as u32,

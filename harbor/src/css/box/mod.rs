@@ -15,8 +15,8 @@ use crate::{
             ComputedStyle,
         },
         properties::{
-            Background, CSSParseable, Display, Font, FontFamily, FontSize, FontWeight, Image,
-            LineHeight, Origin, Position, RepeatStyle, WidthValue,
+            Background, CSSParseable, Display, Font, FontFamily, FontSize, FontStyle, FontWeight,
+            Image, LineHeight, Origin, Position, RepeatStyle, WidthValue,
         },
         selectors::MatchesElement,
     },
@@ -473,53 +473,6 @@ impl Box {
         (self._content_width, self._content_height)
     }
 
-    // pub fn layout_block(
-    //     &mut self,
-    //     container_width: Option<f64>,
-    //     container_height: Option<f64>,
-    //     start_x: f64,
-    //     start_y: f64,
-    // ) -> (f64, f64) {
-    //     let initial_x = start_x + self._margin.3 + self._border.3 + self._padding.3;
-    //     let mut cursor_x = initial_x;
-    //     let mut cursor_y = start_y;
-
-    //     for child_box_rc in &self.children {
-    //         let mut child_box = child_box_rc.borrow_mut();
-
-    //         child_box._position_x = Some(cursor_x - start_x);
-    //         child_box._position_y = Some(cursor_y - start_y);
-
-    //         let (child_width, child_height) =
-    //             child_box.layout(container_width, container_height, cursor_x, cursor_y);
-
-    //         match child_box._box_type {
-    //             BoxType::Block => {
-    //                 cursor_y += child_height + child_box._margin.vertical();
-    //                 cursor_x = initial_x;
-    //             }
-    //             BoxType::Inline => {
-    //                 cursor_x += child_width + child_box._margin.horizontal();
-    //             }
-    //             _ => {}
-    //         }
-
-    //         self._content_width = self._content_width.max(child_width);
-    //     }
-
-    //     let total_height = cursor_y - start_y;
-    //     self._content_height = total_height;
-
-    //     if !matches!(self.associated_style.width, WidthValue::Auto) {
-    //         self._content_width = self
-    //             .associated_style
-    //             .width
-    //             .resolve(container_width.unwrap_or(0.0));
-    //     }
-
-    //     (self._content_width, total_height)
-    // }
-
     pub fn layout_inline(
         &mut self,
         _container_width: Option<f64>,
@@ -559,7 +512,15 @@ impl Box {
                     }
                 };
 
-                let font = ttc.and_then(|ttc| ttc.get_font_by_weight(weight));
+                let font = if matches!(self.associated_style.font.style(), FontStyle::Italic) {
+                    ttc.and_then(|ttc| ttc.get_italic_font_by_weight(weight))
+                        .or(ttc.and_then(|ttc| ttc.get_font_by_weight(weight)))
+                } else {
+                    ttc.and_then(|ttc| ttc.get_font_by_weight(weight))
+                }
+                .or(ttc.and_then(|ttc| ttc.get_regular_font()));
+
+                // let font = ttc.and_then(|ttc| ttc.get_font_by_weight(weight));
 
                 // let font = FONTS.get(
                 //     &self
@@ -770,6 +731,12 @@ fn handle_font_property(
             let line_height = LineHeight::from_cv(&mut stream);
             if let Some(line_height) = line_height {
                 style.font.set_line_height(line_height);
+            }
+        }
+        "font-style" => {
+            let font_style = FontStyle::from_cv(&mut stream);
+            if let Some(font_style) = font_style {
+                style.font.set_style(font_style);
             }
         }
         _ => {}

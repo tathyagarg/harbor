@@ -4,6 +4,7 @@
 use std::fmt::Debug;
 
 use crate::font::otf_dtypes::*;
+use crate::font::tables::head::MacStyle;
 use crate::font::ttf::{
     ParsedTableDirectory, TableDirectory, TableRecord, TableRecordData, parse_table_directory,
 };
@@ -210,7 +211,85 @@ impl CompleteTTCData {
             }) = table_directory.get_table_record(b"OS/2")
             {
                 let os2_weight = os2_table.weight().unwrap_or(400);
-                if os2_weight == weight {
+                let os2_italic = os2_table.is_italic().unwrap_or(false);
+                if os2_weight == weight && !os2_italic {
+                    return Some(table_directory);
+                }
+            }
+        }
+
+        None
+    }
+
+    pub fn get_italic_font(&self) -> Option<&ParsedTableDirectory> {
+        for table_directory in self.table_directories() {
+            if let Some(TableRecord {
+                _data: TableRecordData::Head(head_table),
+                ..
+            }) = table_directory.get_table_record(b"head")
+            {
+                let mac_style = head_table.mac_style;
+                if mac_style & MacStyle::Italic != 0 {
+                    return Some(table_directory);
+                }
+            }
+        }
+
+        None
+    }
+
+    pub fn get_bold_italic_font(&self) -> Option<&ParsedTableDirectory> {
+        for table_directory in self.table_directories() {
+            if let Some(TableRecord {
+                _data: TableRecordData::Head(head_table),
+                ..
+            }) = table_directory.get_table_record(b"head")
+            {
+                let mac_style = head_table.mac_style;
+                if (mac_style & MacStyle::Italic != 0) && (mac_style & MacStyle::Bold != 0) {
+                    return Some(table_directory);
+                }
+            }
+        }
+
+        None
+    }
+
+    pub fn get_italic_font_by_weight(&self, weight: uint16) -> Option<&ParsedTableDirectory> {
+        for table_directory in self.table_directories() {
+            if let Some(TableRecord {
+                _data: TableRecordData::Head(head_table),
+                ..
+            }) = table_directory.get_table_record(b"head")
+            {
+                let mac_style = head_table.mac_style;
+                if mac_style & MacStyle::Italic != 0 {
+                    if let Some(TableRecord {
+                        _data: TableRecordData::OS2(os2_table),
+                        ..
+                    }) = table_directory.get_table_record(b"OS/2")
+                    {
+                        let os2_weight = os2_table.weight().unwrap_or(400);
+                        if os2_weight == weight {
+                            return Some(table_directory);
+                        }
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
+    pub fn get_regular_font(&self) -> Option<&ParsedTableDirectory> {
+        for table_directory in self.table_directories() {
+            if let Some(TableRecord {
+                _data: TableRecordData::Head(head_table),
+                ..
+            }) = table_directory.get_table_record(b"head")
+            {
+                let mac_style = head_table.mac_style;
+                if mac_style & MacStyle::Italic == 0 && mac_style & MacStyle::Bold == 0 {
                     return Some(table_directory);
                 }
             }
@@ -255,6 +334,8 @@ pub fn parse_ttc_header(data: &[u8]) -> TTCHeader {
 }
 
 pub fn parse_ttc(data: &[u8]) -> TTCData {
+    println!("WAHAT");
+
     let ttc_header = parse_ttc_header(data);
     let mut table_directories = Vec::with_capacity(ttc_header.num_fonts() as usize);
 

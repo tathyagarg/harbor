@@ -1,4 +1,5 @@
 use std::fmt::Debug;
+use std::ops::BitAnd;
 
 use crate::font::otf_dtypes::*;
 use crate::font::tables::{ParseContext, TableTrait};
@@ -34,28 +35,47 @@ fn flags_to_string(flags: uint16) -> String {
     flag_descriptions.join(", ")
 }
 
+#[repr(u16)]
+pub enum MacStyle {
+    Bold = 0x0001,
+    Italic = 0x0002,
+    Underline = 0x0004,
+    Outline = 0x0008,
+    Shadow = 0x0010,
+    Condensed = 0x0020,
+    Extended = 0x0040,
+}
+
+impl BitAnd<MacStyle> for uint16 {
+    type Output = uint16;
+
+    fn bitand(self, rhs: MacStyle) -> Self::Output {
+        self & (rhs as uint16)
+    }
+}
+
 fn mac_style_to_string(mac_style: uint16) -> String {
     let mut styles = Vec::new();
 
-    if mac_style & 0x0001 != 0 {
+    if mac_style & MacStyle::Bold != 0 {
         styles.push("Bold");
     }
-    if mac_style & 0x0002 != 0 {
+    if mac_style & MacStyle::Italic != 0 {
         styles.push("Italic");
     }
-    if mac_style & 0x0004 != 0 {
+    if mac_style & MacStyle::Underline != 0 {
         styles.push("Underline");
     }
-    if mac_style & 0x0008 != 0 {
+    if mac_style & MacStyle::Outline != 0 {
         styles.push("Outline");
     }
-    if mac_style & 0x0010 != 0 {
+    if mac_style & MacStyle::Shadow != 0 {
         styles.push("Shadow");
     }
-    if mac_style & 0x0020 != 0 {
+    if mac_style & MacStyle::Condensed != 0 {
         styles.push("Condensed");
     }
-    if mac_style & 0x0040 != 0 {
+    if mac_style & MacStyle::Extended != 0 {
         styles.push("Extended");
     }
 

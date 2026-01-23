@@ -656,14 +656,14 @@ impl ParsedTableDirectory {
                     let mut segment_part = Vec::<Segment>::new();
                     let component_glyph_index = component.glyph_index as usize;
 
-                    if let Some(post_record) = self.get_table_record(b"post") {
-                        if let TableRecordData::Post(post_table) = &post_record._data {
-                            println!(
-                                "Component Glyph Name: {}",
-                                post_table.glyph_name(component_glyph_index as u16).unwrap()
-                            );
-                        }
-                    }
+                    // if let Some(post_record) = self.get_table_record(b"post") {
+                    //     if let TableRecordData::Post(post_table) = &post_record._data {
+                    //         println!(
+                    //             "Component Glyph Name: {}",
+                    //             post_table.glyph_name(component_glyph_index as u16).unwrap()
+                    //         );
+                    //     }
+                    // }
 
                     let mut component_segments: Vec<Segment> = Vec::new();
                     self.make_glyph_segments(

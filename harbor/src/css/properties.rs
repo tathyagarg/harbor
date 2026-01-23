@@ -671,6 +671,13 @@ impl Font {
         }
     }
 
+    pub fn style(&self) -> FontStyle {
+        match self {
+            Font::Constructed(cf) => cf.style.clone(),
+            Font::SystemFont(_) => FontStyle::default(),
+        }
+    }
+
     pub fn set_size(&mut self, size: FontSize) {
         match self {
             Font::Constructed(cf) => cf.size = size,
@@ -695,6 +702,13 @@ impl Font {
     pub fn set_weight(&mut self, weight: FontWeight) {
         match self {
             Font::Constructed(cf) => cf.weight = weight,
+            Font::SystemFont(_) => {}
+        }
+    }
+
+    pub fn set_style(&mut self, style: FontStyle) {
+        match self {
+            Font::Constructed(cf) => cf.style = style,
             Font::SystemFont(_) => {}
         }
     }
