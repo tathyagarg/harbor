@@ -15,8 +15,8 @@ use crate::{
             ComputedStyle,
         },
         properties::{
-            Background, CSSParseable, Font, FontFamily, FontSize, FontWeight, Image, LineHeight,
-            Origin, Position, RepeatStyle, WidthValue,
+            Background, CSSParseable, Display, Font, FontFamily, FontSize, FontWeight, Image,
+            LineHeight, Origin, Position, RepeatStyle, WidthValue,
         },
         selectors::MatchesElement,
     },
@@ -158,8 +158,8 @@ impl Debug for Box {
             // .field("border", &self._border)
             // .field("margin", &self._margin)
             .field("box_type", &self._box_type)
-            .field("position_x", &self._position_x.unwrap_or(-67.0))
-            .field("position_y", &self._position_y.unwrap_or(-67.0))
+            .field("position_x", &self._position_x.unwrap_or(0.0))
+            .field("position_y", &self._position_y.unwrap_or(0.0))
             .field("children_count", &self.children.len())
             .field("children", &self.children)
             .field(
@@ -299,76 +299,28 @@ impl Box {
     ) -> Option<Rc<RefCell<Box>>> {
         match tree.borrow().deref() {
             NodeKind::Element(element_rc) if element_rc.borrow().local_name.as_str() != "head" => {
-                let mut element = element_rc.borrow_mut();
+                let element = element_rc.borrow();
 
-                let display = match element.local_name.as_str() {
-                    "span" | "em" | "strong" => BoxType::Inline,
-                    _ => BoxType::Block,
-                };
+                // let display = match element.local_name.as_str() {
+                //     "span" | "em" | "strong" => BoxType::Inline,
+                //     _ => BoxType::Block,
+                // };
 
-                // element.style_mut().font.resolve_font_size(
-                //     parents
-                //         .last()
-                //         .and_then(|weak_box| weak_box.upgrade())
-                //         .and_then(|parent_box_rc| {
-                //             match parent_box_rc.borrow().associated_style.font {
-                //                 Font::Constructed(ref constructed) => {
-                //                     constructed.resolved_font_size()
-                //                 }
-                //                 _ => None,
-                //             }
-                //         })
-                //         .unwrap_or(16.0),
-                // );
-
-                // TODO: Figure out what to do with this
-                // let line_height = element
-                //     .style()
-                //     .font
-                //     .resolved_line_height()
-                //     .unwrap_or(font_size * 1.2);
-
-                // let font_size = match element.local_name.as_str() {
-                //     "h1" => 32.0,
-                //     "h2" => 24.0,
-                //     "h3" => 18.72,
-                //     "h4" => 16.0,
-                //     "h5" => 13.28,
-                //     "h6" => 10.72,
-                //     _ => {
-                //         parent
-                //             .and_then(|weak_box| weak_box.upgrade())
-                //             .and_then(|parent_box_rc| {
-                //                 match parent_box_rc.borrow().associated_style.font {
-                //                     Font::Constructed(ref constructed) => {
-                //                         constructed.resolved_font_size()
-                //                     }
-                //                     _ => None,
-                //                 }
-                //             })
-                //             .unwrap_or(16.0 * mag)
-                //             / mag
-                //     }
-                // } * mag;
-
-                // if let Font::Constructed(ref mut constructed) = element.style().font {
-                //     constructed.resolve_font_size(font_size);
-                // }
                 let this_box = Rc::new(RefCell::new(Box {
                     _content_width: 0.0,
                     _content_height: 0.0,
                     _padding: Edges::empty(),
                     _border: Edges::empty(),
                     _margin: Edges::empty(),
-                    _box_type: display,
+                    _box_type: if matches!(element.style().display, Display::Block) {
+                        BoxType::Block
+                    } else {
+                        BoxType::Inline
+                    },
                     _position_x: None,
                     _position_y: None,
                     children: vec![],
 
-                    // _font_family: None,
-                    // _font_size: Some(font_size),
-                    // _font_weight: None,
-                    // _line_height: Some(line_height),
                     associated_node: Some(Rc::clone(tree)),
 
                     associated_style: element.style().clone(),
@@ -396,20 +348,6 @@ impl Box {
                     _position_y: None,
                     children: vec![],
 
-                    // _font_family: Some("Times New Roman".to_string()),
-                    // _font_size: Some(
-                    //     parent
-                    //         .and_then(|weak_box| weak_box.upgrade())
-                    //         .and_then(|parent_box_rc| parent_box_rc.borrow()._font_size)
-                    //         .unwrap_or(16.0),
-                    // ),
-                    // _font_weight: None,
-                    // _line_height: Some(
-                    //     parent
-                    //         .and_then(|weak_box| weak_box.upgrade())
-                    //         .and_then(|parent_box_rc| parent_box_rc.borrow()._line_height)
-                    //         .unwrap_or(19.2),
-                    // ),
                     associated_node: Some(Rc::clone(tree)),
 
                     associated_style: parents
@@ -456,23 +394,74 @@ impl Box {
         let mut cursor_x = initial_x;
         let mut cursor_y = start_y;
 
+        let mut inline_run: Vec<Rc<RefCell<Box>>> = Vec::new();
+
+        let flush_inline_run = |run: &mut Vec<Rc<RefCell<Box>>>,
+                                cursor_x: &mut f64,
+                                cursor_y: &mut f64,
+                                content_width: &mut f64| {
+            if run.is_empty() {
+                return;
+            }
+
+            let mut line_width = 0.0;
+            let mut line_height: f64 = 0.0;
+
+            for child_rc in run.drain(..) {
+                let mut child = child_rc.borrow_mut();
+
+                child._position_x = Some(*cursor_x - start_x + line_width);
+                child._position_y = Some(*cursor_y - start_y);
+
+                let (w, h) = child.layout(container_width, container_height, 0.0, 0.0);
+
+                line_width += w + child._margin.horizontal();
+                line_height = line_height.max(h + child._margin.vertical());
+            }
+
+            *cursor_y += line_height;
+            *cursor_x = initial_x;
+            *content_width = content_width.max(line_width);
+        };
+
         for child_box_rc in &self.children {
-            let mut child_box = child_box_rc.borrow_mut();
+            let child_box_type = child_box_rc.borrow()._box_type.clone();
 
-            child_box._position_x = Some(0.0);
-            child_box._position_y = Some(cursor_y - start_y);
+            match child_box_type {
+                BoxType::Inline => {
+                    inline_run.push(child_box_rc.clone());
+                }
+                BoxType::Block => {
+                    flush_inline_run(
+                        &mut inline_run,
+                        &mut cursor_x,
+                        &mut cursor_y,
+                        &mut self._content_width,
+                    );
 
-            let (child_width, child_height) =
-                child_box.layout(container_width, container_height, cursor_x, cursor_y);
+                    let mut child = child_box_rc.borrow_mut();
+                    child._position_x = Some(cursor_x - start_x);
+                    child._position_y = Some(cursor_y - start_y);
 
-            cursor_y += child_height + child_box._margin.vertical();
-            cursor_x = initial_x;
+                    let (w, h) =
+                        child.layout(container_width, container_height, cursor_x, cursor_y);
 
-            self._content_width = self._content_width.max(child_width);
+                    cursor_y += h + child._margin.vertical();
+                    self._content_width = self._content_width.max(w);
+                }
+                _ => {}
+            }
         }
 
-        let total_height = cursor_y - start_y;
-        self._content_height = total_height;
+        // flush trailing inline content
+        flush_inline_run(
+            &mut inline_run,
+            &mut cursor_x,
+            &mut cursor_y,
+            &mut self._content_width,
+        );
+
+        self._content_height = cursor_y - start_y;
 
         if !matches!(self.associated_style.width, WidthValue::Auto) {
             self._content_width = self
@@ -481,8 +470,55 @@ impl Box {
                 .resolve(container_width.unwrap_or(0.0));
         }
 
-        (self._content_width, total_height)
+        (self._content_width, self._content_height)
     }
+
+    // pub fn layout_block(
+    //     &mut self,
+    //     container_width: Option<f64>,
+    //     container_height: Option<f64>,
+    //     start_x: f64,
+    //     start_y: f64,
+    // ) -> (f64, f64) {
+    //     let initial_x = start_x + self._margin.3 + self._border.3 + self._padding.3;
+    //     let mut cursor_x = initial_x;
+    //     let mut cursor_y = start_y;
+
+    //     for child_box_rc in &self.children {
+    //         let mut child_box = child_box_rc.borrow_mut();
+
+    //         child_box._position_x = Some(cursor_x - start_x);
+    //         child_box._position_y = Some(cursor_y - start_y);
+
+    //         let (child_width, child_height) =
+    //             child_box.layout(container_width, container_height, cursor_x, cursor_y);
+
+    //         match child_box._box_type {
+    //             BoxType::Block => {
+    //                 cursor_y += child_height + child_box._margin.vertical();
+    //                 cursor_x = initial_x;
+    //             }
+    //             BoxType::Inline => {
+    //                 cursor_x += child_width + child_box._margin.horizontal();
+    //             }
+    //             _ => {}
+    //         }
+
+    //         self._content_width = self._content_width.max(child_width);
+    //     }
+
+    //     let total_height = cursor_y - start_y;
+    //     self._content_height = total_height;
+
+    //     if !matches!(self.associated_style.width, WidthValue::Auto) {
+    //         self._content_width = self
+    //             .associated_style
+    //             .width
+    //             .resolve(container_width.unwrap_or(0.0));
+    //     }
+
+    //     (self._content_width, total_height)
+    // }
 
     pub fn layout_inline(
         &mut self,
@@ -531,12 +567,6 @@ impl Box {
                     .unwrap_or(16.0)
                     / font.unwrap().units_per_em() as f64;
 
-                println!(
-                    "Laying out text: '{}' with font size: {}",
-                    text_node_rc.borrow().data(),
-                    scale
-                );
-
                 let mut new_data = String::new();
                 for ch in text_node_rc.borrow().data().trim().chars() {
                     if ch != '\n' && ch != '\r' && ch != '\t' {
@@ -549,38 +579,27 @@ impl Box {
                             })
                             .unwrap_or(0.0);
 
-                        println!("Character: '{}' Advance Width: {}", ch, aw);
                         pen_x += aw;
                     } else {
                         // TODO: handle pre
                     }
                 }
-                println!("Total text width: {}", pen_x);
 
                 text_node_rc.borrow_mut().set_data(&new_data);
-                pen_y += self
-                    .associated_style
-                    .font
-                    .resolved_line_height()
-                    .unwrap_or(19.2);
+                self._content_height = self._content_height.max(
+                    self.associated_style
+                        .font
+                        .resolved_line_height()
+                        .unwrap_or(19.2),
+                );
             }
-            NodeKind::Element(element_rc) => {
-                let element = element_rc.borrow();
+            NodeKind::Element(_) => {
+                for child_box in self.children.iter() {
+                    let mut child_box = child_box.borrow_mut();
+                    let (advance, line_height) = child_box.layout_inline(None, None, pen_x, pen_y);
 
-                for child in element._node.borrow().child_nodes().iter() {
-                    let child_box_opt = self.build_box_tree(
-                        child,
-                        &mut vec![Rc::downgrade(&Rc::new(RefCell::new(self.clone())))],
-                    );
-                    if let Some(child_box_rc) = child_box_opt {
-                        let mut child_box = child_box_rc.borrow_mut();
-
-                        let (child_width, child_height) =
-                            child_box.layout(None, None, pen_x, pen_y);
-
-                        pen_x += child_width;
-                        pen_y = pen_y.max(child_height);
-                    }
+                    pen_x += advance;
+                    self._content_height = self._content_height.max(line_height);
                 }
             }
             _ => {}
@@ -588,9 +607,8 @@ impl Box {
 
         let total_width = pen_x - start_x;
         self._content_width = total_width;
-        self._content_height = pen_y - start_y;
 
-        (total_width, pen_y - start_y)
+        (total_width, self._content_height)
     }
 }
 
@@ -612,13 +630,7 @@ fn compute_element_styles(
     // inherit
     *element.style_mut() = parents
         .and_then(|p| p.last())
-        .map_or(ComputedStyle::default(), |parent| parent.style().clone());
-
-    println!(
-        "Inhereted style for <{}>: {:#?}",
-        element.local_name,
-        element.style()
-    );
+        .map_or(ComputedStyle::default(), |parent| parent.style().inherit());
 
     let style_sheets = document.style_sheets();
 
@@ -634,10 +646,8 @@ fn compute_element_styles(
 
                     for selector in style_rule.selectors() {
                         if selector.matches(element, parents) {
-                            let style = element.style_mut();
-
                             for declaration in style_rule.declarations() {
-                                handle_declaration(declaration, style, parents);
+                                handle_declaration(declaration, element.style_mut(), parents);
                             }
                         }
                     }
@@ -780,6 +790,10 @@ fn handle_declaration(
         "width" => {
             let mut stream = InputStream::new(&declaration.value);
             style.width = WidthValue::from_cv(&mut stream).unwrap_or_default();
+        }
+        "display" => {
+            let mut stream = InputStream::new(&declaration.value);
+            style.display = Display::from_cv(&mut stream).unwrap_or_default();
         }
         _ => {
             // todo!(

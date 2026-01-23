@@ -50,6 +50,12 @@ impl Layout {
                 0.0,
             );
         }
+
+        for (_, renderer) in self._renderers.iter_mut() {
+            if let Some(r) = renderer {
+                r.resized((self._window_size.0 as f32, self._window_size.1 as f32));
+            }
+        }
     }
 
     pub fn register_font(&mut self, font_name: &str, font: ParsedTableDirectory) {

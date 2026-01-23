@@ -12,7 +12,7 @@ use crate::{
     css::{
         colors::{Color, is_color},
         parser::{AtRule, ComponentValue, parse_css_declaration_block},
-        properties::{Background, Font, WidthValue},
+        properties::{Background, Display, Font, WidthValue},
         selectors::SelectorList,
         tokenize::{CSSToken, Dimension},
         values::angles::{is_angle_unit, to_canonical_angle},
@@ -696,7 +696,19 @@ pub struct ComputedStyle {
     pub background: Background,
     pub font: Font,
 
+    pub display: Display,
+
     pub width: WidthValue,
+}
+
+impl ComputedStyle {
+    pub fn inherit(&self) -> Self {
+        Self {
+            color: self.color.clone(),
+            font: self.font.clone(),
+            ..Default::default()
+        }
+    }
 }
 
 impl PartialEq for ComputedStyle {

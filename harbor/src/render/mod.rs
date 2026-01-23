@@ -231,6 +231,8 @@ impl WindowState {
         position: (f64, f64),
         render_pass: &mut wgpu::RenderPass,
     ) {
+        println!("Rendering box: {:#?}", layout_box);
+
         match layout_box._box_type {
             BoxType::Block => {
                 render_pass.set_pipeline(&self.fill_render_pipeline);
@@ -271,6 +273,11 @@ impl WindowState {
             }
             BoxType::Inline => {
                 render_pass.set_pipeline(&self.line_render_pipeline);
+                let adj_position = (
+                    layout_box.position().0 as f64 + position.0,
+                    layout_box.position().1 as f64 + position.1,
+                );
+
                 if layout_box.associated_node.is_some() {
                     let node = layout_box.associated_node.as_ref().unwrap();
 
@@ -317,7 +324,7 @@ impl WindowState {
                                 text_content.clone(),
                                 layout_box.associated_style.color.used(),
                                 font_size,
-                                (position.0 as u32, position.1 as u32),
+                                (adj_position.0 as u32, adj_position.1 as u32),
                             );
 
                             if !verts.is_empty() {
@@ -326,13 +333,13 @@ impl WindowState {
                                     text_content.clone(),
                                     layout_box.associated_style.color.used(),
                                     font_size,
-                                    (position.0 as u32, position.1 as u32),
+                                    (adj_position.0 as u32, adj_position.1 as u32),
                                 );
 
                                 let key = (
                                     text_content.clone(),
-                                    position.0 as u32,
-                                    position.1 as u32,
+                                    adj_position.0 as u32,
+                                    adj_position.1 as u32,
                                     font_size as u32,
                                 );
 

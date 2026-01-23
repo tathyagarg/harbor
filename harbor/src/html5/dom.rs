@@ -1457,4 +1457,11 @@ impl Document {
             .style_sheets
             .push(Rc::new(RefCell::new(sheet)));
     }
+
+    pub fn insert_stylesheet(&mut self, index: usize, sheet: CSSStyleSheet) {
+        self.document_or_shadow_root_style
+            .style_sheets
+            .style_sheets
+            .insert(index, Rc::new(RefCell::new(sheet)));
+    }
 }

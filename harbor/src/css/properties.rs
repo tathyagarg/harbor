@@ -851,7 +851,6 @@ impl CSSParseable for ConstructedFont {
             return None;
         }
 
-        println!("Parsed constructed font so far: {:#?}", font);
         Some(font)
     }
 }
@@ -888,7 +887,6 @@ impl CSSParseable for FontStyle {
         Self: Sized,
     {
         if let Some(tok) = cvs.consume() {
-            println!("Parsing FontStyle from token: {:?}", tok);
             match tok {
                 ComponentValue::Token(CSSToken::Ident(ident)) => match ident.as_str() {
                     "normal" => return Some(FontStyle::Normal),
@@ -1032,14 +1030,6 @@ pub enum FontSize {
 
 impl FontSize {
     pub fn resolve(&self, parents: &Vec<&Element>) -> f64 {
-        println!(
-            "Parents: {:?}",
-            parents
-                .iter()
-                .map(|e| e.local_name.clone())
-                .collect::<Vec<_>>()
-        );
-
         match self {
             FontSize::LengthPercentage(lp) => match lp {
                 LengthPercentage::Length(dim) => match dim.unit.as_str() {
@@ -1298,4 +1288,34 @@ impl FontFamilyEntry {
 pub enum FamilyName {
     String(String),
     Idents(Vec<String>),
+}
+
+#[derive(Default, Clone, Debug)]
+pub enum Display {
+    #[default]
+    Inline,
+    Block,
+}
+
+impl CSSParseable for Display {
+    fn from_cv(cvs: &mut InputStream<ComponentValue>) -> Option<Self>
+    where
+        Self: Sized,
+    {
+        if let Some(tok) = cvs.consume() {
+            match tok {
+                ComponentValue::Token(CSSToken::Ident(ident)) => match ident.as_str() {
+                    "inline" => return Some(Display::Inline),
+                    "block" => return Some(Display::Block),
+                    _ => {
+                        todo!("Handle more display values")
+                    }
+                },
+                _ => {}
+            }
+        }
+
+        cvs.reconsume();
+        None
+    }
 }
