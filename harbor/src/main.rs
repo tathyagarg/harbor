@@ -29,6 +29,21 @@ fn main() {
 
     parser.parse();
 
+    let stylesheet = include_str!("../../assets/css/ua.css").to_string();
+    let css_content = parse_stylesheet(
+        &mut InputStream::new(&tokenize(&mut InputStream::new(
+            &stylesheet.chars().collect::<Vec<char>>()[..],
+        ))),
+        Rc::downgrade(parser.document.document()),
+        None,
+    );
+
+    parser
+        .document
+        .document()
+        .borrow_mut()
+        .push_stylesheet(css_content);
+
     // let mut tokenizer = css::parser::CSSParser::new(css_content);
 
     // tokenizer.tokenize();

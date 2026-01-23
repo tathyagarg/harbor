@@ -648,6 +648,85 @@ pub enum Font {
     SystemFont(String),
 }
 
+impl Font {
+    pub fn size(&self) -> FontSize {
+        match self {
+            Font::Constructed(cf) => cf.size.clone(),
+            Font::SystemFont(_) => FontSize::default(),
+        }
+    }
+
+    pub fn family(&self) -> FontFamily {
+        match self {
+            Font::Constructed(cf) => cf.family.clone(),
+            Font::SystemFont(system) => FontFamily {
+                entries: vec![FontFamilyEntry::GenericFamily(system.clone())],
+            },
+        }
+    }
+
+    pub fn set_size(&mut self, size: FontSize) {
+        match self {
+            Font::Constructed(cf) => cf.size = size,
+            Font::SystemFont(_) => {}
+        }
+    }
+
+    pub fn set_family(&mut self, family: FontFamily) {
+        match self {
+            Font::Constructed(cf) => cf.family = family,
+            Font::SystemFont(_) => {}
+        }
+    }
+
+    pub fn set_line_height(&mut self, line_height: LineHeight) {
+        match self {
+            Font::Constructed(cf) => cf.line_height = line_height,
+            Font::SystemFont(_) => {}
+        }
+    }
+
+    pub fn set_weight(&mut self, weight: FontWeight) {
+        match self {
+            Font::Constructed(cf) => cf.weight = weight,
+            Font::SystemFont(_) => {}
+        }
+    }
+
+    pub fn resolved_font_size(&self) -> Option<f64> {
+        match self {
+            Font::Constructed(cf) => cf.resolved_font_size(),
+            Font::SystemFont(_) => None,
+        }
+    }
+
+    pub fn resolve_font_size(&mut self, parent_font_size: f64) -> Option<f64> {
+        match self {
+            Font::Constructed(cf) => Some(cf.resolve_font_size(parent_font_size)),
+            Font::SystemFont(_) => None,
+        }
+    }
+
+    pub fn resolved_line_height(&self) -> Option<f64> {
+        match self {
+            Font::Constructed(cf) => match &cf.line_height {
+                LineHeight::Normal => Some(cf.resolved_font_size().map_or(16.0, |fs| fs * 1.2)),
+                LineHeight::Number(n) => cf.resolved_font_size().map(|fs| fs * n),
+                LineHeight::LengthPercentage(lp) => match lp {
+                    LengthPercentage::Length(dim) => match dim.unit.as_str() {
+                        "px" => Some(dim.value as f64),
+                        _ => None,
+                    },
+                    LengthPercentage::Percentage(perc) => cf
+                        .resolved_font_size()
+                        .map(|fs| (*perc as f64 / 100.0) * fs),
+                },
+            },
+            Font::SystemFont(_) => None,
+        }
+    }
+}
+
 impl Default for Font {
     fn default() -> Self {
         Font::Constructed(ConstructedFont::default())
@@ -663,6 +742,8 @@ pub struct ConstructedFont {
     pub size: FontSize,
     pub line_height: LineHeight,
     pub family: FontFamily,
+
+    _resolved_font_size: Option<f64>,
 }
 
 impl CSSParseable for Font {
@@ -771,6 +852,22 @@ impl CSSParseable for ConstructedFont {
 
         println!("Parsed constructed font so far: {:#?}", font);
         Some(font)
+    }
+}
+
+impl ConstructedFont {
+    pub fn resolve_font_size(&mut self, parent_font_size: f64) -> f64 {
+        if let Some(resolved_size) = self._resolved_font_size {
+            return resolved_size;
+        }
+
+        let resolved_size = self.size.resolve(parent_font_size);
+        self._resolved_font_size = Some(resolved_size);
+        resolved_size
+    }
+
+    pub fn resolved_font_size(&self) -> Option<f64> {
+        self._resolved_font_size
     }
 }
 
@@ -930,6 +1027,33 @@ pub enum FontSize {
     LengthPercentage(LengthPercentage),
     AbsoluteSize(AbsoluteSize),
     RelativeSize(RelativeSize),
+}
+
+impl FontSize {
+    pub fn resolve(&self, parent_font_size: f64) -> f64 {
+        match self {
+            FontSize::LengthPercentage(lp) => match lp {
+                LengthPercentage::Length(dim) => match dim.unit.as_str() {
+                    "px" => dim.value as f64,
+                    _ => todo!("Handle other length units"),
+                },
+                LengthPercentage::Percentage(perc) => (*perc as f64 / 100.0) * parent_font_size,
+            },
+            FontSize::AbsoluteSize(abs_size) => match abs_size {
+                AbsoluteSize::XXSmall => parent_font_size * 0.578,
+                AbsoluteSize::XSmall => parent_font_size * 0.694,
+                AbsoluteSize::Small => parent_font_size * 0.833,
+                AbsoluteSize::Medium => parent_font_size,
+                AbsoluteSize::Large => parent_font_size * 1.2,
+                AbsoluteSize::XLarge => parent_font_size * 1.44,
+                AbsoluteSize::XXLarge => parent_font_size * 1.728,
+            },
+            FontSize::RelativeSize(rel_size) => match rel_size {
+                RelativeSize::Larger => parent_font_size * 1.2,
+                RelativeSize::Smaller => parent_font_size * 0.833,
+            },
+        }
+    }
 }
 
 impl Default for FontSize {
@@ -1115,6 +1239,18 @@ impl CSSParseable for FontFamily {
 pub enum FontFamilyEntry {
     FamilyName(FamilyName),
     GenericFamily(String),
+}
+
+impl FontFamilyEntry {
+    pub fn value(&self) -> String {
+        match self {
+            FontFamilyEntry::FamilyName(fam_name) => match fam_name {
+                FamilyName::String(s) => s.clone(),
+                FamilyName::Idents(idents) => idents.join(" "),
+            },
+            FontFamilyEntry::GenericFamily(generic) => generic.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

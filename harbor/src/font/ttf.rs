@@ -313,7 +313,7 @@ impl TableDirectory {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct ParsedTableDirectory {
     /// 0x00010000 or 0x4F54544F ('OTTO') — see below.
     pub sfnt_version: uint32,

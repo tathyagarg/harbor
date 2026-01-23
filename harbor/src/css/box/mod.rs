@@ -15,7 +15,8 @@ use crate::{
             ComputedStyle,
         },
         properties::{
-            Background, CSSParseable, Font, Image, Origin, Position, RepeatStyle, WidthValue,
+            Background, CSSParseable, Font, FontFamily, FontSize, FontWeight, Image, LineHeight,
+            Origin, Position, RepeatStyle, WidthValue,
         },
         selectors::MatchesElement,
     },
@@ -139,11 +140,10 @@ pub struct Box {
 
     /* Inline Formatting Context Specific Properties */
     /// TODO: Switch to using a proper Font struct
-    pub _font_family: Option<String>,
-    pub _font_size: Option<f64>,
-    pub _font_weight: Option<String>,
-    pub _line_height: Option<f64>,
-
+    // pub _font_family: Option<String>,
+    // pub _font_size: Option<f64>,
+    // pub _font_weight: Option<String>,
+    // pub _line_height: Option<f64>,
     pub associated_node: Option<Rc<RefCell<NodeKind>>>,
 
     pub associated_style: ComputedStyle,
@@ -272,11 +272,10 @@ impl Box {
             _position_y: Some(0.0),
             children: vec![],
 
-            _font_family: None,
-            _font_size: None,
-            _font_weight: None,
-            _line_height: None,
-
+            // _font_family: None,
+            // _font_size: None,
+            // _font_weight: None,
+            // _line_height: None,
             associated_node: None,
 
             associated_style: ComputedStyle::default(),
@@ -300,32 +299,63 @@ impl Box {
     ) -> Option<Rc<RefCell<Box>>> {
         match tree.borrow().deref() {
             NodeKind::Element(element_rc) if element_rc.borrow().local_name.as_str() != "head" => {
-                let element = element_rc.borrow();
+                let mut element = element_rc.borrow_mut();
 
                 let display = match element.local_name.as_str() {
                     "span" | "em" | "strong" => BoxType::Inline,
                     _ => BoxType::Block,
                 };
 
-                let mag = 7.5;
-
-                let font_size = match element.local_name.as_str() {
-                    "h1" => 32.0,
-                    "h2" => 24.0,
-                    "h3" => 18.72,
-                    "h4" => 16.0,
-                    "h5" => 13.28,
-                    "h6" => 10.72,
-                    _ => {
+                let font_size = element
+                    .style_mut()
+                    .font
+                    .resolve_font_size(
                         parent
                             .and_then(|weak_box| weak_box.upgrade())
-                            .and_then(|parent_box_rc| parent_box_rc.borrow()._font_size)
-                            .unwrap_or(16.0 * mag)
-                            / mag
-                    }
-                } * mag;
+                            .and_then(|parent_box_rc| {
+                                match parent_box_rc.borrow().associated_style.font {
+                                    Font::Constructed(ref constructed) => {
+                                        constructed.resolved_font_size()
+                                    }
+                                    _ => None,
+                                }
+                            })
+                            .unwrap_or(16.0),
+                    )
+                    .unwrap_or(16.0);
 
-                let line_height = font_size * 1.2;
+                let line_height = element
+                    .style()
+                    .font
+                    .resolved_line_height()
+                    .unwrap_or(font_size * 1.2);
+
+                // let font_size = match element.local_name.as_str() {
+                //     "h1" => 32.0,
+                //     "h2" => 24.0,
+                //     "h3" => 18.72,
+                //     "h4" => 16.0,
+                //     "h5" => 13.28,
+                //     "h6" => 10.72,
+                //     _ => {
+                //         parent
+                //             .and_then(|weak_box| weak_box.upgrade())
+                //             .and_then(|parent_box_rc| {
+                //                 match parent_box_rc.borrow().associated_style.font {
+                //                     Font::Constructed(ref constructed) => {
+                //                         constructed.resolved_font_size()
+                //                     }
+                //                     _ => None,
+                //                 }
+                //             })
+                //             .unwrap_or(16.0 * mag)
+                //             / mag
+                //     }
+                // } * mag;
+
+                // if let Font::Constructed(ref mut constructed) = element.style().font {
+                //     constructed.resolve_font_size(font_size);
+                // }
 
                 let this_box = Rc::new(RefCell::new(Box {
                     _content_width: 0.0,
@@ -338,11 +368,10 @@ impl Box {
                     _position_y: None,
                     children: vec![],
 
-                    _font_family: None,
-                    _font_size: Some(font_size),
-                    _font_weight: None,
-                    _line_height: Some(line_height),
-
+                    // _font_family: None,
+                    // _font_size: Some(font_size),
+                    // _font_weight: None,
+                    // _line_height: Some(line_height),
                     associated_node: Some(Rc::clone(tree)),
 
                     associated_style: element.style().clone(),
@@ -371,21 +400,20 @@ impl Box {
                     _position_y: None,
                     children: vec![],
 
-                    _font_family: Some("Times New Roman".to_string()),
-                    _font_size: Some(
-                        parent
-                            .and_then(|weak_box| weak_box.upgrade())
-                            .and_then(|parent_box_rc| parent_box_rc.borrow()._font_size)
-                            .unwrap_or(16.0),
-                    ),
-                    _font_weight: None,
-                    _line_height: Some(
-                        parent
-                            .and_then(|weak_box| weak_box.upgrade())
-                            .and_then(|parent_box_rc| parent_box_rc.borrow()._line_height)
-                            .unwrap_or(19.2),
-                    ),
-
+                    // _font_family: Some("Times New Roman".to_string()),
+                    // _font_size: Some(
+                    //     parent
+                    //         .and_then(|weak_box| weak_box.upgrade())
+                    //         .and_then(|parent_box_rc| parent_box_rc.borrow()._font_size)
+                    //         .unwrap_or(16.0),
+                    // ),
+                    // _font_weight: None,
+                    // _line_height: Some(
+                    //     parent
+                    //         .and_then(|weak_box| weak_box.upgrade())
+                    //         .and_then(|parent_box_rc| parent_box_rc.borrow()._line_height)
+                    //         .unwrap_or(19.2),
+                    // ),
                     associated_node: Some(Rc::clone(tree)),
 
                     associated_style: parent
@@ -478,13 +506,39 @@ impl Box {
                     return (0.0, 0.0);
                 }
 
-                let font = FONTS.get(
-                    &self
-                        ._font_family
-                        .clone()
-                        .unwrap_or_else(|| "Times New Roman".to_string()),
+                let family = self.associated_style.font.family();
+                let mut iterator = family.entries.iter();
+                let font = loop {
+                    let entry = iterator.next();
+                    if let Some(entry) = entry {
+                        if let Some(f) = FONTS.get(&entry.value()) {
+                            break Some(f);
+                        }
+                    } else {
+                        break FONTS.get("Times New Roman");
+                    }
+                };
+
+                // let font = FONTS.get(
+                //     &self
+                //         .associated_style.font.
+                //         ._font_family
+                //         .clone()
+                //         .unwrap_or_else(|| "Times New Roman".to_string()),
+                // );
+
+                let scale = self
+                    .associated_style
+                    .font
+                    .resolved_font_size()
+                    .unwrap_or(16.0)
+                    / font.unwrap().units_per_em() as f64;
+
+                println!(
+                    "Laying out text: '{}' with font size: {}",
+                    text_node_rc.borrow().data(),
+                    scale
                 );
-                let scale = self._font_size.unwrap_or(16.0) / font.unwrap().units_per_em() as f64;
 
                 let mut new_data = String::new();
                 for ch in text_node_rc.borrow().data().trim().chars() {
@@ -505,7 +559,11 @@ impl Box {
                 }
 
                 text_node_rc.borrow_mut().set_data(&new_data);
-                pen_y += self._line_height.unwrap_or(16.0);
+                pen_y += self
+                    .associated_style
+                    .font
+                    .resolved_line_height()
+                    .unwrap_or(19.2);
             }
             NodeKind::Element(element_rc) => {
                 let element = element_rc.borrow();
@@ -594,6 +652,12 @@ fn compute_element_styles(
             compute_element_styles(document, &mut child_element, Some(&new_parents));
         }
     }
+
+    println!(
+        "Computed style for <{}>: {:?}",
+        element.local_name,
+        element.style()
+    );
 }
 
 fn handle_background(declaration: &CSSDeclaration, style: &mut ComputedStyle) {
@@ -644,6 +708,38 @@ fn handle_font(declaration: &CSSDeclaration, style: &mut ComputedStyle) {
     }
 }
 
+fn handle_font_property(declaration: &CSSDeclaration, style: &mut ComputedStyle) {
+    let mut stream = InputStream::new(&declaration.value);
+
+    match declaration.property_name.as_str() {
+        "font-family" => {
+            let family = FontFamily::from_cv(&mut stream);
+            if let Some(family) = family {
+                style.font.set_family(family);
+            }
+        }
+        "font-size" => {
+            let size = FontSize::from_cv(&mut stream);
+            if let Some(size) = size {
+                style.font.set_size(size);
+            }
+        }
+        "font-weight" => {
+            let weight = FontWeight::from_cv(&mut stream);
+            if let Some(weight) = weight {
+                style.font.set_weight(weight);
+            }
+        }
+        "line-height" => {
+            let line_height = LineHeight::from_cv(&mut stream);
+            if let Some(line_height) = line_height {
+                style.font.set_line_height(line_height);
+            }
+        }
+        _ => {}
+    }
+}
+
 fn handle_declaration(declaration: &CSSDeclaration, style: &mut ComputedStyle) {
     match declaration.property_name.as_str() {
         "color" => {
@@ -658,6 +754,9 @@ fn handle_declaration(declaration: &CSSDeclaration, style: &mut ComputedStyle) {
         }
         "font" => {
             handle_font(declaration, style);
+        }
+        prop if prop.starts_with("font-") || prop == "line-height" => {
+            handle_font_property(declaration, style);
         }
         "width" => {
             let mut stream = InputStream::new(&declaration.value);

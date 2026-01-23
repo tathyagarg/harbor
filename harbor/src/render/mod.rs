@@ -282,53 +282,67 @@ impl WindowState {
                                 return;
                             }
 
-                            self.layout
-                                ._renderers
-                                .get_mut(
-                                    &layout_box
-                                        ._font_family
-                                        .clone()
-                                        .unwrap_or("Times New Roman".to_string()),
-                                )
-                                .and_then(|renderer_option| {
-                                    if let Some(renderer) = renderer_option {
-                                        let font_size =
-                                            layout_box._font_size.unwrap_or(16.0) as f32;
-
-                                        let verts = renderer.vertices(
-                                            text_content.clone(),
-                                            layout_box.associated_style.color.used(),
-                                            font_size,
-                                            (position.0 as u32, position.1 as u32),
-                                        );
-
-                                        if !verts.is_empty() {
-                                            renderer.update_vertex_buffer(
-                                                &self.device,
-                                                text_content.clone(),
-                                                layout_box.associated_style.color.used(),
-                                                font_size,
-                                                (position.0 as u32, position.1 as u32),
-                                            );
-
-                                            let key = (
-                                                text_content.clone(),
-                                                position.0 as u32,
-                                                position.1 as u32,
-                                                font_size as u32,
-                                            );
-
-                                            if let Some((buffer, count)) =
-                                                renderer.outline_vertex_buffers.get(&key)
-                                            {
-                                                render_pass.set_vertex_buffer(0, buffer.slice(..));
-                                                render_pass.draw(0..*count as u32, 0..1);
-                                            }
+                            let family = layout_box.associated_style.font.family();
+                            let mut font_iter = family.entries.iter();
+                            let mut renderer = loop {
+                                if let Some(font_family) = font_iter.next() {
+                                    if let Some(renderer_option) =
+                                        self.layout._renderers.get_mut(&font_family.value())
+                                    {
+                                        if let Some(renderer) = renderer_option {
+                                            break renderer.clone();
                                         }
                                     }
+                                } else {
+                                    // Fallback to default font
+                                    if let Some(renderer_option) =
+                                        self.layout._renderers.get_mut("Times New Roman")
+                                    {
+                                        if let Some(renderer) = renderer_option {
+                                            break renderer.clone();
+                                        }
+                                    } else {
+                                        return;
+                                    }
+                                }
+                            };
 
-                                    Some(())
-                                });
+                            let font_size = layout_box
+                                .associated_style
+                                .font
+                                .resolved_font_size()
+                                .unwrap_or(16.0) as f32;
+
+                            let verts = renderer.vertices(
+                                text_content.clone(),
+                                layout_box.associated_style.color.used(),
+                                font_size,
+                                (position.0 as u32, position.1 as u32),
+                            );
+
+                            if !verts.is_empty() {
+                                renderer.update_vertex_buffer(
+                                    &self.device,
+                                    text_content.clone(),
+                                    layout_box.associated_style.color.used(),
+                                    font_size,
+                                    (position.0 as u32, position.1 as u32),
+                                );
+
+                                let key = (
+                                    text_content.clone(),
+                                    position.0 as u32,
+                                    position.1 as u32,
+                                    font_size as u32,
+                                );
+
+                                if let Some((buffer, count)) =
+                                    renderer.outline_vertex_buffers.get(&key)
+                                {
+                                    render_pass.set_vertex_buffer(0, buffer.slice(..));
+                                    render_pass.draw(0..*count as u32, 0..1);
+                                }
+                            }
                         }
                         _ => {}
                     }
