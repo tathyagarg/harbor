@@ -642,8 +642,20 @@ impl Origin {
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum Font {
+    Constructed(ConstructedFont),
+    SystemFont(String),
+}
+
+impl Default for Font {
+    fn default() -> Self {
+        Font::Constructed(ConstructedFont::default())
+    }
+}
+
 #[derive(Default, Debug, Clone)]
-pub struct Font {
+pub struct ConstructedFont {
     pub style: FontStyle,
     pub variant: FontVariant,
     pub weight: FontWeight,
@@ -651,6 +663,115 @@ pub struct Font {
     pub size: FontSize,
     pub line_height: LineHeight,
     pub family: FontFamily,
+}
+
+impl CSSParseable for Font {
+    fn from_cv(cvs: &mut InputStream<ComponentValue>) -> Option<Self>
+    where
+        Self: Sized,
+    {
+        let cvs_vec = cvs.finish();
+
+        let mut cvs = InputStream::new(
+            &cvs_vec
+                .iter()
+                .filter(|cv| match cv {
+                    ComponentValue::Token(token) => match token {
+                        CSSToken::Whitespace => false,
+                        _ => true,
+                    },
+                    _ => true,
+                })
+                .cloned()
+                .collect::<Vec<ComponentValue>>()[..],
+        );
+
+        if let Some(tok) = cvs.peek() {
+            match tok {
+                ComponentValue::Token(CSSToken::Ident(ident))
+                    if matches!(
+                        ident.as_str(),
+                        "caption"
+                            | "icon"
+                            | "menu"
+                            | "message-box"
+                            | "small-caption"
+                            | "status-bar"
+                    ) =>
+                {
+                    cvs.consume();
+                    return Some(Font::SystemFont(ident));
+                }
+                _ => ConstructedFont::from_cv(&mut cvs).map(|cf| Font::Constructed(cf)),
+            }
+        } else {
+            None
+        }
+    }
+}
+
+impl CSSParseable for ConstructedFont {
+    fn from_cv(cvs: &mut InputStream<ComponentValue>) -> Option<Self>
+    where
+        Self: Sized,
+    {
+        let mut font = ConstructedFont::default();
+
+        let mut progress = true;
+
+        while progress {
+            progress = false;
+
+            if let Some(style) = FontStyle::from_cv(cvs) {
+                font.style = style;
+                progress = true;
+                continue;
+            }
+
+            if let Some(variant) = FontVariant::from_cv(cvs) {
+                font.variant = variant;
+                progress = true;
+                continue;
+            }
+
+            if let Some(weight) = FontWeight::from_cv(cvs) {
+                font.weight = weight;
+                progress = true;
+                continue;
+            }
+
+            if let Some(width) = FontWidth::from_cv(cvs) {
+                font.width = width;
+                progress = true;
+                continue;
+            }
+        }
+
+        if let Some(size) = FontSize::from_cv(cvs) {
+            font.size = size;
+
+            if let Some(tok) = cvs.consume() {
+                if let ComponentValue::Token(CSSToken::Delim('\u{002F}')) = tok {
+                    if let Some(line_height) = LineHeight::from_cv(cvs) {
+                        font.line_height = line_height;
+                    }
+                } else {
+                    cvs.reconsume();
+                }
+            }
+        } else {
+            return None;
+        }
+
+        if let Some(family) = FontFamily::from_cv(cvs) {
+            font.family = family;
+        } else {
+            return None;
+        }
+
+        println!("Parsed constructed font so far: {:#?}", font);
+        Some(font)
+    }
 }
 
 #[derive(Default, Debug, Clone)]
@@ -663,12 +784,65 @@ pub enum FontStyle {
     Right,
 }
 
+impl CSSParseable for FontStyle {
+    fn from_cv(cvs: &mut InputStream<ComponentValue>) -> Option<Self>
+    where
+        Self: Sized,
+    {
+        if let Some(tok) = cvs.consume() {
+            println!("Parsing FontStyle from token: {:?}", tok);
+            match tok {
+                ComponentValue::Token(CSSToken::Ident(ident)) => match ident.as_str() {
+                    "normal" => return Some(FontStyle::Normal),
+                    "italic" => return Some(FontStyle::Italic),
+                    "oblique" => {
+                        if let Some(ComponentValue::Token(CSSToken::Dimension(dim))) = cvs.peek() {
+                            cvs.consume();
+                            return Some(FontStyle::Oblique(Some(dim.clone())));
+                        } else {
+                            return Some(FontStyle::Oblique(None));
+                        }
+                    }
+                    "left" => return Some(FontStyle::Left),
+                    "right" => return Some(FontStyle::Right),
+                    _ => {}
+                },
+                _ => {}
+            }
+        }
+
+        cvs.reconsume();
+        None
+    }
+}
+
 #[derive(Default, Debug, Clone)]
 pub enum FontVariant {
     #[default]
     Normal,
 
     SmallCaps,
+}
+
+impl CSSParseable for FontVariant {
+    fn from_cv(cvs: &mut InputStream<ComponentValue>) -> Option<Self>
+    where
+        Self: Sized,
+    {
+        if let Some(tok) = cvs.consume() {
+            match tok {
+                ComponentValue::Token(CSSToken::Ident(ident)) => match ident.as_str() {
+                    "normal" => return Some(FontVariant::Normal),
+                    "small-caps" => return Some(FontVariant::SmallCaps),
+                    _ => {}
+                },
+                _ => {}
+            }
+        }
+
+        cvs.reconsume();
+        None
+    }
 }
 
 #[derive(Default, Debug, Clone)]
@@ -681,6 +855,32 @@ pub enum FontWeight {
     Lighter,
 
     Weight(u32),
+}
+
+impl CSSParseable for FontWeight {
+    fn from_cv(cvs: &mut InputStream<ComponentValue>) -> Option<Self>
+    where
+        Self: Sized,
+    {
+        if let Some(tok) = cvs.consume() {
+            match tok {
+                ComponentValue::Token(CSSToken::Ident(ident)) => match ident.as_str() {
+                    "normal" => return Some(FontWeight::Normal),
+                    "bold" => return Some(FontWeight::Bold),
+                    "bolder" => return Some(FontWeight::Bolder),
+                    "lighter" => return Some(FontWeight::Lighter),
+                    _ => {}
+                },
+                ComponentValue::Token(CSSToken::Number { value, number_type }) => {
+                    return Some(FontWeight::Weight(value as u32));
+                }
+                _ => {}
+            }
+        }
+
+        cvs.reconsume();
+        None
+    }
 }
 
 #[derive(Default, Debug, Clone)]
@@ -697,6 +897,34 @@ pub enum FontWidth {
     UltraExpanded,
 }
 
+impl CSSParseable for FontWidth {
+    fn from_cv(cvs: &mut InputStream<ComponentValue>) -> Option<Self>
+    where
+        Self: Sized,
+    {
+        if let Some(tok) = cvs.consume() {
+            match tok {
+                ComponentValue::Token(CSSToken::Ident(ident)) => match ident.as_str() {
+                    "normal" => return Some(FontWidth::Normal),
+                    "ultra-condensed" => return Some(FontWidth::UltraCondensed),
+                    "extra-condensed" => return Some(FontWidth::ExtraCondensed),
+                    "condensed" => return Some(FontWidth::Condensed),
+                    "semi-condensed" => return Some(FontWidth::SemiCondensed),
+                    "semi-expanded" => return Some(FontWidth::SemiExpanded),
+                    "expanded" => return Some(FontWidth::Expanded),
+                    "extra-expanded" => return Some(FontWidth::ExtraExpanded),
+                    "ultra-expanded" => return Some(FontWidth::UltraExpanded),
+                    _ => {}
+                },
+                _ => {}
+            }
+        }
+
+        cvs.reconsume();
+        None
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum FontSize {
     LengthPercentage(LengthPercentage),
@@ -707,6 +935,44 @@ pub enum FontSize {
 impl Default for FontSize {
     fn default() -> Self {
         FontSize::AbsoluteSize(AbsoluteSize::Medium)
+    }
+}
+
+impl CSSParseable for FontSize {
+    fn from_cv(cvs: &mut InputStream<ComponentValue>) -> Option<Self>
+    where
+        Self: Sized,
+    {
+        if let Some(tok) = cvs.consume() {
+            match tok {
+                ComponentValue::Token(CSSToken::Dimension(dim)) => {
+                    return Some(FontSize::LengthPercentage(LengthPercentage::Length(
+                        dim.clone(),
+                    )));
+                }
+                ComponentValue::Token(CSSToken::Percentage(perc)) => {
+                    return Some(FontSize::LengthPercentage(LengthPercentage::Percentage(
+                        perc.clone(),
+                    )));
+                }
+                ComponentValue::Token(CSSToken::Ident(ident)) => match ident.as_str() {
+                    "xx-small" => return Some(FontSize::AbsoluteSize(AbsoluteSize::XXSmall)),
+                    "x-small" => return Some(FontSize::AbsoluteSize(AbsoluteSize::XSmall)),
+                    "small" => return Some(FontSize::AbsoluteSize(AbsoluteSize::Small)),
+                    "medium" => return Some(FontSize::AbsoluteSize(AbsoluteSize::Medium)),
+                    "large" => return Some(FontSize::AbsoluteSize(AbsoluteSize::Large)),
+                    "x-large" => return Some(FontSize::AbsoluteSize(AbsoluteSize::XLarge)),
+                    "xx-large" => return Some(FontSize::AbsoluteSize(AbsoluteSize::XXLarge)),
+                    "larger" => return Some(FontSize::RelativeSize(RelativeSize::Larger)),
+                    "smaller" => return Some(FontSize::RelativeSize(RelativeSize::Smaller)),
+                    _ => {}
+                },
+                _ => {}
+            }
+        }
+
+        cvs.reconsume();
+        None
     }
 }
 
@@ -738,9 +1004,111 @@ pub enum LineHeight {
     LengthPercentage(LengthPercentage),
 }
 
+impl CSSParseable for LineHeight {
+    fn from_cv(cvs: &mut InputStream<ComponentValue>) -> Option<Self>
+    where
+        Self: Sized,
+    {
+        if let Some(tok) = cvs.consume() {
+            match tok {
+                ComponentValue::Token(CSSToken::Ident(ident)) if ident == "normal" => {
+                    return Some(LineHeight::Normal);
+                }
+                ComponentValue::Token(CSSToken::Number { value, .. }) => {
+                    return Some(LineHeight::Number(value as f64));
+                }
+                ComponentValue::Token(CSSToken::Dimension(dim)) => {
+                    return Some(LineHeight::LengthPercentage(LengthPercentage::Length(
+                        dim.clone(),
+                    )));
+                }
+                ComponentValue::Token(CSSToken::Percentage(perc)) => {
+                    return Some(LineHeight::LengthPercentage(LengthPercentage::Percentage(
+                        perc.clone(),
+                    )));
+                }
+                _ => {}
+            }
+        }
+
+        cvs.reconsume();
+        None
+    }
+}
+
 #[derive(Default, Debug, Clone)]
 pub struct FontFamily {
     pub entries: Vec<FontFamilyEntry>,
+}
+
+impl CSSParseable for FontFamily {
+    fn from_cv(cvs: &mut InputStream<ComponentValue>) -> Option<Self>
+    where
+        Self: Sized,
+    {
+        let mut family = FontFamily {
+            entries: Vec::new(),
+        };
+
+        let cvs_vec = cvs.finish();
+
+        let mut families_cvs = cvs_vec
+            .split(|cv| match cv {
+                ComponentValue::Token(token) => match token {
+                    CSSToken::Comma => true,
+                    _ => false,
+                },
+                _ => false,
+            })
+            .map(|slice| slice.to_vec())
+            .collect::<Vec<Vec<ComponentValue>>>();
+
+        for fam_tokens in families_cvs.iter_mut() {
+            let mut fam_cvs = InputStream::new(&fam_tokens[..]);
+
+            if let Some(tok) = fam_cvs.consume() {
+                match tok {
+                    ComponentValue::Token(CSSToken::Ident(ident))
+                        if matches!(
+                            ident.as_str(),
+                            "serif"
+                                | "sans-serif"
+                                | "monospace"
+                                | "cursive"
+                                | "fantasy"
+                                | "system-ui"
+                        ) =>
+                    {
+                        family.entries.push(FontFamilyEntry::GenericFamily(ident));
+                    }
+                    ComponentValue::Token(CSSToken::String(fam_name)) => {
+                        family
+                            .entries
+                            .push(FontFamilyEntry::FamilyName(FamilyName::String(fam_name)));
+                    }
+                    ComponentValue::Token(CSSToken::Ident(ident)) => {
+                        let mut idents = vec![ident];
+
+                        while let Some(ComponentValue::Token(CSSToken::Ident(next_ident))) =
+                            fam_cvs.peek()
+                        {
+                            fam_cvs.consume();
+                            idents.push(next_ident);
+                        }
+
+                        family
+                            .entries
+                            .push(FontFamilyEntry::FamilyName(FamilyName::Idents(idents)));
+                    }
+                    _ => {
+                        fam_cvs.reconsume();
+                    }
+                }
+            }
+        }
+
+        Some(family)
+    }
 }
 
 #[derive(Debug, Clone)]

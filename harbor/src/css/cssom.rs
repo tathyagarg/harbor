@@ -12,7 +12,7 @@ use crate::{
     css::{
         colors::{Color, is_color},
         parser::{AtRule, ComponentValue, parse_css_declaration_block},
-        properties::{Background, WidthValue},
+        properties::{Background, Font, WidthValue},
         selectors::{Selector, SelectorList},
         tokenize::{CSSToken, Dimension, Percentage},
         values::angles::{is_angle_unit, to_canonical_angle},
@@ -694,6 +694,7 @@ impl Eq for DocumentOrShadowRootStyle {}
 pub struct ComputedStyle {
     pub color: Color,
     pub background: Background,
+    pub font: Font,
 
     pub width: WidthValue,
 }

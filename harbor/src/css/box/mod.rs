@@ -14,7 +14,9 @@ use crate::{
             CSSDeclaration, CSSRuleNode, CSSRuleType, CSSStyleRuleData, CSSStyleSheetExt,
             ComputedStyle,
         },
-        properties::{Background, CSSParseable, Image, Origin, Position, RepeatStyle, WidthValue},
+        properties::{
+            Background, CSSParseable, Font, Image, Origin, Position, RepeatStyle, WidthValue,
+        },
         selectors::MatchesElement,
     },
     globals::FONTS,
@@ -633,6 +635,15 @@ fn handle_background_property(declaration: &CSSDeclaration, style: &mut Computed
     }
 }
 
+fn handle_font(declaration: &CSSDeclaration, style: &mut ComputedStyle) {
+    let mut stream = InputStream::new(&declaration.value);
+
+    let font = Font::from_cv(&mut stream);
+    if let Some(font) = font {
+        style.font = font;
+    }
+}
+
 fn handle_declaration(declaration: &CSSDeclaration, style: &mut ComputedStyle) {
     match declaration.property_name.as_str() {
         "color" => {
@@ -644,6 +655,9 @@ fn handle_declaration(declaration: &CSSDeclaration, style: &mut ComputedStyle) {
         }
         prop if prop.starts_with("background-") => {
             handle_background_property(declaration, style);
+        }
+        "font" => {
+            handle_font(declaration, style);
         }
         "width" => {
             let mut stream = InputStream::new(&declaration.value);
