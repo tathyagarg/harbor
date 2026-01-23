@@ -77,17 +77,6 @@ impl NodeKind {
         }
     }
 
-    // pub fn node_mut(&mut self) -> &mut Node {
-    //     match self {
-    //         NodeKind::Node(n) => n,
-    //         NodeKind::Element(e) => &mut e._node,
-    //         NodeKind::Text(t) => &mut t._character_data._node,
-    //         NodeKind::Comment(c) => &mut c._character_data._node,
-    //         NodeKind::DocumentType(dt) => &mut dt._node,
-    //         NodeKind::Document(_) => panic!("MUTABLE FUCK"),
-    //     }
-    // }
-
     pub fn set_parent(&mut self, parent: Option<Rc<RefCell<Node>>>) {
         let self_node = self.node();
         let mut node = self_node.borrow_mut();
@@ -1018,28 +1007,6 @@ impl Element {
     pub fn style_mut(&mut self) -> &mut ComputedStyle {
         &mut self._style
     }
-
-    // pub fn push_attr_raw(&mut self, name: &str, value: &str) {
-    //     let attr = Attr::new(
-    //         None,
-    //         None,
-    //         name.to_string(),
-    //         value.to_string(),
-    //         Some(self),
-    //         Rc::clone(
-    //             &self
-    //                 .node()
-    //                 .borrow()
-    //                 .node_document
-    //                 .as_ref()
-    //                 .unwrap()
-    //                 .upgrade()
-    //                 .unwrap(),
-    //         ),
-    //     );
-
-    //     self.attribute_list.push(attr);
-    // }
 
     pub fn push_attribute(&mut self, attr: Attr) {
         self.attribute_list.push(attr);

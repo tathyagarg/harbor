@@ -528,7 +528,7 @@ impl Box {
         start_y: f64,
     ) -> (f64, f64) {
         let mut pen_x = start_x;
-        let mut pen_y = start_y;
+        let pen_y = start_y;
 
         let node = self.associated_node.as_ref().unwrap().borrow().clone();
 
@@ -540,8 +540,15 @@ impl Box {
                 }
 
                 let family = self.associated_style.font.family();
+                let weight = self
+                    .associated_style
+                    .font
+                    .resolved_font_weight()
+                    .unwrap_or(400) as u16;
+
                 let mut iterator = family.entries.iter();
-                let font = loop {
+
+                let ttc = loop {
                     let entry = iterator.next();
                     if let Some(entry) = entry {
                         if let Some(f) = FONTS.get(&entry.value()) {
@@ -551,6 +558,8 @@ impl Box {
                         break FONTS.get("Times New Roman");
                     }
                 };
+
+                let font = ttc.and_then(|ttc| ttc.get_font_by_weight(weight));
 
                 // let font = FONTS.get(
                 //     &self
@@ -725,6 +734,7 @@ fn handle_font(
     if let Some(font) = font {
         style.font = font;
         style.font.resolve_font_size(parents.unwrap_or(&vec![]));
+        style.font.resolve_font_weight(parents.unwrap_or(&vec![]));
     }
 }
 
@@ -753,6 +763,7 @@ fn handle_font_property(
             let weight = FontWeight::from_cv(&mut stream);
             if let Some(weight) = weight {
                 style.font.set_weight(weight);
+                style.font.resolve_font_weight(parents.unwrap_or(&vec![]));
             }
         }
         "line-height" => {

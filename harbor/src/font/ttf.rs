@@ -154,7 +154,7 @@ pub struct TableRecord {
     /// Length of this table.
     length: uint32,
 
-    _data: TableRecordData,
+    pub _data: TableRecordData,
 }
 
 impl Debug for TableRecord {
@@ -834,12 +834,6 @@ pub fn parse_table_directory(data: &[u8], offset: Option<usize>) -> TableDirecto
 
     for _ in 0..num_tables {
         let table_tag: [u8; 4] = data[record_offset..record_offset + 4].try_into().unwrap();
-
-        // let checksum = u32::from_be_bytes(
-        //     data[record_offset + 4..record_offset + 8]
-        //         .try_into()
-        //         .unwrap(),
-        // );
 
         let offset = Offset32::from_data(&data[record_offset + 8..]);
         let length = uint32::from_data(&data[record_offset + 12..]);

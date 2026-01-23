@@ -1,14 +1,17 @@
-use crate::font;
-use crate::font::ttf::ParsedTableDirectory;
+use crate::font::ttc::{CompleteTTCData, TTCData};
+use crate::font::{self};
 
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
-pub static FONTS: LazyLock<HashMap<String, ParsedTableDirectory>> = LazyLock::new(|| {
-    let fira_code = font::parse_ttf(include_bytes!("../../assets/fonts/FiraCode.ttf"));
-    let times =
-        &font::parse_ttc(include_bytes!("../../assets/fonts/Times.ttc")).table_directories[0];
-    let sfns = font::parse_ttf(include_bytes!("../../assets/fonts/SFNS.ttf"));
+pub static FONTS: LazyLock<HashMap<String, CompleteTTCData>> = LazyLock::new(|| {
+    let fira_code_ttf = font::parse_ttf(include_bytes!("../../assets/fonts/FiraCode.ttf"));
+    let fira_code = TTCData::new(vec![fira_code_ttf]);
+
+    let times = font::parse_ttc(include_bytes!("../../assets/fonts/Times.ttc"));
+
+    let sfns_ttf = font::parse_ttf(include_bytes!("../../assets/fonts/SFNS.ttf"));
+    let sfns = TTCData::new(vec![sfns_ttf]);
 
     let mut map = HashMap::new();
     map.insert("FiraCode".to_string(), fira_code.complete());

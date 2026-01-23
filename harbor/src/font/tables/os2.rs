@@ -615,4 +615,14 @@ impl OS2Table {
     pub fn empty_with_mac(mac_style: uint16) -> OS2Table {
         OS2Table::Interim(mac_style)
     }
+
+    pub fn weight(&self) -> Option<uint16> {
+        match self {
+            OS2Table::V5(table) => Some(table.us_weight_class),
+            OS2Table::V4(table) | OS2Table::V3(table) | OS2Table::V2(table) => {
+                Some(table.us_weight_class)
+            }
+            OS2Table::Interim(_) => None,
+        }
+    }
 }

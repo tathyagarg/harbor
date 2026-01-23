@@ -4,12 +4,14 @@
 use std::fmt::Debug;
 
 use crate::font::otf_dtypes::*;
-use crate::font::ttf::{TableDirectory, parse_table_directory};
+use crate::font::ttf::{
+    ParsedTableDirectory, TableDirectory, TableRecord, TableRecordData, parse_table_directory,
+};
 
 pub struct TTCHeader_v1_0 {
     /// Font Collection ID string: 'ttcf' (used for fonts with CFF or CFF2 outlines,
     /// as well as TrueType outlines)
-    pub ttc_tag: Tag,
+    // pub ttc_tag: Tag,
 
     /// Major version of the TTCHeader, = 1.
     pub major_version: uint16,
@@ -28,7 +30,7 @@ pub struct TTCHeader_v1_0 {
 pub struct TTCHeader_v2_0 {
     /// Font Collection ID string: 'ttcf' (used for fonts with CFF or CFF2 outlines,
     /// as well as TrueType outlines)
-    pub ttc_tag: Tag,
+    // pub ttc_tag: Tag,
 
     /// Major version of the TTCHeader, = 2.
     pub major_version: uint16,
@@ -61,10 +63,6 @@ pub enum TTCHeader {
 impl Debug for TTCHeader_v1_0 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("TTCHeader_v1_0")
-            .field(
-                "ttc_tag",
-                &tag_as_str(&self.ttc_tag).unwrap_or(String::from("Invalid Tag")),
-            )
             .field("major_version", &self.major_version)
             .field("minor_version", &self.minor_version)
             .field("num_fonts", &self.num_fonts)
@@ -74,29 +72,15 @@ impl Debug for TTCHeader_v1_0 {
 }
 
 impl TTCHeader {
-    pub fn new(
-        ttc_tag: Tag,
-        major_version: uint16,
-        minor_version: uint16,
-        num_fonts: uint32,
-    ) -> TTCHeader {
-        if !is_valid_tag(ttc_tag) {
-            panic!(
-                "Invalid TTC tag: {:?}",
-                ttc_tag.map(|b| b as char).iter().collect::<String>()
-            );
-        }
-
+    pub fn new(major_version: uint16, minor_version: uint16, num_fonts: uint32) -> TTCHeader {
         match (major_version, minor_version) {
             (1, 0) => TTCHeader::v1_0(TTCHeader_v1_0 {
-                ttc_tag,
                 major_version,
                 minor_version,
                 num_fonts,
                 table_directory_offsets: Vec::with_capacity(num_fonts as usize),
             }),
             (2, 0) => TTCHeader::v2_0(TTCHeader_v2_0 {
-                ttc_tag,
                 major_version,
                 minor_version,
                 num_fonts,
@@ -188,18 +172,60 @@ pub struct TTCData {
     pub table_directories: Vec<TableDirectory>,
 }
 
+impl TTCData {
+    pub fn new(table_directories: Vec<TableDirectory>) -> Self {
+        let num_fonts = table_directories.len() as uint32;
+        let ttc_header = TTCHeader::new(1, 0, num_fonts);
+
+        TTCData {
+            header: ttc_header,
+            table_directories,
+        }
+    }
+
+    pub fn complete(self) -> CompleteTTCData {
+        let parsed_table_directories = self
+            .table_directories
+            .into_iter()
+            .map(|td| td.complete())
+            .collect();
+
+        CompleteTTCData(parsed_table_directories)
+    }
+}
+
+#[derive(Clone)]
+pub struct CompleteTTCData(Vec<ParsedTableDirectory>);
+
+impl CompleteTTCData {
+    pub fn table_directories(&self) -> &Vec<ParsedTableDirectory> {
+        &self.0
+    }
+
+    pub fn get_font_by_weight(&self, weight: uint16) -> Option<&ParsedTableDirectory> {
+        for table_directory in self.table_directories() {
+            if let Some(TableRecord {
+                _data: TableRecordData::OS2(os2_table),
+                ..
+            }) = table_directory.get_table_record(b"OS/2")
+            {
+                let os2_weight = os2_table.weight().unwrap_or(400);
+                if os2_weight == weight {
+                    return Some(table_directory);
+                }
+            }
+        }
+
+        None
+    }
+}
+
 pub fn parse_ttc_header(data: &[u8]) -> TTCHeader {
-    let ttc_tag = &data[0..4];
     let major_version = uint16::from_be_bytes(data[4..6].try_into().unwrap());
     let minor_version = uint16::from_be_bytes(data[6..8].try_into().unwrap());
     let num_fonts = uint32::from_be_bytes(data[8..12].try_into().unwrap());
 
-    let mut ttc_header = TTCHeader::new(
-        ttc_tag.try_into().unwrap(),
-        major_version,
-        minor_version,
-        num_fonts,
-    );
+    let mut ttc_header = TTCHeader::new(major_version, minor_version, num_fonts);
 
     let mut offset = 12;
 

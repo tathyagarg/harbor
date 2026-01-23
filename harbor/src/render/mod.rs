@@ -17,6 +17,7 @@ use wgpu;
 use crate::css::r#box::{Box, BoxType};
 use crate::css::colors::UsedColor;
 use crate::css::layout::Layout;
+use crate::font::ttc::CompleteTTCData;
 use crate::font::ttf::ParsedTableDirectory;
 use crate::html5::dom::Document;
 
@@ -36,7 +37,7 @@ pub fn rgba_to_color(r: u8, g: u8, b: u8, a: u8) -> wgpu::Color {
 
 #[derive(Clone, Default)]
 pub struct TextRendererCreator {
-    pub font: Option<ParsedTableDirectory>,
+    pub font: Option<CompleteTTCData>,
     pub window_size: (f32, f32),
 
     pub buffer: Option<wgpu::Buffer>,
@@ -45,7 +46,7 @@ pub struct TextRendererCreator {
 }
 
 impl TextRendererCreator {
-    pub fn with_font(mut self, font: ParsedTableDirectory) -> Self {
+    pub fn with_font(mut self, font: CompleteTTCData) -> Self {
         self.font = Some(font);
         self
     }
@@ -84,20 +85,20 @@ impl TextRendererCreator {
 
 #[derive(Clone)]
 pub struct TextRenderer {
-    pub font: Option<ParsedTableDirectory>,
+    pub font: Option<CompleteTTCData>,
 
-    /// Key: (text, x position, y position, font-size (rounded))
+    /// Key: (text, weight, x position, y position, font-size (rounded))
     /// Value: (vertices, font-size)
     /// The font size in the key is rounded
     /// When getting a value from the cache, if the required font-size matches the key but is not
     /// equal, the cache will not be used and new vertices will be generated. This will not update
     /// the cache.
-    pub vertex_cache: HashMap<(String, u32, u32, u32), (Vec<text::Vertex>, f32)>,
+    pub vertex_cache: HashMap<(String, u16, u32, u32, u32), (Vec<text::Vertex>, f32)>,
 
     pub window_size: (f32, f32),
 
     _empty_buffer: Option<wgpu::Buffer>,
-    outline_vertex_buffers: HashMap<(String, u32, u32, u32), (wgpu::Buffer, usize)>,
+    outline_vertex_buffers: HashMap<(String, u16, u32, u32, u32), (wgpu::Buffer, usize)>,
 }
 
 impl TextRenderer {
@@ -108,14 +109,18 @@ impl TextRenderer {
     pub fn vertices(
         &mut self,
         text: String,
+        weight: u16,
         color: UsedColor,
         font_size: f32,
         position: (u32, u32),
     ) -> Vec<text::Vertex> {
-        let update_cache = if let Some((verts, cached_font_size)) =
-            self.vertex_cache
-                .get(&(text.clone(), position.0, position.1, font_size as u32))
-        {
+        let update_cache = if let Some((verts, cached_font_size)) = self.vertex_cache.get(&(
+            text.clone(),
+            weight,
+            position.0,
+            position.1,
+            font_size as u32,
+        )) {
             if *cached_font_size == font_size {
                 return verts.clone();
             }
@@ -128,7 +133,9 @@ impl TextRenderer {
         let font = match &self.font {
             Some(f) => f,
             None => return vec![],
-        };
+        }
+        .get_font_by_weight(weight)
+        .unwrap_or_else(|| &self.font.as_ref().unwrap().table_directories()[0]);
 
         let scale = font_size / font.units_per_em() as f32;
 
@@ -148,12 +155,23 @@ impl TextRenderer {
 
         if update_cache {
             self.vertex_cache.insert(
-                (text.clone(), position.0, position.1, font_size as u32),
+                (
+                    text.clone(),
+                    weight,
+                    position.0,
+                    position.1,
+                    font_size as u32,
+                ),
                 (verts.clone(), font_size),
             );
 
-            self.outline_vertex_buffers
-                .remove(&(text, position.0, position.1, font_size as u32));
+            self.outline_vertex_buffers.remove(&(
+                text,
+                weight,
+                position.0,
+                position.1,
+                font_size as u32,
+            ));
         }
 
         verts
@@ -163,13 +181,14 @@ impl TextRenderer {
         &mut self,
         device: &wgpu::Device,
         text: String,
+        weight: u16,
         color: UsedColor,
         font_size: f32,
         position: (u32, u32),
     ) {
-        let verts = self.vertices(text.clone(), color, font_size, position);
+        let verts = self.vertices(text.clone(), weight, color, font_size, position);
 
-        let key = (text, position.0, position.1, font_size as u32);
+        let key = (text, weight, position.0, position.1, font_size as u32);
 
         let existing_buffer = self.outline_vertex_buffers.get_mut(&key);
 
@@ -318,8 +337,16 @@ impl WindowState {
                                 .resolved_font_size()
                                 .unwrap_or(16.0) as f32;
 
+                            let font_weight = layout_box
+                                .associated_style
+                                .font
+                                .resolved_font_weight()
+                                .unwrap_or(400)
+                                as u16;
+
                             let verts = renderer.vertices(
                                 text_content.clone(),
+                                font_weight,
                                 layout_box.associated_style.color.used(),
                                 font_size,
                                 (adj_position.0 as u32, adj_position.1 as u32),
@@ -329,6 +356,7 @@ impl WindowState {
                                 renderer.update_vertex_buffer(
                                     &self.device,
                                     text_content.clone(),
+                                    font_weight,
                                     layout_box.associated_style.color.used(),
                                     font_size,
                                     (adj_position.0 as u32, adj_position.1 as u32),
@@ -336,6 +364,7 @@ impl WindowState {
 
                                 let key = (
                                     text_content.clone(),
+                                    font_weight,
                                     adj_position.0 as u32,
                                     adj_position.1 as u32,
                                     font_size as u32,

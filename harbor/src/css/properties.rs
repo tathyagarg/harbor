@@ -664,6 +664,13 @@ impl Font {
         }
     }
 
+    pub fn weight(&self) -> FontWeight {
+        match self {
+            Font::Constructed(cf) => cf.weight.clone(),
+            Font::SystemFont(_) => FontWeight::default(),
+        }
+    }
+
     pub fn set_size(&mut self, size: FontSize) {
         match self {
             Font::Constructed(cf) => cf.size = size,
@@ -724,6 +731,20 @@ impl Font {
             Font::SystemFont(_) => None,
         }
     }
+
+    pub fn resolve_font_weight(&mut self, parents: &Vec<&Element>) -> Option<u32> {
+        match self {
+            Font::Constructed(cf) => Some(cf.resolve_font_weight(parents)),
+            Font::SystemFont(_) => None,
+        }
+    }
+
+    pub fn resolved_font_weight(&self) -> Option<u32> {
+        match self {
+            Font::Constructed(cf) => cf.resolved_font_weight(),
+            Font::SystemFont(_) => None,
+        }
+    }
 }
 
 impl Default for Font {
@@ -743,6 +764,7 @@ pub struct ConstructedFont {
     pub family: FontFamily,
 
     _resolved_font_size: Option<f64>,
+    _resolve_font_weight: Option<u32>,
 }
 
 impl CSSParseable for Font {
@@ -867,6 +889,20 @@ impl ConstructedFont {
     pub fn resolved_font_size(&self) -> Option<f64> {
         self._resolved_font_size
     }
+
+    pub fn resolve_font_weight(&mut self, parents: &Vec<&Element>) -> u32 {
+        if let Some(resolved_weight) = self._resolve_font_weight {
+            return resolved_weight;
+        }
+
+        let resolved_weight = self.weight.resolve(parents);
+        self._resolve_font_weight = Some(resolved_weight);
+        resolved_weight
+    }
+
+    pub fn resolved_font_weight(&self) -> Option<u32> {
+        self._resolve_font_weight
+    }
 }
 
 #[derive(Default, Debug, Clone)]
@@ -974,6 +1010,54 @@ impl CSSParseable for FontWeight {
 
         cvs.reconsume();
         None
+    }
+}
+
+impl FontWeight {
+    pub fn resolve(&self, parents: &Vec<&Element>) -> u32 {
+        match self {
+            FontWeight::Normal => 400,
+            FontWeight::Bold => 700,
+            FontWeight::Bolder => {
+                let new_parents = if parents.len() > 1 {
+                    &parents[..parents.len() - 1].to_vec()
+                } else {
+                    &vec![]
+                };
+
+                let parent_weight = parents
+                    .last()
+                    .and_then(|parent| parent.style().font.weight().resolve(new_parents).into())
+                    .unwrap_or(400);
+
+                match parent_weight {
+                    100..=300 => 400,
+                    400..=600 => 700,
+                    700..=900 => 900,
+                    _ => 400,
+                }
+            }
+            FontWeight::Lighter => {
+                let new_parents = if parents.len() > 1 {
+                    &parents[..parents.len() - 1].to_vec()
+                } else {
+                    &vec![]
+                };
+
+                let parent_weight = parents
+                    .last()
+                    .and_then(|parent| parent.style().font.weight().resolve(new_parents).into())
+                    .unwrap_or(400);
+
+                match parent_weight {
+                    100..=300 => 100,
+                    400..=600 => 300,
+                    700..=900 => 600,
+                    _ => 400,
+                }
+            }
+            FontWeight::Weight(w) => *w,
+        }
     }
 }
 
