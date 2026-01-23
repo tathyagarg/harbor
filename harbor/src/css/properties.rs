@@ -4,6 +4,7 @@ use crate::{
         parser::{ComponentValue, Function},
         tokenize::{CSSToken, Dimension, NumberType, Percentage},
     },
+    html5::dom::Element,
     infra::InputStream,
 };
 
@@ -700,9 +701,9 @@ impl Font {
         }
     }
 
-    pub fn resolve_font_size(&mut self, parent_font_size: f64) -> Option<f64> {
+    pub fn resolve_font_size(&mut self, parents: &Vec<&Element>) -> Option<f64> {
         match self {
-            Font::Constructed(cf) => Some(cf.resolve_font_size(parent_font_size)),
+            Font::Constructed(cf) => Some(cf.resolve_font_size(parents)),
             Font::SystemFont(_) => None,
         }
     }
@@ -856,12 +857,12 @@ impl CSSParseable for ConstructedFont {
 }
 
 impl ConstructedFont {
-    pub fn resolve_font_size(&mut self, parent_font_size: f64) -> f64 {
-        if let Some(resolved_size) = self._resolved_font_size {
-            return resolved_size;
-        }
+    pub fn resolve_font_size(&mut self, parents: &Vec<&Element>) -> f64 {
+        // if let Some(resolved_size) = self._resolved_font_size {
+        //     return resolved_size;
+        // }
 
-        let resolved_size = self.size.resolve(parent_font_size);
+        let resolved_size = self.size.resolve(parents);
         self._resolved_font_size = Some(resolved_size);
         resolved_size
     }
@@ -1030,29 +1031,69 @@ pub enum FontSize {
 }
 
 impl FontSize {
-    pub fn resolve(&self, parent_font_size: f64) -> f64 {
+    pub fn resolve(&self, parents: &Vec<&Element>) -> f64 {
+        println!(
+            "Parents: {:?}",
+            parents
+                .iter()
+                .map(|e| e.local_name.clone())
+                .collect::<Vec<_>>()
+        );
+
         match self {
             FontSize::LengthPercentage(lp) => match lp {
                 LengthPercentage::Length(dim) => match dim.unit.as_str() {
                     "px" => dim.value as f64,
+                    "em" => {
+                        let parent_font_size = parents
+                            .last()
+                            .and_then(|parent| parent.style().font.resolved_font_size())
+                            .unwrap_or(16.0);
+
+                        dim.value as f64 * parent_font_size
+                    }
+                    "rem" => {
+                        let root_font_size = parents
+                            .first()
+                            .and_then(|root| root.style().font.resolved_font_size())
+                            .unwrap_or(16.0);
+
+                        dim.value as f64 * root_font_size
+                    }
                     _ => todo!("Handle other length units"),
                 },
-                LengthPercentage::Percentage(perc) => (*perc as f64 / 100.0) * parent_font_size,
+                LengthPercentage::Percentage(perc) => {
+                    // For now, assume parent font size is 16px
+                    let parent_font_size = 16.0;
+                    (*perc as f64 / 100.0) * parent_font_size
+                }
             },
-            FontSize::AbsoluteSize(abs_size) => match abs_size {
-                AbsoluteSize::XXSmall => parent_font_size * 0.578,
-                AbsoluteSize::XSmall => parent_font_size * 0.694,
-                AbsoluteSize::Small => parent_font_size * 0.833,
-                AbsoluteSize::Medium => parent_font_size,
-                AbsoluteSize::Large => parent_font_size * 1.2,
-                AbsoluteSize::XLarge => parent_font_size * 1.44,
-                AbsoluteSize::XXLarge => parent_font_size * 1.728,
-            },
-            FontSize::RelativeSize(rel_size) => match rel_size {
-                RelativeSize::Larger => parent_font_size * 1.2,
-                RelativeSize::Smaller => parent_font_size * 0.833,
-            },
+            _ => todo!("Handle other FontSize variants"),
         }
+
+        // match self {
+        //     FontSize::LengthPercentage(lp) => match lp {
+        //         LengthPercentage::Length(dim) => match dim.unit.as_str() {
+        //             "px" => dim.value as f64,
+        //             "em" => dim.value as f64 * parent_font_size,
+        //             _ => todo!("Handle other length units"),
+        //         },
+        //         LengthPercentage::Percentage(perc) => (*perc as f64 / 100.0) * parent_font_size,
+        //     },
+        //     FontSize::AbsoluteSize(abs_size) => match abs_size {
+        //         AbsoluteSize::XXSmall => parent_font_size * 0.578,
+        //         AbsoluteSize::XSmall => parent_font_size * 0.694,
+        //         AbsoluteSize::Small => parent_font_size * 0.833,
+        //         AbsoluteSize::Medium => parent_font_size,
+        //         AbsoluteSize::Large => parent_font_size * 1.2,
+        //         AbsoluteSize::XLarge => parent_font_size * 1.44,
+        //         AbsoluteSize::XXLarge => parent_font_size * 1.728,
+        //     },
+        //     FontSize::RelativeSize(rel_size) => match rel_size {
+        //         RelativeSize::Larger => parent_font_size * 1.2,
+        //         RelativeSize::Smaller => parent_font_size * 0.833,
+        //     },
+        // }
     }
 }
 

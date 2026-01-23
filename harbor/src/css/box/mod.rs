@@ -287,7 +287,7 @@ impl Box {
             .iter()
             .find(|node_rc| matches!(node_rc.borrow().deref(), NodeKind::Element(_)));
 
-        let tree = root_box.build_box_tree(first_element.unwrap(), None);
+        let tree = root_box.build_box_tree(first_element.unwrap(), &mut vec![]);
 
         tree
     }
@@ -295,7 +295,7 @@ impl Box {
     pub fn build_box_tree(
         &mut self,
         tree: &Rc<RefCell<NodeKind>>,
-        parent: Option<&Weak<RefCell<Box>>>,
+        parents: &mut Vec<Weak<RefCell<Box>>>,
     ) -> Option<Rc<RefCell<Box>>> {
         match tree.borrow().deref() {
             NodeKind::Element(element_rc) if element_rc.borrow().local_name.as_str() != "head" => {
@@ -306,19 +306,20 @@ impl Box {
                     _ => BoxType::Block,
                 };
 
-                element.style_mut().font.resolve_font_size(
-                    parent
-                        .and_then(|weak_box| weak_box.upgrade())
-                        .and_then(|parent_box_rc| {
-                            match parent_box_rc.borrow().associated_style.font {
-                                Font::Constructed(ref constructed) => {
-                                    constructed.resolved_font_size()
-                                }
-                                _ => None,
-                            }
-                        })
-                        .unwrap_or(16.0),
-                );
+                // element.style_mut().font.resolve_font_size(
+                //     parents
+                //         .last()
+                //         .and_then(|weak_box| weak_box.upgrade())
+                //         .and_then(|parent_box_rc| {
+                //             match parent_box_rc.borrow().associated_style.font {
+                //                 Font::Constructed(ref constructed) => {
+                //                     constructed.resolved_font_size()
+                //                 }
+                //                 _ => None,
+                //             }
+                //         })
+                //         .unwrap_or(16.0),
+                // );
 
                 // TODO: Figure out what to do with this
                 // let line_height = element
@@ -373,10 +374,9 @@ impl Box {
                     associated_style: element.style().clone(),
                 }));
 
+                parents.push(Rc::downgrade(&this_box));
                 for child in element._node.borrow().child_nodes().iter() {
-                    if let Some(child_box) =
-                        self.build_box_tree(&child, Some(&Rc::downgrade(&this_box)))
-                    {
+                    if let Some(child_box) = self.build_box_tree(&child, parents) {
                         this_box.borrow_mut().children.push(child_box);
                     }
                 }
@@ -412,7 +412,8 @@ impl Box {
                     // ),
                     associated_node: Some(Rc::clone(tree)),
 
-                    associated_style: parent
+                    associated_style: parents
+                        .last()
                         .and_then(|weak_box| weak_box.upgrade())
                         .map_or(ComputedStyle::default(), |parent_box_rc| {
                             parent_box_rc.borrow().associated_style.clone()
@@ -546,13 +547,15 @@ impl Box {
                                     // .map(|aw| aw as f64 * self._font_size.unwrap_or(16.0))
                                     .map(|aw| aw as f64 * scale)
                             })
-                            .unwrap_or(8.0);
+                            .unwrap_or(0.0);
 
+                        println!("Character: '{}' Advance Width: {}", ch, aw);
                         pen_x += aw;
                     } else {
                         // TODO: handle pre
                     }
                 }
+                println!("Total text width: {}", pen_x);
 
                 text_node_rc.borrow_mut().set_data(&new_data);
                 pen_y += self
@@ -567,7 +570,7 @@ impl Box {
                 for child in element._node.borrow().child_nodes().iter() {
                     let child_box_opt = self.build_box_tree(
                         child,
-                        Some(&Rc::downgrade(&Rc::new(RefCell::new(self.clone())))),
+                        &mut vec![Rc::downgrade(&Rc::new(RefCell::new(self.clone())))],
                     );
                     if let Some(child_box_rc) = child_box_opt {
                         let mut child_box = child_box_rc.borrow_mut();
@@ -606,6 +609,17 @@ fn compute_element_styles(
     element: &mut Element,
     parents: Option<&Vec<&Element>>,
 ) {
+    // inherit
+    *element.style_mut() = parents
+        .and_then(|p| p.last())
+        .map_or(ComputedStyle::default(), |parent| parent.style().clone());
+
+    println!(
+        "Inhereted style for <{}>: {:#?}",
+        element.local_name,
+        element.style()
+    );
+
     let style_sheets = document.style_sheets();
 
     for stylesheet in style_sheets.style_sheets.iter() {
@@ -623,7 +637,7 @@ fn compute_element_styles(
                             let style = element.style_mut();
 
                             for declaration in style_rule.declarations() {
-                                handle_declaration(declaration, style);
+                                handle_declaration(declaration, style, parents);
                             }
                         }
                     }
@@ -639,6 +653,7 @@ fn compute_element_styles(
         Some(p) => p.clone(),
         None => vec![],
     };
+
     new_parents.push(element);
 
     for child_rc in element._node.borrow().child_nodes().iter() {
@@ -648,12 +663,6 @@ fn compute_element_styles(
             compute_element_styles(document, &mut child_element, Some(&new_parents));
         }
     }
-
-    println!(
-        "Computed style for <{}>: {:?}",
-        element.local_name,
-        element.style()
-    );
 }
 
 fn handle_background(declaration: &CSSDeclaration, style: &mut ComputedStyle) {
@@ -695,16 +704,25 @@ fn handle_background_property(declaration: &CSSDeclaration, style: &mut Computed
     }
 }
 
-fn handle_font(declaration: &CSSDeclaration, style: &mut ComputedStyle) {
+fn handle_font(
+    declaration: &CSSDeclaration,
+    style: &mut ComputedStyle,
+    parents: Option<&Vec<&Element>>,
+) {
     let mut stream = InputStream::new(&declaration.value);
 
     let font = Font::from_cv(&mut stream);
     if let Some(font) = font {
         style.font = font;
+        style.font.resolve_font_size(parents.unwrap_or(&vec![]));
     }
 }
 
-fn handle_font_property(declaration: &CSSDeclaration, style: &mut ComputedStyle) {
+fn handle_font_property(
+    declaration: &CSSDeclaration,
+    style: &mut ComputedStyle,
+    parents: Option<&Vec<&Element>>,
+) {
     let mut stream = InputStream::new(&declaration.value);
 
     match declaration.property_name.as_str() {
@@ -718,6 +736,7 @@ fn handle_font_property(declaration: &CSSDeclaration, style: &mut ComputedStyle)
             let size = FontSize::from_cv(&mut stream);
             if let Some(size) = size {
                 style.font.set_size(size);
+                style.font.resolve_font_size(parents.unwrap_or(&vec![]));
             }
         }
         "font-weight" => {
@@ -736,7 +755,11 @@ fn handle_font_property(declaration: &CSSDeclaration, style: &mut ComputedStyle)
     }
 }
 
-fn handle_declaration(declaration: &CSSDeclaration, style: &mut ComputedStyle) {
+fn handle_declaration(
+    declaration: &CSSDeclaration,
+    style: &mut ComputedStyle,
+    parents: Option<&Vec<&Element>>,
+) {
     match declaration.property_name.as_str() {
         "color" => {
             let mut stream = InputStream::new(&declaration.value);
@@ -749,10 +772,10 @@ fn handle_declaration(declaration: &CSSDeclaration, style: &mut ComputedStyle) {
             handle_background_property(declaration, style);
         }
         "font" => {
-            handle_font(declaration, style);
+            handle_font(declaration, style, parents);
         }
         prop if prop.starts_with("font-") || prop == "line-height" => {
-            handle_font_property(declaration, style);
+            handle_font_property(declaration, style, parents);
         }
         "width" => {
             let mut stream = InputStream::new(&declaration.value);
