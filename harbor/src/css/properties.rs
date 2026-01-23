@@ -641,3 +641,116 @@ impl Origin {
         origins
     }
 }
+
+#[derive(Default, Debug, Clone)]
+pub struct Font {
+    pub style: FontStyle,
+    pub variant: FontVariant,
+    pub weight: FontWeight,
+    pub width: FontWidth,
+    pub size: FontSize,
+    pub line_height: LineHeight,
+    pub family: FontFamily,
+}
+
+#[derive(Default, Debug, Clone)]
+pub enum FontStyle {
+    #[default]
+    Normal,
+    Italic,
+    Oblique(Option<Dimension>),
+    Left,
+    Right,
+}
+
+#[derive(Default, Debug, Clone)]
+pub enum FontVariant {
+    #[default]
+    Normal,
+
+    SmallCaps,
+}
+
+#[derive(Default, Debug, Clone)]
+pub enum FontWeight {
+    #[default]
+    Normal,
+    Bold,
+
+    Bolder,
+    Lighter,
+
+    Weight(u32),
+}
+
+#[derive(Default, Debug, Clone)]
+pub enum FontWidth {
+    #[default]
+    Normal,
+    UltraCondensed,
+    ExtraCondensed,
+    Condensed,
+    SemiCondensed,
+    SemiExpanded,
+    Expanded,
+    ExtraExpanded,
+    UltraExpanded,
+}
+
+#[derive(Debug, Clone)]
+pub enum FontSize {
+    LengthPercentage(LengthPercentage),
+    AbsoluteSize(AbsoluteSize),
+    RelativeSize(RelativeSize),
+}
+
+impl Default for FontSize {
+    fn default() -> Self {
+        FontSize::AbsoluteSize(AbsoluteSize::Medium)
+    }
+}
+
+#[derive(Default, Debug, Clone)]
+pub enum AbsoluteSize {
+    XXSmall,
+    XSmall,
+    Small,
+
+    #[default]
+    Medium,
+
+    Large,
+    XLarge,
+    XXLarge,
+}
+
+#[derive(Debug, Clone)]
+pub enum RelativeSize {
+    Larger,
+    Smaller,
+}
+
+#[derive(Default, Debug, Clone)]
+pub enum LineHeight {
+    #[default]
+    Normal,
+    Number(f64),
+    LengthPercentage(LengthPercentage),
+}
+
+#[derive(Default, Debug, Clone)]
+pub struct FontFamily {
+    pub entries: Vec<FontFamilyEntry>,
+}
+
+#[derive(Debug, Clone)]
+pub enum FontFamilyEntry {
+    FamilyName(FamilyName),
+    GenericFamily(String),
+}
+
+#[derive(Debug, Clone)]
+pub enum FamilyName {
+    String(String),
+    Idents(Vec<String>),
+}
