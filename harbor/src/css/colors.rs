@@ -131,6 +131,50 @@ pub fn is_system_color(name: &str) -> bool {
     )
 }
 
+pub fn get_system_color(name: &str, dark_mode: bool) -> Option<&'static str> {
+    match (name, dark_mode) {
+        ("AccentColor", false) => Some(ACCENT_COLOR_LIGHT),
+        ("AccentColor", true) => Some(ACCENT_COLOR_DARK),
+        ("AccentColorText", false) => Some(ACCENT_COLOR_TEXT_LIGHT),
+        ("AccentColorText", true) => Some(ACCENT_COLOR_TEXT_DARK),
+        ("ActiveText", false) => Some(ACTIVE_TEXT_LIGHT),
+        ("ActiveText", true) => Some(ACTIVE_TEXT_DARK),
+        ("ButtonBorder", false) => Some(BUTTON_BORDER_LIGHT),
+        ("ButtonBorder", true) => Some(BUTTON_BORDER_DARK),
+        ("ButtonFace", false) => Some(BUTTON_FACE_LIGHT),
+        ("ButtonFace", true) => Some(BUTTON_FACE_DARK),
+        ("ButtonText", false) => Some(BUTTON_TEXT_LIGHT),
+        ("ButtonText", true) => Some(BUTTON_TEXT_DARK),
+        ("Canvas", false) => Some(CANVAS_LIGHT),
+        ("Canvas", true) => Some(CANVAS_DARK),
+        ("CanvasText", false) => Some(CANVAS_TEXT_LIGHT),
+        ("CanvasText", true) => Some(CANVAS_TEXT_DARK),
+        ("Field", false) => Some(FIELD_LIGHT),
+        ("Field", true) => Some(FIELD_DARK),
+        ("FieldText", false) => Some(FIELD_TEXT_LIGHT),
+        ("FieldText", true) => Some(FIELD_TEXT_DARK),
+        ("GrayText", false) => Some(GRAY_TEXT_LIGHT),
+        ("GrayText", true) => Some(GRAY_TEXT_DARK),
+        ("Highlight", false) => Some(HIGHLIGHT_LIGHT),
+        ("Highlight", true) => Some(HIGHLIGHT_DARK),
+        ("HighlightText", false) => Some(HIGHLIGHT_TEXT_LIGHT),
+        ("HighlightText", true) => Some(HIGHLIGHT_TEXT_DARK),
+        ("LinkText", false) => Some(LINK_TEXT_LIGHT),
+        ("LinkText", true) => Some(LINK_TEXT_DARK),
+        ("Mark", false) => Some(MARK_LIGHT),
+        ("Mark", true) => Some(MARK_DARK),
+        ("MarkText", false) => Some(MARK_TEXT_LIGHT),
+        ("MarkText", true) => Some(MARK_TEXT_DARK),
+        ("SelectedItem", false) => Some(SELECTED_ITEM_LIGHT),
+        ("SelectedItem", true) => Some(SELECTED_ITEM_DARK),
+        ("SelectedItemText", false) => Some(SELECTED_ITEM_TEXT_LIGHT),
+        ("SelectedItemText", true) => Some(SELECTED_ITEM_TEXT_DARK),
+        ("VisitedText", false) => Some(VISITED_TEXT_LIGHT),
+        ("VisitedText", true) => Some(VISITED_TEXT_DARK),
+        _ => None,
+    }
+}
+
 /* Named Colors */
 pub fn get_named_color(name: &str) -> Option<&'static str> {
     match name.to_lowercase().as_str() {
@@ -404,6 +448,7 @@ mod functions {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Color {
     Named(String),
+    SystemNamed(String),
     Hex(String),
     Function(Function),
 }
@@ -423,6 +468,13 @@ impl Color {
         match self {
             Color::Named(name) => {
                 if let Some(hex) = get_named_color(name) {
+                    hex_to_rgb(hex)
+                } else {
+                    [0.0, 0.0, 0.0, 0.0]
+                }
+            }
+            Color::SystemNamed(name) => {
+                if let Some(hex) = get_system_color(name, false) {
                     hex_to_rgb(hex)
                 } else {
                     [0.0, 0.0, 0.0, 0.0]
@@ -453,6 +505,9 @@ impl CSSParseable for Color {
                     if get_named_color(&name).is_some() =>
                 {
                     Some(Color::Named(name.clone()))
+                }
+                ComponentValue::Token(CSSToken::Ident(name)) if is_system_color(&name) => {
+                    Some(Color::SystemNamed(name.clone()))
                 }
                 ComponentValue::Token(CSSToken::Hash(HashToken { value: val, .. })) => {
                     Some(Color::Hex(val.clone()))

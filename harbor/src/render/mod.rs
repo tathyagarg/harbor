@@ -231,8 +231,6 @@ impl WindowState {
         position: (f64, f64),
         render_pass: &mut wgpu::RenderPass,
     ) {
-        println!("Rendering box: {:#?}", layout_box);
-
         match layout_box._box_type {
             BoxType::Block => {
                 render_pass.set_pipeline(&self.fill_render_pipeline);

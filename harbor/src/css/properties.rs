@@ -185,7 +185,6 @@ impl CSSParseable for Background {
             }
         }
 
-        println!("Parsed background: {:#?}", bg);
         Some(bg)
     }
 }
@@ -325,7 +324,6 @@ impl BackgroundLayer {
             }
         }
 
-        println!("Parsed background layer: {:?}", layer);
         Some(layer)
     }
 }
