@@ -15,7 +15,7 @@ use crate::{
             ComputedStyle,
         },
         parser::ComponentValue,
-        properties::{Background, CSSParseable, WidthValue},
+        properties::{Background, CSSParseable, Image, Origin, Position, RepeatStyle, WidthValue},
         selectors::MatchesElement,
         tokenize::CSSToken,
     },
@@ -605,6 +605,36 @@ fn handle_background(declaration: &CSSDeclaration, style: &mut ComputedStyle) {
     }
 }
 
+fn handle_background_property(declaration: &CSSDeclaration, style: &mut ComputedStyle) {
+    let mut stream = InputStream::new(&declaration.value);
+
+    match declaration.property_name.as_str() {
+        "background-color" => {
+            let color = Color::from_cv(&mut stream);
+            if let Some(color) = color {
+                style.background.set_color(color);
+            }
+        }
+        "background-image" => {
+            let bg_image = Image::parse_multiple_images(&mut stream);
+            style.background.set_images(bg_image);
+        }
+        "background-repeat" => {
+            let repeat = RepeatStyle::parse_multiple_repeat_styles(&mut stream);
+            style.background.set_repeat_styles(repeat);
+        }
+        "background-position" => {
+            let position = Position::parse_multiple_positions(&mut stream);
+            style.background.set_positions(position);
+        }
+        "background-origin" => {
+            let origin = Origin::parse_multiple_origins(&mut stream);
+            style.background.set_origins(origin);
+        }
+        _ => {}
+    }
+}
+
 fn handle_declaration(declaration: &CSSDeclaration, style: &mut ComputedStyle) {
     match declaration.property_name.as_str() {
         "color" => {
@@ -613,6 +643,9 @@ fn handle_declaration(declaration: &CSSDeclaration, style: &mut ComputedStyle) {
         }
         "background" => {
             handle_background(declaration, style);
+        }
+        prop if prop.starts_with("background-") => {
+            handle_background_property(declaration, style);
         }
         "width" => {
             let mut stream = InputStream::new(&declaration.value);

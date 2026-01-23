@@ -105,6 +105,30 @@ impl Image {
 
         None
     }
+
+    pub fn parse_multiple_images(cvs: &mut InputStream<ComponentValue>) -> Vec<Image> {
+        let mut cvs = InputStream::new(
+            &cvs.finish()
+                .iter()
+                .filter(|cv| match cv {
+                    ComponentValue::Token(token) => match token {
+                        CSSToken::Whitespace | CSSToken::Comma => false,
+                        _ => true,
+                    },
+                    _ => true,
+                })
+                .cloned()
+                .collect::<Vec<ComponentValue>>()[..],
+        );
+
+        let mut images = Vec::new();
+
+        while let Some(image) = Image::from_cv(&mut cvs) {
+            images.push(image);
+        }
+
+        images
+    }
 }
 
 #[derive(Default, Debug, Clone)]
@@ -132,25 +156,6 @@ impl Default for BackgroundLayer {
         }
     }
 }
-
-// impl BackgroundLayer {
-//     fn _parse_step(cvs: &mut InputStream<ComponentValue>) -> Option<BackgroundLayer> {
-//         println!("CVS: {:?}", cvs);
-//         if let Some(image) = Image::from_cv(cvs) {
-//             return Some(BackgroundLayer::Image(image));
-//         }
-//
-//         if let Some(position) = Position::from_cv(cvs) {
-//             return Some(BackgroundLayer::Position(position));
-//         }
-//
-//         if let Some(repeat_style) = RepeatStyle::from_cv(cvs) {
-//             return Some(BackgroundLayer::RepeatStyle(repeat_style));
-//         }
-//
-//         None
-//     }
-// }
 
 impl CSSParseable for Background {
     fn from_cv(cvs: &mut InputStream<ComponentValue>) -> Option<Self>
@@ -184,36 +189,6 @@ impl CSSParseable for Background {
     }
 }
 
-// impl CSSParseable for BackgroundLayer {
-//     /// https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/background#formal_syntax
-//     fn from_cv(cvs: &mut InputStream<ComponentValue>) -> Option<Self> {
-//         let mut bg = BackgroundLayer::default();
-//
-//         let vec = cvs.finish();
-//
-//         let bg_layers = Background::preprocess_tokens(&vec);
-//
-//         for (i, layer) in bg_layers.iter().enumerate() {
-//             if i == bg_layers.len() - 1 {
-//                 println!("Parsing final bg layer: {:?}", layer);
-//                 let mut layer_cvs = InputStream::new(layer);
-//
-//                 bg.update_from_layer(Background::parse_final_bg_layer(&mut layer_cvs));
-//             } else {
-//                 println!("Parsing bg layer: {:?}", layer);
-//                 let mut layer_cvs = InputStream::new(layer);
-//
-//                 if let Some(parsed_layer) = Background::parse_bg_layer(&mut layer_cvs) {
-//                     bg.update_from_layer(parsed_layer);
-//                 }
-//             }
-//         }
-//
-//         println!("Parsed background: {:?}", bg);
-//         Some(bg)
-//     }
-// }
-
 impl Background {
     pub fn preprocess_tokens(cvs: &[ComponentValue]) -> Vec<Vec<ComponentValue>> {
         cvs.iter()
@@ -237,27 +212,79 @@ impl Background {
             .collect()
     }
 
-    // fn update_from_bg(&mut self, bg: Background) {
-    //     match bg {
-    //         BackgroundLayer::Image(image) => {
-    //             self.image = image;
-    //         }
-    //         BackgroundLayer::Color(color) => {
-    //             self.color = color;
-    //         }
-    //         BackgroundLayer::Position(position) => {
-    //             self.position = position;
-    //         }
-    //         BackgroundLayer::RepeatStyle(_repeat_style) => {
-    //             self.repeat_style = _repeat_style;
-    //         }
-    //     }
-    // }
-
     pub fn color(&self) -> Color {
         self.layers
             .last()
             .map_or(Color::transparent(), |layer| layer.color.clone())
+    }
+
+    fn ensure_layer(&mut self) -> &mut BackgroundLayer {
+        if self.layers.is_empty() {
+            self.layers.push(BackgroundLayer::default());
+        }
+        self.layers.last_mut().unwrap()
+    }
+
+    fn update_color(&mut self, color: Color) {
+        let layer = self.ensure_layer();
+        layer.color = color;
+    }
+
+    pub fn set_color(&mut self, color: Color) {
+        let layer = self.ensure_layer();
+        layer.color = color;
+    }
+
+    pub fn set_images(&mut self, images: Vec<Image>) {
+        for (i, image) in images.into_iter().enumerate() {
+            if i < self.layers.len() {
+                self.layers[i].image = image;
+            } else {
+                let mut layer = BackgroundLayer::default();
+                layer.image = image;
+                self.layers.push(layer);
+                self.update_color(self.color());
+            }
+        }
+    }
+
+    pub fn set_positions(&mut self, positions: Vec<Position>) {
+        for (i, position) in positions.into_iter().enumerate() {
+            if i < self.layers.len() {
+                self.layers[i].position = position;
+            } else {
+                let mut layer = BackgroundLayer::default();
+                layer.position = position;
+                self.layers.push(layer);
+                self.update_color(self.color());
+            }
+        }
+    }
+
+    pub fn set_repeat_styles(&mut self, repeat_styles: Vec<RepeatStyle>) {
+        for (i, repeat_style) in repeat_styles.into_iter().enumerate() {
+            if i < self.layers.len() {
+                self.layers[i].repeat_style = repeat_style;
+            } else {
+                let mut layer = BackgroundLayer::default();
+                layer.repeat_style = repeat_style;
+                self.layers.push(layer);
+                self.update_color(self.color());
+            }
+        }
+    }
+
+    pub fn set_origins(&mut self, origins: Vec<Origin>) {
+        for (i, origin) in origins.into_iter().enumerate() {
+            if i < self.layers.len() {
+                self.layers[i].origin = origin;
+            } else {
+                let mut layer = BackgroundLayer::default();
+                layer.origin = origin;
+                self.layers.push(layer);
+                self.update_color(self.color());
+            }
+        }
     }
 }
 
@@ -269,8 +296,6 @@ impl BackgroundLayer {
         let mut layer = BackgroundLayer::default();
 
         while !cvs.is_eof {
-            println!("Next: {:?}", cvs.peek());
-
             if let Some(image) = Image::from_cv(cvs) {
                 layer.image = image;
                 continue;
@@ -334,28 +359,29 @@ pub enum PositionDirection {
 
 #[derive(Debug, Clone)]
 pub struct Position {
-    pub direction_x: PositionDirection,
-    pub direction_y: PositionDirection,
-
-    pub offset_x: LengthPercentage,
-    pub offset_y: LengthPercentage,
+    pub x: (PositionDirection, LengthPercentage),
+    pub y: (PositionDirection, LengthPercentage),
 }
 
 impl Default for Position {
     fn default() -> Self {
         Position {
-            direction_x: PositionDirection::Center,
-            direction_y: PositionDirection::Center,
-            offset_x: LengthPercentage::Length(Dimension {
-                value: 0.0,
-                number_type: NumberType::Integer,
-                unit: "px".to_string(),
-            }),
-            offset_y: LengthPercentage::Length(Dimension {
-                value: 0.0,
-                number_type: NumberType::Integer,
-                unit: "px".to_string(),
-            }),
+            x: (
+                PositionDirection::Center,
+                LengthPercentage::Length(Dimension {
+                    value: 0.0,
+                    number_type: NumberType::Integer,
+                    unit: "px".to_string(),
+                }),
+            ),
+            y: (
+                PositionDirection::Center,
+                LengthPercentage::Length(Dimension {
+                    value: 0.0,
+                    number_type: NumberType::Integer,
+                    unit: "px".to_string(),
+                }),
+            ),
         }
     }
 }
@@ -366,24 +392,65 @@ impl CSSParseable for Position {
             match tok {
                 ComponentValue::Token(CSSToken::Ident(ident)) => match ident.as_str() {
                     "left" => Some(Position {
-                        direction_x: PositionDirection::Left,
+                        x: (
+                            PositionDirection::Left,
+                            LengthPercentage::Length(Dimension {
+                                value: 0.0,
+                                number_type: NumberType::Integer,
+                                unit: "px".to_string(),
+                            }),
+                        ),
                         ..Default::default()
                     }),
                     "center" => Some(Position {
-                        direction_x: PositionDirection::Center,
-                        direction_y: PositionDirection::Center,
-                        ..Default::default()
+                        x: (
+                            PositionDirection::Center,
+                            LengthPercentage::Length(Dimension {
+                                value: 0.0,
+                                number_type: NumberType::Integer,
+                                unit: "px".to_string(),
+                            }),
+                        ),
+                        y: (
+                            PositionDirection::Center,
+                            LengthPercentage::Length(Dimension {
+                                value: 0.0,
+                                number_type: NumberType::Integer,
+                                unit: "px".to_string(),
+                            }),
+                        ),
                     }),
                     "right" => Some(Position {
-                        direction_x: PositionDirection::Right,
+                        x: (
+                            PositionDirection::Right,
+                            LengthPercentage::Length(Dimension {
+                                value: 0.0,
+                                number_type: NumberType::Integer,
+                                unit: "px".to_string(),
+                            }),
+                        ),
                         ..Default::default()
                     }),
                     "top" => Some(Position {
-                        direction_y: PositionDirection::Top,
+                        y: (
+                            PositionDirection::Top,
+                            LengthPercentage::Length(Dimension {
+                                value: 0.0,
+                                number_type: NumberType::Integer,
+                                unit: "px".to_string(),
+                            }),
+                        ),
                         ..Default::default()
                     }),
                     "bottom" => Some(Position {
-                        direction_y: PositionDirection::Bottom,
+                        y: (
+                            PositionDirection::Bottom,
+                            LengthPercentage::Length(Dimension {
+                                value: 0.0,
+                                number_type: NumberType::Integer,
+                                unit: "px".to_string(),
+                            }),
+                        ),
                         ..Default::default()
                     }),
                     _ => {
@@ -392,16 +459,24 @@ impl CSSParseable for Position {
                     }
                 },
                 ComponentValue::Token(CSSToken::Percentage(perc)) => Some(Position {
-                    direction_x: PositionDirection::Center,
-                    direction_y: PositionDirection::Center,
-                    offset_x: LengthPercentage::Percentage(perc),
-                    offset_y: LengthPercentage::Percentage(perc),
+                    x: (
+                        PositionDirection::Center,
+                        LengthPercentage::Percentage(perc.clone()),
+                    ),
+                    y: (
+                        PositionDirection::Center,
+                        LengthPercentage::Percentage(perc.clone()),
+                    ),
                 }),
                 ComponentValue::Token(CSSToken::Dimension(dim)) => Some(Position {
-                    direction_x: PositionDirection::Center,
-                    direction_y: PositionDirection::Center,
-                    offset_x: LengthPercentage::Length(dim.clone()),
-                    offset_y: LengthPercentage::Length(dim.clone()),
+                    x: (
+                        PositionDirection::Center,
+                        LengthPercentage::Length(dim.clone()),
+                    ),
+                    y: (
+                        PositionDirection::Center,
+                        LengthPercentage::Length(dim.clone()),
+                    ),
                 }),
                 _ => {
                     cvs.reconsume();
@@ -411,6 +486,32 @@ impl CSSParseable for Position {
         } else {
             None
         }
+    }
+}
+
+impl Position {
+    pub fn parse_multiple_positions(cvs: &mut InputStream<ComponentValue>) -> Vec<Position> {
+        let mut cvs = InputStream::new(
+            &cvs.finish()
+                .iter()
+                .filter(|cv| match cv {
+                    ComponentValue::Token(token) => match token {
+                        CSSToken::Whitespace | CSSToken::Comma => false,
+                        _ => true,
+                    },
+                    _ => true,
+                })
+                .cloned()
+                .collect::<Vec<ComponentValue>>()[..],
+        );
+
+        let mut positions = Vec::new();
+
+        while let Some(position) = Position::from_cv(&mut cvs) {
+            positions.push(position);
+        }
+
+        positions
     }
 }
 
@@ -458,6 +559,32 @@ impl CSSParseable for RepeatStyle {
     }
 }
 
+impl RepeatStyle {
+    pub fn parse_multiple_repeat_styles(cvs: &mut InputStream<ComponentValue>) -> Vec<RepeatStyle> {
+        let mut cvs = InputStream::new(
+            &cvs.finish()
+                .iter()
+                .filter(|cv| match cv {
+                    ComponentValue::Token(token) => match token {
+                        CSSToken::Whitespace | CSSToken::Comma => false,
+                        _ => true,
+                    },
+                    _ => true,
+                })
+                .cloned()
+                .collect::<Vec<ComponentValue>>()[..],
+        );
+
+        let mut repeat_styles = Vec::new();
+
+        while let Some(repeat_style) = RepeatStyle::from_cv(&mut cvs) {
+            repeat_styles.push(repeat_style);
+        }
+
+        repeat_styles
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Origin {
     PaddingBox,
@@ -486,5 +613,31 @@ impl CSSParseable for Origin {
         } else {
             None
         }
+    }
+}
+
+impl Origin {
+    pub fn parse_multiple_origins(cvs: &mut InputStream<ComponentValue>) -> Vec<Origin> {
+        let mut cvs = InputStream::new(
+            &cvs.finish()
+                .iter()
+                .filter(|cv| match cv {
+                    ComponentValue::Token(token) => match token {
+                        CSSToken::Whitespace | CSSToken::Comma => false,
+                        _ => true,
+                    },
+                    _ => true,
+                })
+                .cloned()
+                .collect::<Vec<ComponentValue>>()[..],
+        );
+
+        let mut origins = Vec::new();
+
+        while let Some(origin) = Origin::from_cv(&mut cvs) {
+            origins.push(origin);
+        }
+
+        origins
     }
 }
