@@ -14,6 +14,7 @@ use crate::{
             CSSDeclaration, CSSRuleNode, CSSRuleType, CSSStyleRuleData, CSSStyleSheetExt,
             ComputedStyle,
         },
+        layout,
         properties::{
             Background, CSSParseable, Display, Font, FontFamily, FontSize, FontStyle, FontWeight,
             Image, LengthPercentage, LineHeight, Margin, MarginValue, Origin, Position,
@@ -374,14 +375,26 @@ impl Box {
         container_height: Option<f64>,
         start_x: f64,
         start_y: f64,
+        first_child: bool,
+        last_child: bool,
     ) -> (f64, f64) {
         match self._box_type {
-            BoxType::Block => {
-                self.layout_block(container_width, container_height, start_x, start_y)
-            }
-            BoxType::Inline => {
-                self.layout_inline(container_width, container_height, start_x, start_y)
-            }
+            BoxType::Block => self.layout_block(
+                container_width,
+                container_height,
+                start_x,
+                start_y,
+                first_child,
+                last_child,
+            ),
+            BoxType::Inline => self.layout_inline(
+                container_width,
+                container_height,
+                start_x,
+                start_y,
+                first_child,
+                last_child,
+            ),
             _ => (start_x, start_y),
         }
     }
@@ -392,6 +405,8 @@ impl Box {
         container_height: Option<f64>,
         start_x: f64,
         start_y: f64,
+        first_child: bool,
+        last_child: bool,
     ) -> (f64, f64) {
         let initial_x = start_x + self._margin.3 + self._border.3 + self._padding.3;
         println!("Margin: {:?}", self._margin);
@@ -400,9 +415,9 @@ impl Box {
         let mut cursor_x = initial_x;
         let mut cursor_y = initial_y;
 
-        let mut inline_run: Vec<Rc<RefCell<Box>>> = Vec::new();
+        let mut inline_run: Vec<(Rc<RefCell<Box>>, bool, bool)> = Vec::new();
 
-        let flush_inline_run = |run: &mut Vec<Rc<RefCell<Box>>>,
+        let flush_inline_run = |run: &mut Vec<(Rc<RefCell<Box>>, bool, bool)>,
                                 cursor_x: &mut f64,
                                 cursor_y: &mut f64,
                                 content_width: &mut f64| {
@@ -413,13 +428,13 @@ impl Box {
             let mut line_width = 0.0;
             let mut line_height: f64 = 0.0;
 
-            for child_rc in run.drain(..) {
+            for (child_rc, first, last) in run.drain(..) {
                 let mut child = child_rc.borrow_mut();
 
                 child._position_x = Some(*cursor_x - start_x + line_width);
                 child._position_y = Some(*cursor_y - start_y);
 
-                let (w, h) = child.layout(container_width, container_height, 0.0, 0.0);
+                let (w, h) = child.layout(container_width, container_height, 0.0, 0.0, first, last);
 
                 line_width += w + child._margin.horizontal();
                 line_height = line_height.max(h + child._margin.vertical());
@@ -430,12 +445,12 @@ impl Box {
             *content_width = content_width.max(line_width);
         };
 
-        for child_box_rc in &self.children {
+        for (i, child_box_rc) in self.children.iter().enumerate() {
             let child_box_type = child_box_rc.borrow()._box_type.clone();
 
             match child_box_type {
                 BoxType::Inline => {
-                    inline_run.push(child_box_rc.clone());
+                    inline_run.push((child_box_rc.clone(), i == 0, i == self.children.len() - 1));
                 }
                 BoxType::Block => {
                     flush_inline_run(
@@ -449,8 +464,14 @@ impl Box {
                     child._position_x = Some(cursor_x - start_x);
                     child._position_y = Some(cursor_y - start_y);
 
-                    let (w, h) =
-                        child.layout(container_width, container_height, cursor_x, cursor_y);
+                    let (w, h) = child.layout(
+                        container_width,
+                        container_height,
+                        cursor_x,
+                        cursor_y,
+                        i == 0,
+                        i == self.children.len() - 1,
+                    );
 
                     cursor_y += h + (child._margin.vertical() / 2.0);
                     self._content_width = self._content_width.max(w);
@@ -485,6 +506,8 @@ impl Box {
         _container_height: Option<f64>,
         start_x: f64,
         start_y: f64,
+        first_child: bool,
+        last_child: bool,
     ) -> (f64, f64) {
         let mut pen_x = start_x;
         let pen_y = start_y;
@@ -526,16 +549,6 @@ impl Box {
                 }
                 .or(ttc.and_then(|ttc| ttc.get_regular_font()));
 
-                // let font = ttc.and_then(|ttc| ttc.get_font_by_weight(weight));
-
-                // let font = FONTS.get(
-                //     &self
-                //         .associated_style.font.
-                //         ._font_family
-                //         .clone()
-                //         .unwrap_or_else(|| "Times New Roman".to_string()),
-                // );
-
                 let scale = self
                     .associated_style
                     .font
@@ -544,7 +557,22 @@ impl Box {
                     / font.unwrap().units_per_em() as f64;
 
                 let mut new_data = String::new();
-                for ch in text_node_rc.borrow().data().trim().chars() {
+
+                let chars = {
+                    let text_node = text_node_rc.borrow();
+                    let data = text_node.data();
+                    if first_child && last_child {
+                        data.trim().chars().collect::<Vec<char>>()
+                    } else if first_child {
+                        data.trim_start().chars().collect::<Vec<char>>()
+                    } else if last_child {
+                        data.trim_end().chars().collect::<Vec<char>>()
+                    } else {
+                        data.chars().collect::<Vec<char>>()
+                    }
+                };
+
+                for ch in chars {
                     if ch != '\n' && ch != '\r' && ch != '\t' {
                         new_data.push(ch);
                         let aw = font
@@ -570,9 +598,16 @@ impl Box {
                 );
             }
             NodeKind::Element(_) => {
-                for child_box in self.children.iter() {
+                for (i, child_box) in self.children.iter().enumerate() {
                     let mut child_box = child_box.borrow_mut();
-                    let (advance, line_height) = child_box.layout_inline(None, None, pen_x, pen_y);
+                    let (advance, line_height) = child_box.layout_inline(
+                        None,
+                        None,
+                        pen_x,
+                        pen_y,
+                        i == 0,
+                        i == self.children.len() - 1,
+                    );
 
                     pen_x += advance;
                     self._content_height = self._content_height.max(line_height);
