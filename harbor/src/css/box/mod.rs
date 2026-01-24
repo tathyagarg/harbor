@@ -14,11 +14,9 @@ use crate::{
             CSSDeclaration, CSSRuleNode, CSSRuleType, CSSStyleRuleData, CSSStyleSheetExt,
             ComputedStyle,
         },
-        layout,
         properties::{
             Background, CSSParseable, Display, Font, FontFamily, FontSize, FontStyle, FontWeight,
-            Image, LengthPercentage, LineHeight, Margin, MarginValue, Origin, Position,
-            RepeatStyle, WidthValue,
+            Image, LineHeight, Margin, MarginValue, Origin, Position, RepeatStyle, WidthValue,
         },
         selectors::MatchesElement,
     },
@@ -53,6 +51,22 @@ impl Edges {
         self.3 = left;
     }
 
+    pub fn top(&self) -> f64 {
+        self.0
+    }
+
+    pub fn right(&self) -> f64 {
+        self.1
+    }
+
+    pub fn bottom(&self) -> f64 {
+        self.2
+    }
+
+    pub fn left(&self) -> f64 {
+        self.3
+    }
+
     pub fn update_top(&mut self, top: f64) {
         self.0 = top;
     }
@@ -67,6 +81,10 @@ impl Edges {
 
     pub fn update_left(&mut self, left: f64) {
         self.3 = left;
+    }
+
+    pub fn is_none(&self) -> bool {
+        self.0 == 0.0 && self.1 == 0.0 && self.2 == 0.0 && self.3 == 0.0
     }
 }
 
@@ -337,6 +355,7 @@ impl Box {
                         this_box.borrow_mut().children.push(child_box);
                     }
                 }
+                parents.pop();
 
                 Some(this_box)
             }
@@ -379,14 +398,9 @@ impl Box {
         last_child: bool,
     ) -> (f64, f64) {
         match self._box_type {
-            BoxType::Block => self.layout_block(
-                container_width,
-                container_height,
-                start_x,
-                start_y,
-                first_child,
-                last_child,
-            ),
+            BoxType::Block => {
+                self.layout_block(container_width, container_height, start_x, start_y)
+            }
             BoxType::Inline => self.layout_inline(
                 container_width,
                 container_height,
@@ -405,11 +419,8 @@ impl Box {
         container_height: Option<f64>,
         start_x: f64,
         start_y: f64,
-        first_child: bool,
-        last_child: bool,
     ) -> (f64, f64) {
         let initial_x = start_x + self._margin.3 + self._border.3 + self._padding.3;
-        println!("Margin: {:?}", self._margin);
         let initial_y = start_y + self._margin.0 + self._border.0 + self._padding.0;
 
         let mut cursor_x = initial_x;
@@ -445,11 +456,13 @@ impl Box {
             *content_width = content_width.max(line_width);
         };
 
+        let mut prev_child: Option<Rc<RefCell<Box>>> = None;
         for (i, child_box_rc) in self.children.iter().enumerate() {
             let child_box_type = child_box_rc.borrow()._box_type.clone();
 
             match child_box_type {
                 BoxType::Inline => {
+                    // prev_child = None;
                     inline_run.push((child_box_rc.clone(), i == 0, i == self.children.len() - 1));
                 }
                 BoxType::Block => {
@@ -461,6 +474,28 @@ impl Box {
                     );
 
                     let mut child = child_box_rc.borrow_mut();
+
+                    if let Some(prev_child_rc) = &prev_child {
+                        let prev = prev_child_rc.borrow();
+
+                        if matches!(prev._box_type, BoxType::Block)
+                            && prev._padding.is_none()
+                            && child._padding.is_none()
+                            && prev._border.is_none()
+                            && child._border.is_none()
+                        {
+                            println!("PREV ({}) {:#?}", prev._margin.bottom(), prev);
+                            println!("CHILD ({}) {:#?}", child._margin.top(), child);
+
+                            if child._margin.top() > prev._margin.bottom() {
+                                cursor_y -= prev._margin.bottom();
+                            } else {
+                            }
+                        } else {
+                        }
+                    } else {
+                    }
+
                     child._position_x = Some(cursor_x - start_x);
                     child._position_y = Some(cursor_y - start_y);
 
@@ -473,8 +508,10 @@ impl Box {
                         i == self.children.len() - 1,
                     );
 
-                    cursor_y += h + (child._margin.vertical() / 2.0);
+                    cursor_y += h + child._margin.bottom();
+
                     self._content_width = self._content_width.max(w);
+                    prev_child = Some(child_box_rc.clone());
                 }
                 _ => {}
             }

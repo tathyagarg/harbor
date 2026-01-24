@@ -19,36 +19,6 @@ use winit::event_loop::EventLoop;
 fn main() {
     env_logger::init();
 
-    // let html_content = include_str!("../../assets/html/custom001.html");
-    // let html_chars = html_content.chars().collect::<Vec<char>>();
-    // let html_slice = &html_chars[..];
-
-    // let mut stream = InputStream::new(html_slice);
-    // let mut parser = html5::parse::Parser::new(&mut stream);
-
-    // parser.parse();
-
-    // let stylesheet = include_str!("../../assets/css/ua.css").to_string();
-    // let css_content = parse_stylesheet(
-    //     &mut InputStream::new(&tokenize(&mut InputStream::new(
-    //         &stylesheet.chars().collect::<Vec<char>>()[..],
-    //     ))),
-    //     Rc::downgrade(parser.document.document()),
-    //     None,
-    // );
-
-    // parser
-    //     .document
-    //     .document()
-    //     .borrow_mut()
-    //     .insert_stylesheet(0, css_content);
-
-    // let mut tokenizer = css::parser::CSSParser::new(css_content);
-
-    // tokenizer.tokenize();
-
-    // println!("CSS Tokens: {:#?}", tokenizer.tokens);
-
     // let url_target = String::from("https://old.arson.dev/");
     // println!("Parsing target: {}", url_target);
 
@@ -98,12 +68,6 @@ fn main() {
     layout.make_tree();
     layout.layout();
 
-    // println!("Layout Tree: {:#?}", layout.root_box);
-
-    // layout.register_font("Times New Roman", times.complete());
-    // layout.register_font("FiraCode", fira_code.complete());
-    // layout.register_font("SFNS", sfns.complete());
-
     let event_loop = EventLoop::with_user_event().build().unwrap();
     event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
 
@@ -117,9 +81,6 @@ fn main() {
                 a: 0.0,
             },
         },
-        // font: ttf.clone(),
-        // text: "Hello, world!".to_string(),
-        // vertices: vec![],
         state: None,
         document: parser.document.document.borrow().clone(),
         layout,
