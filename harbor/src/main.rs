@@ -19,30 +19,30 @@ use winit::event_loop::EventLoop;
 fn main() {
     env_logger::init();
 
-    // let url_target = String::from("https://old.arson.dev/");
-    // println!("Parsing target: {}", url_target);
+    let url_target = String::from("https://jmeow.net/");
+    println!("Parsing target: {}", url_target);
 
-    // let mut client = http::Client::new(http::Protocol::HTTP1_1, true);
-    // let url = client.connect_to_url(url_target);
+    let mut client = http::Client::new(http::Protocol::HTTP1_1, true);
+    let url = client.connect_to_url(url_target);
 
-    // println!("Sending request to: {}", url.serialize());
+    println!("Sending request to: {}", url.serialize());
 
-    // let resp = client.send_request(http::Request {
-    //     method: String::from("GET"),
-    //     request_target: url.path.serialize(),
-    //     protocol: http::Protocol::HTTP1_1,
-    //     headers: vec![
-    //         http::Header::new(String::from("User-Agent"), String::from("Harbor Browser")),
-    //         http::Header::new(String::from("Host"), url.host.unwrap().serialize()),
-    //     ],
-    //     body: None,
-    // });
+    let resp = client.send_request(http::Request {
+        method: String::from("GET"),
+        request_target: url.path.serialize(),
+        protocol: http::Protocol::HTTP1_1,
+        headers: vec![
+            http::Header::new(String::from("User-Agent"), String::from("Harbor Browser")),
+            http::Header::new(String::from("Host"), url.host.unwrap().serialize()),
+        ],
+        body: None,
+    });
 
-    // let response = resp.unwrap();
-    // println!("Received response: \n\n{}", response.body.clone().unwrap());
+    let response = resp.unwrap();
+    println!("Received response: \n\n{}", response.body.clone().unwrap());
 
-    // let html_content = response.body.unwrap();
-    let html_content = include_str!("../../assets/html/custom002.html");
+    let html_content = response.body.unwrap();
+    // let html_content = include_str!("../../assets/html/custom002.html");
 
     let mut stream = InputStream::new(&html_content.chars().collect::<Vec<char>>()[..]);
     let mut parser = html5::parse::Parser::new(&mut stream);

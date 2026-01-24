@@ -36,14 +36,19 @@ html {
 }
 
 body {
-  margin: 8px;
+  margin: 16px;
   background-color: white;
   color: black;
   font-size: 32px;
 }
 
-html, body, h1, h2, h3, ul, li, p, div {
+html, body, h1, h2, h3, ul, p, div {
   display: block;
+}
+
+li {
+  display: list-item;
+  margin-left: 0.5em;
 }
 
 span, a, em, strong, b, i {

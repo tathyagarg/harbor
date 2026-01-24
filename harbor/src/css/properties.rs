@@ -2,7 +2,7 @@ use std::{cell::RefCell, rc::Weak};
 
 use crate::{
     css::{
-        r#box::{Box, Edges},
+        r#box::{Box, BoxType, Edges},
         colors::Color,
         parser::{ComponentValue, Function},
         tokenize::{CSSToken, Dimension, NumberType, Percentage},
@@ -1389,11 +1389,12 @@ pub enum FamilyName {
     Idents(Vec<String>),
 }
 
-#[derive(Default, Clone, Debug)]
+#[derive(Default, Clone, Debug, Eq, PartialEq)]
 pub enum Display {
     #[default]
     Inline,
     Block,
+    ListItem,
 }
 
 impl CSSParseable for Display {
@@ -1406,6 +1407,7 @@ impl CSSParseable for Display {
                 ComponentValue::Token(CSSToken::Ident(ident)) => match ident.as_str() {
                     "inline" => return Some(Display::Inline),
                     "block" => return Some(Display::Block),
+                    "list-item" => return Some(Display::ListItem),
                     _ => {
                         todo!("Handle more display values")
                     }
@@ -1416,6 +1418,16 @@ impl CSSParseable for Display {
 
         cvs.reconsume();
         None
+    }
+}
+
+impl Display {
+    pub fn to_box_type(&self) -> BoxType {
+        match self {
+            Display::Inline => BoxType::Inline,
+            Display::Block => BoxType::Block,
+            Display::ListItem => BoxType::ListItem,
+        }
     }
 }
 

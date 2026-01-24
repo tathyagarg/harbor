@@ -111,6 +111,9 @@ pub enum BoxType {
     Block,
 
     Inline,
+
+    ListItem,
+    Marker,
 }
 
 pub enum FormattingContext {
@@ -281,6 +284,13 @@ impl Box {
             .unwrap_or(16.0)
     }
 
+    pub fn get_line_height(&self) -> f64 {
+        self.associated_style
+            .font
+            .resolved_line_height()
+            .unwrap_or(19.2)
+    }
+
     pub fn build_doc_box_tree(
         doc: &mut Document,
         window_size: (f64, f64),
@@ -329,17 +339,13 @@ impl Box {
                 //     _ => BoxType::Block,
                 // };
 
-                let this_box = Rc::new(RefCell::new(Box {
+                let parent_box = Rc::new(RefCell::new(Box {
                     _content_width: 0.0,
                     _content_height: 0.0,
                     _padding: Edges::empty(),
                     _border: Edges::empty(),
                     _margin: element.style().margin.to_edges(parents),
-                    _box_type: if matches!(element.style().display, Display::Block) {
-                        BoxType::Block
-                    } else {
-                        BoxType::Inline
-                    },
+                    _box_type: element.style().display.to_box_type(),
                     _position_x: None,
                     _position_y: None,
                     children: vec![],
@@ -348,16 +354,62 @@ impl Box {
 
                     associated_style: element.style().clone(),
                 }));
+                parents.push(Rc::downgrade(&parent_box));
 
-                parents.push(Rc::downgrade(&this_box));
+                let this_box = if element.style().display == Display::ListItem {
+                    parent_box.borrow_mut().children = vec![
+                        Rc::new(RefCell::new(Box {
+                            _content_width: 0.0,
+                            _content_height: 0.0,
+                            _padding: Edges::empty(),
+                            _border: Edges::empty(),
+                            _margin: Edges::empty(),
+                            _box_type: BoxType::Marker,
+                            _position_x: None,
+                            _position_y: None,
+                            children: vec![],
+
+                            associated_node: None,
+
+                            associated_style: ComputedStyle::default(),
+                        })),
+                        Rc::new(RefCell::new(Box {
+                            _content_width: 0.0,
+                            _content_height: 0.0,
+                            _padding: Edges::empty(),
+                            _border: Edges::empty(),
+                            _margin: element.style().margin.to_edges(parents),
+                            _box_type: BoxType::Block,
+                            _position_x: None,
+                            _position_y: None,
+                            children: vec![],
+
+                            associated_node: Some(Rc::clone(tree)),
+
+                            associated_style: element.style().clone(),
+                        })),
+                    ];
+
+                    parent_box.borrow_mut().associated_style = ComputedStyle::default();
+                    let content_box = parent_box.borrow().children[1].clone();
+                    parents.push(Rc::downgrade(&content_box));
+                    content_box
+                } else {
+                    parent_box.clone()
+                };
+
                 for child in element._node.borrow().child_nodes().iter() {
                     if let Some(child_box) = self.build_box_tree(&child, parents) {
                         this_box.borrow_mut().children.push(child_box);
                     }
                 }
-                parents.pop();
 
-                Some(this_box)
+                parents.pop();
+                if element.style().display == Display::ListItem {
+                    parents.pop();
+                }
+
+                Some(parent_box)
             }
             NodeKind::Text(_) => {
                 // Text nodes can be represented as inline boxes
@@ -409,7 +461,51 @@ impl Box {
                 first_child,
                 last_child,
             ),
-            _ => (start_x, start_y),
+            BoxType::ListItem => {
+                let marker_box_rc = self.children.get(0).unwrap().clone();
+                let content_box_rc = self.children.get(1).unwrap().clone();
+
+                let mut marker_box = marker_box_rc.borrow_mut();
+                let (marker_width, marker_height) = marker_box.layout(
+                    container_width,
+                    container_height,
+                    start_x,
+                    start_y,
+                    first_child,
+                    last_child,
+                );
+
+                let mut content_box = content_box_rc.borrow_mut();
+
+                let (content_width, content_height) = content_box.layout(
+                    container_width,
+                    container_height,
+                    start_x,
+                    start_y,
+                    first_child,
+                    last_child,
+                );
+
+                content_box._position_x = Some(content_box._margin.left());
+                content_box._position_y = Some(content_box._margin.top());
+
+                self._content_width = marker_width + content_width;
+                self._content_height = marker_height.max(content_height);
+
+                (self._content_width, self._content_height)
+            }
+            BoxType::Marker => {
+                self._content_width = self.get_font_size();
+                self._content_height = self.get_font_size();
+
+                self._position_x = Some(self._content_width);
+                self._position_y = Some(self.get_line_height());
+
+                (0.0, 0.0)
+            }
+            _ => {
+                todo!("Layout for box type: {:?}", self._box_type);
+            }
         }
     }
 
@@ -420,8 +516,8 @@ impl Box {
         start_x: f64,
         start_y: f64,
     ) -> (f64, f64) {
-        let initial_x = start_x + self._margin.3 + self._border.3 + self._padding.3;
-        let initial_y = start_y + self._margin.0 + self._border.0 + self._padding.0;
+        let initial_x = start_x + self._margin.left() + self._border.3 + self._padding.3;
+        let initial_y = start_y + self._margin.top() + self._border.0 + self._padding.0;
 
         let mut cursor_x = initial_x;
         let mut cursor_y = initial_y;
@@ -484,9 +580,6 @@ impl Box {
                             && prev._border.is_none()
                             && child._border.is_none()
                         {
-                            println!("PREV ({}) {:#?}", prev._margin.bottom(), prev);
-                            println!("CHILD ({}) {:#?}", child._margin.top(), child);
-
                             if child._margin.top() > prev._margin.bottom() {
                                 cursor_y -= prev._margin.bottom();
                             } else {
@@ -513,7 +606,24 @@ impl Box {
                     self._content_width = self._content_width.max(w);
                     prev_child = Some(child_box_rc.clone());
                 }
-                _ => {}
+                _ => {
+                    let mut child = child_box_rc.borrow_mut();
+
+                    child._position_x = Some(cursor_x - start_x);
+                    child._position_y = Some(cursor_y - start_y);
+
+                    let (w, h) = child.layout(
+                        container_width,
+                        container_height,
+                        cursor_x,
+                        cursor_y,
+                        i == 0,
+                        i == self.children.len() - 1,
+                    );
+
+                    cursor_y += h + child._margin.bottom();
+                    self._content_width = self._content_width.max(w);
+                }
             }
         }
 

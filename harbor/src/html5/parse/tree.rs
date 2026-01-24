@@ -1085,7 +1085,10 @@ impl InsertMode {
                 return false;
             }
             Token::EndTag(ref tag) if tag.name.as_str() == "script" => {
-                todo!("Handle script end tag correctly");
+                parser.open_elements_stack.pop();
+                parser.insertion_mode = parser.original_insertion_mode.clone().unwrap();
+
+                // todo!("Handle script end tag correctly");
             }
             Token::EndTag(ref tag) => {
                 let popped_elem = parser.open_elements_stack.pop().unwrap();

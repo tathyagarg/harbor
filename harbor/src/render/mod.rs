@@ -167,7 +167,7 @@ impl TextRenderer {
             text.as_str(),
             color,
             scale,
-            800.0 / font_size,
+            self.window_size.0 / font_size,
             float_position,
             self.window_size,
         );
@@ -260,6 +260,7 @@ pub struct WindowState {
 
     line_render_pipeline: wgpu::RenderPipeline,
     fill_render_pipeline: wgpu::RenderPipeline,
+    circle_render_pipeline: wgpu::RenderPipeline,
 
     vertex_buffer: wgpu::Buffer,
     number_of_vertices: u32,
@@ -418,6 +419,46 @@ impl WindowState {
                         _ => {}
                     }
                 }
+            }
+            BoxType::Marker => {
+                // use circle render pipeline
+                render_pass.set_pipeline(&self.circle_render_pipeline);
+
+                let adj_position = (
+                    layout_box.position().0 as f64 + position.0,
+                    layout_box.position().1 as f64 + position.1,
+                );
+
+                let window_size = self.window.inner_size();
+
+                let pixel_x = adj_position.0 as f32;
+                let pixel_y = adj_position.1 as f32;
+
+                let x_pos = pixel_x;
+                let y_pos = pixel_y;
+
+                let radius = layout_box.content_edges().horizontal() / 2.0;
+
+                let verts = shapes::circle_at(
+                    x_pos,
+                    y_pos,
+                    radius as f32,
+                    32,
+                    [0.0, 0.0, 0.0, 1.0],
+                    window_size.width as f32,
+                    window_size.height as f32,
+                );
+
+                let buffer = wgpu::util::BufferInitDescriptor {
+                    label: Some("Circle Vertex Buffer"),
+                    contents: bytemuck::cast_slice(&verts),
+                    usage: wgpu::BufferUsages::VERTEX,
+                };
+
+                let circle_vertex_buffer = self.device.create_buffer_init(&buffer);
+
+                render_pass.set_vertex_buffer(0, circle_vertex_buffer.slice(..));
+                render_pass.draw(0..verts.len() as u32, 0..1);
             }
             _ => {}
         }
@@ -666,6 +707,56 @@ impl WindowState {
             cache: None,
         });
 
+        let circle_render_pipeline =
+            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("Circle Render Pipeline"),
+                layout: Some(&render_pipeline_layout),
+                vertex: wgpu::VertexState {
+                    module: &shader,
+                    entry_point: Some("vs_main"),
+                    buffers: &[text::Vertex::desc()],
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: &shader,
+                    entry_point: Some("fs_main"),
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format: config.format,
+                        blend: Some(wgpu::BlendState {
+                            color: wgpu::BlendComponent {
+                                src_factor: wgpu::BlendFactor::SrcAlpha,
+                                dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                                operation: wgpu::BlendOperation::Add,
+                            },
+                            alpha: wgpu::BlendComponent {
+                                src_factor: wgpu::BlendFactor::One,
+                                dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                                operation: wgpu::BlendOperation::Add,
+                            },
+                        }),
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                }),
+                primitive: wgpu::PrimitiveState {
+                    topology: wgpu::PrimitiveTopology::TriangleList,
+                    strip_index_format: None,
+                    front_face: wgpu::FrontFace::Ccw,
+                    cull_mode: None,
+                    unclipped_depth: false,
+                    polygon_mode: wgpu::PolygonMode::Fill,
+                    conservative: false,
+                },
+                depth_stencil: None,
+                multisample: wgpu::MultisampleState {
+                    count: 4,
+                    mask: !0,
+                    alpha_to_coverage_enabled: false,
+                },
+                multiview: None,
+                cache: None,
+            });
+
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),
             contents: bytemuck::cast_slice(&[] as &[text::Vertex]),
@@ -690,6 +781,7 @@ impl WindowState {
             layout: populated_layout,
             line_render_pipeline,
             fill_render_pipeline,
+            circle_render_pipeline,
             vertex_buffer,
             number_of_vertices,
             is_surface_configured: false,
@@ -757,6 +849,7 @@ impl ApplicationHandler<WindowState> for App {
             .with_title("Harbor Browser")
             // TODO: Change this to not have any decorations
             .with_decorations(true);
+        // .with_inner_size(winit::dpi::PhysicalSize::new(600, 600));
 
         if self.window_options.use_transparent {
             window_attributes = window_attributes.with_transparent(true);
