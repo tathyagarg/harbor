@@ -12,7 +12,7 @@ use crate::{
     css::{
         colors::{Color, is_color},
         parser::{AtRule, ComponentValue, parse_css_declaration_block},
-        properties::{Background, Display, Font, WidthValue},
+        properties::{Background, Display, Font, Margin, WidthValue},
         selectors::SelectorList,
         tokenize::{CSSToken, Dimension},
         values::angles::{is_angle_unit, to_canonical_angle},
@@ -697,6 +697,8 @@ pub struct ComputedStyle {
     pub font: Font,
 
     pub display: Display,
+
+    pub margin: Margin,
 
     pub width: WidthValue,
 }

@@ -1,6 +1,11 @@
-use crate::infra::{
-    InputStream, char_is_ident, char_is_non_printable, char_is_whitespace, is_valid_escape,
-    would_start_ident,
+use std::{cell::RefCell, rc::Weak};
+
+use crate::{
+    css::r#box::Box,
+    infra::{
+        InputStream, char_is_ident, char_is_non_printable, char_is_whitespace, is_valid_escape,
+        would_start_ident,
+    },
 };
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -26,6 +31,45 @@ pub struct Dimension {
     pub value: f64,
     pub number_type: NumberType,
     pub unit: String,
+}
+
+impl Dimension {
+    pub fn resolve(&self, parents: &Vec<Weak<RefCell<Box>>>) -> f64 {
+        match self.unit.as_str() {
+            "px" => self.value,
+            "%" => {
+                if let Some(parent) = parents.last() {
+                    if let Some(parent_box) = parent.upgrade() {
+                        let parent_borrowed = parent_box.borrow();
+                        return parent_borrowed._content_width * (self.value / 100.0);
+                    }
+                }
+
+                self.value
+            }
+            "em" => {
+                if let Some(parent) = parents.last() {
+                    if let Some(parent_box) = parent.upgrade() {
+                        let parent_borrowed = parent_box.borrow();
+                        return parent_borrowed.get_font_size() * self.value;
+                    }
+                }
+
+                self.value * 16.0
+            }
+            "rem" => {
+                if let Some(root) = parents.first() {
+                    if let Some(root_box) = root.upgrade() {
+                        let root_borrowed = root_box.borrow();
+                        return root_borrowed.get_font_size() * self.value;
+                    }
+                }
+
+                self.value * 16.0
+            }
+            _ => self.value,
+        }
+    }
 }
 
 pub type Percentage = f64;

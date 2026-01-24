@@ -334,8 +334,6 @@ pub fn parse_ttc_header(data: &[u8]) -> TTCHeader {
 }
 
 pub fn parse_ttc(data: &[u8]) -> TTCData {
-    println!("WAHAT");
-
     let ttc_header = parse_ttc_header(data);
     let mut table_directories = Vec::with_capacity(ttc_header.num_fonts() as usize);
 

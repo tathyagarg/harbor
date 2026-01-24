@@ -16,7 +16,8 @@ use crate::{
         },
         properties::{
             Background, CSSParseable, Display, Font, FontFamily, FontSize, FontStyle, FontWeight,
-            Image, LineHeight, Origin, Position, RepeatStyle, WidthValue,
+            Image, LengthPercentage, LineHeight, Margin, MarginValue, Origin, Position,
+            RepeatStyle, WidthValue,
         },
         selectors::MatchesElement,
     },
@@ -113,7 +114,7 @@ pub enum FormattingContext {
 #[derive(Clone)]
 pub struct Box {
     /// Width of the content area
-    _content_width: f64,
+    pub _content_width: f64,
 
     /// Height of the content area
     _content_height: f64,
@@ -254,6 +255,13 @@ impl Box {
         )
     }
 
+    pub fn get_font_size(&self) -> f64 {
+        self.associated_style
+            .font
+            .resolved_font_size()
+            .unwrap_or(16.0)
+    }
+
     pub fn build_doc_box_tree(
         doc: &mut Document,
         window_size: (f64, f64),
@@ -272,10 +280,6 @@ impl Box {
             _position_y: Some(0.0),
             children: vec![],
 
-            // _font_family: None,
-            // _font_size: None,
-            // _font_weight: None,
-            // _line_height: None,
             associated_node: None,
 
             associated_style: ComputedStyle::default(),
@@ -311,7 +315,7 @@ impl Box {
                     _content_height: 0.0,
                     _padding: Edges::empty(),
                     _border: Edges::empty(),
-                    _margin: Edges::empty(),
+                    _margin: element.style().margin.to_edges(parents),
                     _box_type: if matches!(element.style().display, Display::Block) {
                         BoxType::Block
                     } else {
@@ -376,7 +380,6 @@ impl Box {
                 self.layout_block(container_width, container_height, start_x, start_y)
             }
             BoxType::Inline => {
-                // For simplicity, treat inline boxes as block boxes in this example
                 self.layout_inline(container_width, container_height, start_x, start_y)
             }
             _ => (start_x, start_y),
@@ -391,8 +394,11 @@ impl Box {
         start_y: f64,
     ) -> (f64, f64) {
         let initial_x = start_x + self._margin.3 + self._border.3 + self._padding.3;
+        println!("Margin: {:?}", self._margin);
+        let initial_y = start_y + self._margin.0 + self._border.0 + self._padding.0;
+
         let mut cursor_x = initial_x;
-        let mut cursor_y = start_y;
+        let mut cursor_y = initial_y;
 
         let mut inline_run: Vec<Rc<RefCell<Box>>> = Vec::new();
 
@@ -446,7 +452,7 @@ impl Box {
                     let (w, h) =
                         child.layout(container_width, container_height, cursor_x, cursor_y);
 
-                    cursor_y += h + child._margin.vertical();
+                    cursor_y += h + (child._margin.vertical() / 2.0);
                     self._content_width = self._content_width.max(w);
                 }
                 _ => {}
@@ -743,6 +749,47 @@ fn handle_font_property(
     }
 }
 
+fn handle_margin(declaration: &CSSDeclaration, style: &mut ComputedStyle) {
+    let mut stream = InputStream::new(&declaration.value);
+
+    let margin = Margin::from_cv(&mut stream);
+    if let Some(margin) = margin {
+        style.margin = margin;
+    }
+}
+
+fn handle_margin_property(declaration: &CSSDeclaration, style: &mut ComputedStyle) {
+    let mut stream = InputStream::new(&declaration.value);
+
+    match declaration.property_name.as_str() {
+        "margin-top" => {
+            let top = MarginValue::from_cv(&mut stream);
+            if let Some(top) = top {
+                style.margin.top = top;
+            }
+        }
+        "margin-right" => {
+            let right = MarginValue::from_cv(&mut stream);
+            if let Some(right) = right {
+                style.margin.right = right;
+            }
+        }
+        "margin-bottom" => {
+            let bottom = MarginValue::from_cv(&mut stream);
+            if let Some(bottom) = bottom {
+                style.margin.bottom = bottom;
+            }
+        }
+        "margin-left" => {
+            let left = MarginValue::from_cv(&mut stream);
+            if let Some(left) = left {
+                style.margin.left = left;
+            }
+        }
+        _ => {}
+    }
+}
+
 fn handle_declaration(
     declaration: &CSSDeclaration,
     style: &mut ComputedStyle,
@@ -772,6 +819,12 @@ fn handle_declaration(
         "display" => {
             let mut stream = InputStream::new(&declaration.value);
             style.display = Display::from_cv(&mut stream).unwrap_or_default();
+        }
+        "margin" => {
+            handle_margin(declaration, style);
+        }
+        prop if prop.starts_with("margin-") => {
+            handle_margin_property(declaration, style);
         }
         _ => {
             // todo!(

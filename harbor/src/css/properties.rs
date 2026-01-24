@@ -1,5 +1,8 @@
+use std::{cell::RefCell, rc::Weak};
+
 use crate::{
     css::{
+        r#box::{Box, Edges},
         colors::Color,
         parser::{ComponentValue, Function},
         tokenize::{CSSToken, Dimension, NumberType, Percentage},
@@ -1413,5 +1416,169 @@ impl CSSParseable for Display {
 
         cvs.reconsume();
         None
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum MarginValue {
+    LengthPercentage(LengthPercentage),
+    Auto,
+}
+
+impl CSSParseable for MarginValue {
+    fn from_cv(stream: &mut InputStream<ComponentValue>) -> Option<Self> {
+        if let Some(next) = stream.consume() {
+            match next {
+                ComponentValue::Token(CSSToken::Number { value: 0.0, .. }) => Some(
+                    MarginValue::LengthPercentage(LengthPercentage::Length(Dimension {
+                        value: 0.0,
+                        number_type: NumberType::Integer,
+                        unit: "px".to_string(),
+                    })),
+                ),
+                ComponentValue::Token(CSSToken::Dimension(dim)) => {
+                    Some(MarginValue::LengthPercentage(LengthPercentage::Length(dim)))
+                }
+                ComponentValue::Token(CSSToken::Percentage(perc)) => Some(
+                    MarginValue::LengthPercentage(LengthPercentage::Percentage(perc)),
+                ),
+                ComponentValue::Token(CSSToken::Ident(ident)) if ident == "auto" => {
+                    Some(MarginValue::Auto)
+                }
+                _ => {
+                    stream.reconsume();
+                    None
+                }
+            }
+        } else {
+            None
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Margin {
+    pub top: MarginValue,
+    pub right: MarginValue,
+    pub bottom: MarginValue,
+    pub left: MarginValue,
+}
+
+impl Default for Margin {
+    fn default() -> Self {
+        Margin {
+            top: MarginValue::LengthPercentage(LengthPercentage::Length(Dimension {
+                value: 0.0,
+                number_type: NumberType::Integer,
+                unit: "px".to_string(),
+            })),
+            right: MarginValue::LengthPercentage(LengthPercentage::Length(Dimension {
+                value: 0.0,
+                number_type: NumberType::Integer,
+                unit: "px".to_string(),
+            })),
+            bottom: MarginValue::LengthPercentage(LengthPercentage::Length(Dimension {
+                value: 0.0,
+                number_type: NumberType::Integer,
+                unit: "px".to_string(),
+            })),
+            left: MarginValue::LengthPercentage(LengthPercentage::Length(Dimension {
+                value: 0.0,
+                number_type: NumberType::Integer,
+                unit: "px".to_string(),
+            })),
+        }
+    }
+}
+
+impl Margin {
+    pub fn resolved_top(&self, parents: &Vec<Weak<RefCell<Box>>>) -> f64 {
+        match &self.top {
+            MarginValue::LengthPercentage(LengthPercentage::Length(dim)) => dim.resolve(parents),
+            MarginValue::LengthPercentage(LengthPercentage::Percentage(_)) => 0.0,
+            MarginValue::Auto => 0.0,
+        }
+    }
+
+    pub fn resolved_right(&self, parents: &Vec<Weak<RefCell<Box>>>) -> f64 {
+        match &self.right {
+            MarginValue::LengthPercentage(LengthPercentage::Length(dim)) => dim.resolve(parents),
+            MarginValue::LengthPercentage(LengthPercentage::Percentage(_)) => 0.0,
+            MarginValue::Auto => 0.0,
+        }
+    }
+
+    pub fn resolved_bottom(&self, parents: &Vec<Weak<RefCell<Box>>>) -> f64 {
+        match &self.bottom {
+            MarginValue::LengthPercentage(LengthPercentage::Length(dim)) => dim.resolve(parents),
+            MarginValue::LengthPercentage(LengthPercentage::Percentage(_)) => 0.0,
+            MarginValue::Auto => 0.0,
+        }
+    }
+
+    pub fn resolved_left(&self, parents: &Vec<Weak<RefCell<Box>>>) -> f64 {
+        match &self.left {
+            MarginValue::LengthPercentage(LengthPercentage::Length(dim)) => dim.resolve(parents),
+            MarginValue::LengthPercentage(LengthPercentage::Percentage(_)) => 0.0,
+            MarginValue::Auto => 0.0,
+        }
+    }
+
+    pub fn to_edges(&self, parents: &Vec<Weak<RefCell<Box>>>) -> Edges {
+        Edges(
+            self.resolved_top(parents),
+            self.resolved_right(parents),
+            self.resolved_bottom(parents),
+            self.resolved_left(parents),
+        )
+    }
+}
+
+impl CSSParseable for Margin {
+    fn from_cv(stream: &mut InputStream<ComponentValue>) -> Option<Self> {
+        let mut values: Vec<MarginValue> = vec![];
+
+        while !stream.is_eof {
+            let next = stream.peek();
+
+            if let Some(ComponentValue::Token(CSSToken::Whitespace)) = next {
+                stream.consume();
+                continue;
+            }
+
+            if let Some(margin_val) = MarginValue::from_cv(stream) {
+                values.push(margin_val);
+            } else {
+                break;
+            }
+        }
+
+        match values.len() {
+            1 => Some(Margin {
+                top: values[0].clone(),
+                right: values[0].clone(),
+                bottom: values[0].clone(),
+                left: values[0].clone(),
+            }),
+            2 => Some(Margin {
+                top: values[0].clone(),
+                right: values[1].clone(),
+                bottom: values[0].clone(),
+                left: values[1].clone(),
+            }),
+            3 => Some(Margin {
+                top: values[0].clone(),
+                right: values[1].clone(),
+                bottom: values[2].clone(),
+                left: values[1].clone(),
+            }),
+            4 => Some(Margin {
+                top: values[0].clone(),
+                right: values[1].clone(),
+                bottom: values[2].clone(),
+                left: values[3].clone(),
+            }),
+            _ => None,
+        }
     }
 }

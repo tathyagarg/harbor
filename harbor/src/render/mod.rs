@@ -76,6 +76,7 @@ impl TextRendererCreator {
     pub fn build(self) -> TextRenderer {
         TextRenderer {
             font: self.font,
+            matching_fonts: HashMap::new(),
             window_size: self.window_size,
             vertex_cache: HashMap::new(),
             _empty_buffer: self.buffer,
@@ -87,6 +88,8 @@ impl TextRendererCreator {
 #[derive(Clone)]
 pub struct TextRenderer {
     pub font: Option<CompleteTTCData>,
+
+    pub matching_fonts: HashMap<(u16, bool), ParsedTableDirectory>,
 
     /// Key: (text, weight, italic, x position, y position, font-size (rounded))
     /// Value: (vertices, font-size)
@@ -138,19 +141,20 @@ impl TextRenderer {
             None => return vec![],
         };
 
-        let font = if italic {
-            ttc.get_italic_font_by_weight(weight)
+        let font = if let Some(cached_font) = self.matching_fonts.get(&(weight, italic)) {
+            cached_font
         } else {
-            ttc.get_font_by_weight(weight)
-        }
-        .unwrap_or(ttc.get_regular_font().unwrap());
+            let font = if italic {
+                ttc.get_italic_font_by_weight(weight)
+            } else {
+                ttc.get_font_by_weight(weight)
+            }
+            .unwrap_or(ttc.get_regular_font().unwrap());
 
-        println!(
-            "Head table: {:#?}\nRequired: {} {:?}",
-            font.get_table_record(b"head"),
-            weight,
-            italic
-        );
+            self.matching_fonts.insert((weight, italic), font.clone());
+
+            font
+        };
 
         let scale = font_size / font.units_per_em() as f32;
 
