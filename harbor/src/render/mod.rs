@@ -1,6 +1,7 @@
 // #![allow(warnings)]
 
 use std::collections::HashMap;
+use std::fmt::Debug;
 use std::ops::Deref;
 use std::sync::Arc;
 
@@ -15,12 +16,12 @@ use winit::window::{Window, WindowId};
 use wgpu;
 
 use crate::css::r#box::{Box, BoxType};
-use crate::css::colors::UsedColor;
+use crate::css::colors::{Color, UsedColor};
 use crate::css::layout::Layout;
 use crate::css::properties::FontStyle;
 use crate::font::ttc::CompleteTTCData;
 use crate::font::ttf::ParsedTableDirectory;
-use crate::html5::dom::Document;
+use crate::html5::dom::{Document, Node, NodeKind};
 
 pub mod shapes;
 pub mod text;
@@ -880,6 +881,58 @@ impl ApplicationHandler<WindowState> for App {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(size) => {
                 state.resize(size.width, size.height);
+            }
+            WindowEvent::CursorMoved {
+                device_id,
+                position,
+            } => {
+                if let Some(root) = state.layout.root_box.as_ref() {
+                    let elems = Box::get_hovered_elems(root, position.x, position.y, 0.0, 0.0);
+
+                    for child in elems {
+                        child.borrow_mut().trigger_hover();
+
+                        // child
+                        //     .borrow_mut()
+                        //     .associated_style
+                        //     .background
+                        //     .set_color(Color::Named("red".to_string()));
+
+                        if let Some(node) = &child.borrow().associated_node {
+                            match node.borrow().deref() {
+                                NodeKind::Element(elem) => {
+                                    println!("Hovered element: {}", elem.borrow().local_name);
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+
+                    // for child in root
+                    //     .borrow()
+                    //     .get_hovered_elems(position.x, position.y, 0.0, 0.0)
+                    // {
+                    //     child
+                    //         .borrow_mut()
+                    //         .associated_style
+                    //         .background
+                    //         .set_color(Color::Named("red".to_string()));
+
+                    //     match child
+                    //         .borrow()
+                    //         .associated_node
+                    //         .as_ref()
+                    //         .unwrap()
+                    //         .borrow()
+                    //         .deref()
+                    //     {
+                    //         NodeKind::Element(elem) => {
+                    //             println!("Hovered element: {}", elem.borrow().local_name);
+                    //         }
+                    //         _ => {}
+                    //     }
+                    // }
+                }
             }
             WindowEvent::RedrawRequested => {
                 state.update();

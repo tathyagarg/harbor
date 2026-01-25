@@ -325,6 +325,46 @@ impl Box {
         tree
     }
 
+    pub fn get_hovered_elems(
+        root: &Rc<RefCell<Box>>,
+        pos_x: f64,
+        pos_y: f64,
+        parent_x: f64,
+        parent_y: f64,
+    ) -> Vec<Rc<RefCell<Box>>> {
+        let mut hovered_elems = Vec::new();
+
+        let box_borrowed = root.borrow();
+
+        let box_x = parent_x + box_borrowed._position_x.unwrap_or(0.0);
+        let box_y = parent_y + box_borrowed._position_y.unwrap_or(0.0);
+
+        let box_width = box_borrowed._content_width
+            + box_borrowed._padding.horizontal()
+            + box_borrowed._border.horizontal()
+            + box_borrowed._margin.horizontal();
+        let box_height = box_borrowed._content_height
+            + box_borrowed._padding.vertical()
+            + box_borrowed._border.vertical()
+            + box_borrowed._margin.vertical();
+
+        if pos_x >= box_x
+            && pos_x <= box_x + box_width
+            && pos_y >= box_y
+            && pos_y <= box_y + box_height
+        {
+            hovered_elems.push(Rc::clone(&root));
+
+            for child in box_borrowed.children.iter() {
+                let mut child_hovered =
+                    Box::get_hovered_elems(&Rc::clone(child), pos_x, pos_y, box_x, box_y);
+                hovered_elems.append(&mut child_hovered);
+            }
+        }
+
+        hovered_elems
+    }
+
     pub fn build_box_tree(
         &mut self,
         tree: &Rc<RefCell<NodeKind>>,
@@ -391,6 +431,8 @@ impl Box {
                     ];
 
                     parent_box.borrow_mut().associated_style = ComputedStyle::default();
+                    parent_box.borrow_mut().associated_node = None;
+
                     let content_box = parent_box.borrow().children[1].clone();
                     parents.push(Rc::downgrade(&content_box));
                     content_box
@@ -489,7 +531,7 @@ impl Box {
                 content_box._position_x = Some(content_box._margin.left());
                 content_box._position_y = Some(content_box._margin.top());
 
-                self._content_width = marker_width + content_width;
+                self._content_width = marker_width + content_width + content_box._margin.left();
                 self._content_height = marker_height.max(content_height);
 
                 (self._content_width, self._content_height)
@@ -505,6 +547,19 @@ impl Box {
             }
             _ => {
                 todo!("Layout for box type: {:?}", self._box_type);
+            }
+        }
+    }
+
+    pub fn trigger_hover(&mut self) {
+        if let Some(node_rc) = &self.associated_node {
+            if let NodeKind::Element(element_rc) = node_rc.borrow().deref() {
+                let element = element_rc.borrow_mut();
+                if element.local_name == "li" {
+                    self.associated_style
+                        .background
+                        .set_color(Color::Named(String::from("red")));
+                }
             }
         }
     }
@@ -538,8 +593,8 @@ impl Box {
             for (child_rc, first, last) in run.drain(..) {
                 let mut child = child_rc.borrow_mut();
 
-                child._position_x = Some(*cursor_x - start_x + line_width);
-                child._position_y = Some(*cursor_y - start_y);
+                child._position_x = Some(*cursor_x - initial_x + line_width);
+                child._position_y = Some(*cursor_y - initial_y);
 
                 let (w, h) = child.layout(container_width, container_height, 0.0, 0.0, first, last);
 
@@ -582,11 +637,8 @@ impl Box {
                         {
                             if child._margin.top() > prev._margin.bottom() {
                                 cursor_y -= prev._margin.bottom();
-                            } else {
                             }
-                        } else {
                         }
-                    } else {
                     }
 
                     child._position_x = Some(cursor_x - start_x);
