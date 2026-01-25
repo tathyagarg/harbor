@@ -1,6 +1,5 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::ops::DerefMut;
 use std::rc::Rc;
 
 use crate::font::ttf::ParsedTableDirectory;
@@ -34,10 +33,7 @@ impl Layout {
     }
 
     pub fn make_tree(&mut self) {
-        let mut document = self.document.borrow_mut();
-
-        let root_node = document.deref_mut();
-        let root_box = r#box::Box::build_doc_box_tree(root_node, self._window_size);
+        let root_box = r#box::Box::build_doc_box_tree(&self.document, self._window_size);
         self.root_box = root_box;
     }
 
@@ -51,6 +47,7 @@ impl Layout {
                 // fuhhh
                 false,
                 false,
+                &mut vec![],
             );
         }
 

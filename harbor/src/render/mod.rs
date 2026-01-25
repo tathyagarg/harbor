@@ -17,6 +17,7 @@ use wgpu;
 
 use crate::css::r#box::{Box, BoxType};
 use crate::css::colors::{Color, UsedColor};
+use crate::css::cssom::ComputedStyle;
 use crate::css::layout::Layout;
 use crate::css::properties::FontStyle;
 use crate::font::ttc::CompleteTTCData;
@@ -279,12 +280,13 @@ impl WindowState {
         &mut self,
         layout_box: Box,
         position: (f64, f64),
+        parents: &mut Vec<Box>,
         render_pass: &mut wgpu::RenderPass,
     ) {
         match layout_box._box_type {
             BoxType::Block => {
                 render_pass.set_pipeline(&self.fill_render_pipeline);
-                let bg_color = layout_box.associated_style.background.color().used();
+                let bg_color = layout_box.style().unwrap().background.color().used();
 
                 if bg_color[3] > 0.0 {
                     let window_size = self.window.inner_size();
@@ -330,14 +332,16 @@ impl WindowState {
                     let node = layout_box.associated_node.as_ref().unwrap();
 
                     match node.borrow().deref() {
-                        crate::html5::dom::NodeKind::Text(text_node) => {
+                        NodeKind::Text(text_node) => {
                             let text_content = text_node.borrow().data().to_string();
 
                             if text_content.trim().is_empty() {
                                 return;
                             }
 
-                            let family = layout_box.associated_style.font.family();
+                            let style = parents.last().unwrap().style().unwrap();
+
+                            let family = style.font.family();
                             let mut font_iter = family.entries.iter();
                             let renderer = loop {
                                 if let Some(font_family) = font_iter.next() {
@@ -362,29 +366,18 @@ impl WindowState {
                                 }
                             };
 
-                            let font_size = layout_box
-                                .associated_style
-                                .font
-                                .resolved_font_size()
-                                .unwrap_or(16.0) as f32;
+                            let font_size = style.font.resolved_font_size().unwrap_or(16.0) as f32;
 
-                            let font_weight = layout_box
-                                .associated_style
-                                .font
-                                .resolved_font_weight()
-                                .unwrap_or(400)
-                                as u16;
+                            let font_weight =
+                                style.font.resolved_font_weight().unwrap_or(400) as u16;
 
-                            let italic = matches!(
-                                layout_box.associated_style.font.style(),
-                                FontStyle::Italic
-                            );
+                            let italic = matches!(style.font.style(), FontStyle::Italic);
 
                             let verts = renderer.vertices(
                                 text_content.clone(),
                                 font_weight,
                                 italic,
-                                layout_box.associated_style.color.used(),
+                                style.color.used(),
                                 font_size,
                                 (adj_position.0 as u32, adj_position.1 as u32),
                             );
@@ -395,7 +388,7 @@ impl WindowState {
                                     text_content.clone(),
                                     font_weight,
                                     italic,
-                                    layout_box.associated_style.color.used(),
+                                    style.color.used(),
                                     font_size,
                                     (adj_position.0 as u32, adj_position.1 as u32),
                                 );
@@ -464,14 +457,18 @@ impl WindowState {
             _ => {}
         }
 
+        parents.push(layout_box.clone());
+
         for child in &layout_box.children {
             let new_position = (
                 layout_box.position().0 + position.0,
                 layout_box.position().1 + position.1,
             );
 
-            self.render_box(child.borrow().clone(), new_position, render_pass);
+            self.render_box(child.borrow().clone(), new_position, parents, render_pass);
         }
+
+        parents.pop();
     }
 
     pub fn render(&mut self) {
@@ -521,7 +518,7 @@ impl WindowState {
 
             let root_box = self.layout.root_box.as_ref().unwrap().borrow().clone();
 
-            self.render_box(root_box, (0.0, 0.0), &mut _render_pass);
+            self.render_box(root_box, (0.0, 0.0), &mut vec![], &mut _render_pass);
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));

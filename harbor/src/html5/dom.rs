@@ -96,6 +96,13 @@ impl NodeKind {
             _ => None,
         }
     }
+
+    pub fn style(&self) -> Option<ComputedStyle> {
+        match self {
+            NodeKind::Element(e) => Some(e.borrow()._style.clone()),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -760,7 +767,7 @@ pub struct Element {
 
     _token: Option<Token>,
 
-    _style: ComputedStyle,
+    pub _style: ComputedStyle,
 }
 
 impl Debug for Element {
