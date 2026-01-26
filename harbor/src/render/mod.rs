@@ -1,8 +1,10 @@
 // #![allow(warnings)]
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::ops::Deref;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use wgpu::util::DeviceExt;
@@ -22,7 +24,7 @@ use crate::css::layout::Layout;
 use crate::css::properties::FontStyle;
 use crate::font::ttc::CompleteTTCData;
 use crate::font::ttf::ParsedTableDirectory;
-use crate::html5::dom::{Document, Node, NodeKind};
+use crate::html5::dom::{Document, Element, Node, NodeKind};
 
 pub mod shapes;
 pub mod text;
@@ -104,7 +106,8 @@ pub struct TextRenderer {
     pub window_size: (f32, f32),
 
     _empty_buffer: Option<wgpu::Buffer>,
-    outline_vertex_buffers: HashMap<(String, u16, bool, u32, u32, u32), (wgpu::Buffer, usize)>,
+    outline_vertex_buffers:
+        HashMap<(String, u16, bool, u32, u32, u32, [u32; 4]), (wgpu::Buffer, usize)>,
 }
 
 impl TextRenderer {
@@ -120,7 +123,7 @@ impl TextRenderer {
         color: UsedColor,
         font_size: f32,
         position: (u32, u32),
-    ) -> Vec<text::Vertex> {
+    ) -> (Vec<text::Vertex>, bool) {
         let update_cache = if let Some((verts, cached_font_size)) = self.vertex_cache.get(&(
             text.clone(),
             weight,
@@ -130,7 +133,22 @@ impl TextRenderer {
             font_size as u32,
         )) {
             if *cached_font_size == font_size {
-                return verts.clone();
+                if verts[0].color != color {
+                    println!("Using cached vertices with updated color: {:?}", color);
+
+                    return (
+                        verts
+                            .iter()
+                            .map(|v| text::Vertex {
+                                position: v.position,
+                                color,
+                            })
+                            .collect(),
+                        false,
+                    );
+                }
+
+                return (verts.clone(), true);
             }
 
             false
@@ -140,7 +158,7 @@ impl TextRenderer {
 
         let ttc = match &self.font {
             Some(f) => f,
-            None => return vec![],
+            None => return (vec![], false),
         };
 
         let font = if let Some(cached_font) = self.matching_fonts.get(&(weight, italic)) {
@@ -194,10 +212,16 @@ impl TextRenderer {
                 position.0,
                 position.1,
                 font_size as u32,
+                color
+                    .iter()
+                    .map(|c| c.to_bits())
+                    .collect::<Vec<u32>>()
+                    .try_into()
+                    .unwrap(),
             ));
         }
 
-        verts
+        (verts, false)
     }
 
     pub fn update_vertex_buffer(
@@ -210,7 +234,7 @@ impl TextRenderer {
         font_size: f32,
         position: (u32, u32),
     ) {
-        let verts = self.vertices(text.clone(), weight, italic, color, font_size, position);
+        let (verts, hit) = self.vertices(text.clone(), weight, italic, color, font_size, position);
 
         let key = (
             text,
@@ -219,11 +243,19 @@ impl TextRenderer {
             position.0,
             position.1,
             font_size as u32,
+            color
+                .iter()
+                .map(|c| c.to_bits())
+                .collect::<Vec<u32>>()
+                .try_into()
+                .unwrap(),
         );
 
         let existing_buffer = self.outline_vertex_buffers.get_mut(&key);
 
-        let new_buffer = if let Some((_, _)) = existing_buffer {
+        let new_buffer = if let Some((_, _)) = existing_buffer
+            && hit
+        {
             return;
         } else {
             let new_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -273,6 +305,8 @@ pub struct WindowState {
     window_options: WindowOptions,
 
     document: Document,
+
+    prev_hovered_elements: Vec<Rc<RefCell<Element>>>,
 }
 
 impl WindowState {
@@ -373,7 +407,7 @@ impl WindowState {
 
                             let italic = matches!(style.font.style(), FontStyle::Italic);
 
-                            let verts = renderer.vertices(
+                            let (verts, _) = renderer.vertices(
                                 text_content.clone(),
                                 font_weight,
                                 italic,
@@ -381,6 +415,14 @@ impl WindowState {
                                 font_size,
                                 (adj_position.0 as u32, adj_position.1 as u32),
                             );
+
+                            if let Some(node_rc) = &parents.last().unwrap().associated_node {
+                                if let NodeKind::Element(element) = &node_rc.borrow().deref() {
+                                    if element.borrow().local_name == "h1" {
+                                        println!("Found color: {:?}", verts[0].color);
+                                    }
+                                }
+                            }
 
                             if !verts.is_empty() {
                                 renderer.update_vertex_buffer(
@@ -400,6 +442,14 @@ impl WindowState {
                                     adj_position.0 as u32,
                                     adj_position.1 as u32,
                                     font_size as u32,
+                                    style
+                                        .color
+                                        .used()
+                                        .iter()
+                                        .map(|c| c.to_bits())
+                                        .collect::<Vec<u32>>()
+                                        .try_into()
+                                        .unwrap(),
                                 );
 
                                 if let Some((buffer, count)) =
@@ -785,6 +835,7 @@ impl WindowState {
             is_surface_configured: false,
             window_options,
             document,
+            prev_hovered_elements: vec![],
         }
     }
 
@@ -886,24 +937,35 @@ impl ApplicationHandler<WindowState> for App {
                 if let Some(root) = state.layout.root_box.as_ref() {
                     let elems = Box::get_hovered_elems(root, position.x, position.y, 0.0, 0.0);
 
-                    for child in elems {
-                        child.borrow_mut().trigger_hover();
+                    {
+                        print!("Hovered: [");
+                        for elem in &elems {
+                            print!("{}, ", elem.borrow().local_name);
+                        }
+                        println!("]");
 
-                        // child
-                        //     .borrow_mut()
-                        //     .associated_style
-                        //     .background
-                        //     .set_color(Color::Named("red".to_string()));
+                        print!("Previously hovered: [");
+                        for elem in &state.prev_hovered_elements {
+                            print!("{}, ", elem.borrow().local_name);
+                        }
+                        println!("]");
+                    }
 
-                        if let Some(node) = &child.borrow().associated_node {
-                            match node.borrow().deref() {
-                                NodeKind::Element(elem) => {
-                                    println!("Hovered element: {}", elem.borrow().local_name);
-                                }
-                                _ => {}
-                            }
+                    for (i, child) in elems.iter().enumerate() {
+                        let mut child_borrow = child.borrow_mut();
+                        if !child_borrow._element_state.is_hovered {
+                            child_borrow.trigger_hover(&elems[..i]);
                         }
                     }
+
+                    for (i, prev) in state.prev_hovered_elements.iter().enumerate() {
+                        if !elems.contains(prev) {
+                            prev.borrow_mut()
+                                .leave_hover(&state.prev_hovered_elements[..i]);
+                        }
+                    }
+
+                    state.prev_hovered_elements = elems;
 
                     // for child in root
                     //     .borrow()

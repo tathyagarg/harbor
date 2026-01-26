@@ -3,7 +3,12 @@ use std::ops::Deref;
 use std::rc::Weak;
 use std::{cell::RefCell, rc::Rc};
 
-use crate::css::cssom::{CSSStyleSheet, ComputedStyle, DocumentOrShadowRootStyle, StyleSheetList};
+use crate::css::r#box::handle_declaration;
+use crate::css::cssom::{
+    CSSRuleNode, CSSRuleType, CSSStyleRuleData, CSSStyleSheet, CSSStyleSheetExt, ComputedStyle,
+    DocumentOrShadowRootStyle, StyleSheetList,
+};
+use crate::css::selectors::MatchesElement;
 use crate::infra::Serializable;
 use crate::{
     html5::{HTML_NAMESPACE, parse::Token, tag_groups::*},
@@ -748,6 +753,11 @@ impl Attr {
 
 pub type ElementID = String;
 
+#[derive(Clone, PartialEq, Eq, Default)]
+pub struct ElementState {
+    pub is_hovered: bool,
+}
+
 #[derive(Clone, PartialEq, Eq)]
 pub struct Element {
     pub _node: Rc<RefCell<Node>>,
@@ -768,6 +778,8 @@ pub struct Element {
     _token: Option<Token>,
 
     pub _style: ComputedStyle,
+
+    pub _element_state: ElementState,
 }
 
 impl Debug for Element {
@@ -928,6 +940,82 @@ impl Element {
         element
     }
 
+    pub fn trigger_hover(&mut self, parents: &[Rc<RefCell<Element>>]) {
+        self._element_state.is_hovered = true;
+
+        self.compute_element_styles(Some(&parents.to_vec()));
+    }
+
+    pub fn leave_hover(&mut self, parents: &[Rc<RefCell<Element>>]) {
+        self._element_state.is_hovered = false;
+
+        self.compute_element_styles(Some(&parents.to_vec()));
+    }
+
+    pub fn compute_element_styles(&mut self, parents: Option<&Vec<Rc<RefCell<Element>>>>) {
+        // inherit
+        *self.style_mut() = parents
+            .and_then(|p| p.last())
+            .map_or(ComputedStyle::default(), |parent| {
+                parent.borrow().style().inherit()
+            });
+
+        let node_doc = &self
+            ._node
+            .borrow()
+            .node_document
+            .as_ref()
+            .unwrap()
+            .upgrade()
+            .unwrap();
+        let document = node_doc.borrow();
+        let style_sheets = document.style_sheets();
+
+        for stylesheet in style_sheets.style_sheets.iter() {
+            for rule in stylesheet.borrow().css_rules().iter() {
+                match rule.deref()._type() {
+                    CSSRuleType::Style => {
+                        let style_rule = rule
+                            .deref()
+                            .as_any()
+                            .downcast_ref::<CSSRuleNode<CSSStyleRuleData>>()
+                            .unwrap();
+
+                        for selector in style_rule.selectors() {
+                            if selector.matches(self, parents) {
+                                for declaration in style_rule.declarations() {
+                                    handle_declaration(declaration, self.style_mut(), parents);
+                                }
+                            }
+                        }
+                    }
+                    _ => {
+                        todo!("Handle other CSS rule types");
+                    }
+                }
+            }
+        }
+
+        if self.local_name == "h1" {
+            println!("Computed style for <h1>: {:#?}", self.style());
+        }
+
+        let mut new_parents = match parents {
+            Some(p) => p.clone(),
+            None => vec![],
+        };
+
+        new_parents.push(Rc::new(RefCell::new(self.clone())));
+
+        for child_rc in self._node.borrow().child_nodes().iter() {
+            let child = child_rc.borrow();
+            if let NodeKind::Element(child_element_rc) = child.deref() {
+                let mut child_element = child_element_rc.borrow_mut();
+                child_element.compute_element_styles(Some(&new_parents));
+            }
+        }
+    }
+
     fn create_element_internal<T: IElement>(
         _document: Rc<RefCell<Document>>,
         namespace: Option<String>,
@@ -1057,6 +1145,8 @@ impl INode for Element {
             attribute_list: vec![],
             _token: None,
             _style: ComputedStyle::default(),
+
+            _element_state: ElementState::default(),
         }
     }
 
@@ -1129,7 +1219,9 @@ impl IElement for Element {
             is_value: None,
             attribute_list: vec![],
             _token: None,
+
             _style: ComputedStyle::default(),
+            _element_state: ElementState::default(),
         }
     }
 

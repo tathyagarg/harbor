@@ -1,4 +1,7 @@
-use std::{cell::RefCell, rc::Weak};
+use std::{
+    cell::RefCell,
+    rc::{Rc, Weak},
+};
 
 use crate::{
     css::{
@@ -723,7 +726,7 @@ impl Font {
         }
     }
 
-    pub fn resolve_font_size(&mut self, parents: &Vec<&Element>) -> Option<f64> {
+    pub fn resolve_font_size(&mut self, parents: &Vec<Rc<RefCell<Element>>>) -> Option<f64> {
         match self {
             Font::Constructed(cf) => Some(cf.resolve_font_size(parents)),
             Font::SystemFont(_) => None,
@@ -749,7 +752,7 @@ impl Font {
         }
     }
 
-    pub fn resolve_font_weight(&mut self, parents: &Vec<&Element>) -> Option<u32> {
+    pub fn resolve_font_weight(&mut self, parents: &Vec<Rc<RefCell<Element>>>) -> Option<u32> {
         match self {
             Font::Constructed(cf) => Some(cf.resolve_font_weight(parents)),
             Font::SystemFont(_) => None,
@@ -893,7 +896,7 @@ impl CSSParseable for ConstructedFont {
 }
 
 impl ConstructedFont {
-    pub fn resolve_font_size(&mut self, parents: &Vec<&Element>) -> f64 {
+    pub fn resolve_font_size(&mut self, parents: &Vec<Rc<RefCell<Element>>>) -> f64 {
         // if let Some(resolved_size) = self._resolved_font_size {
         //     return resolved_size;
         // }
@@ -907,7 +910,7 @@ impl ConstructedFont {
         self._resolved_font_size
     }
 
-    pub fn resolve_font_weight(&mut self, parents: &Vec<&Element>) -> u32 {
+    pub fn resolve_font_weight(&mut self, parents: &Vec<Rc<RefCell<Element>>>) -> u32 {
         if let Some(resolved_weight) = self._resolve_font_weight {
             return resolved_weight;
         }
@@ -1031,7 +1034,7 @@ impl CSSParseable for FontWeight {
 }
 
 impl FontWeight {
-    pub fn resolve(&self, parents: &Vec<&Element>) -> u32 {
+    pub fn resolve(&self, parents: &Vec<Rc<RefCell<Element>>>) -> u32 {
         match self {
             FontWeight::Normal => 400,
             FontWeight::Bold => 700,
@@ -1044,7 +1047,15 @@ impl FontWeight {
 
                 let parent_weight = parents
                     .last()
-                    .and_then(|parent| parent.style().font.weight().resolve(new_parents).into())
+                    .and_then(|parent| {
+                        parent
+                            .borrow()
+                            .style()
+                            .font
+                            .weight()
+                            .resolve(new_parents)
+                            .into()
+                    })
                     .unwrap_or(400);
 
                 match parent_weight {
@@ -1063,7 +1074,15 @@ impl FontWeight {
 
                 let parent_weight = parents
                     .last()
-                    .and_then(|parent| parent.style().font.weight().resolve(new_parents).into())
+                    .and_then(|parent| {
+                        parent
+                            .borrow()
+                            .style()
+                            .font
+                            .weight()
+                            .resolve(new_parents)
+                            .into()
+                    })
                     .unwrap_or(400);
 
                 match parent_weight {
@@ -1128,7 +1147,7 @@ pub enum FontSize {
 }
 
 impl FontSize {
-    pub fn resolve(&self, parents: &Vec<&Element>) -> f64 {
+    pub fn resolve(&self, parents: &Vec<Rc<RefCell<Element>>>) -> f64 {
         match self {
             FontSize::LengthPercentage(lp) => match lp {
                 LengthPercentage::Length(dim) => match dim.unit.as_str() {
@@ -1136,7 +1155,7 @@ impl FontSize {
                     "em" => {
                         let parent_font_size = parents
                             .last()
-                            .and_then(|parent| parent.style().font.resolved_font_size())
+                            .and_then(|parent| parent.borrow().style().font.resolved_font_size())
                             .unwrap_or(16.0);
 
                         dim.value as f64 * parent_font_size
@@ -1144,7 +1163,7 @@ impl FontSize {
                     "rem" => {
                         let root_font_size = parents
                             .first()
-                            .and_then(|root| root.style().font.resolved_font_size())
+                            .and_then(|root| root.borrow().style().font.resolved_font_size())
                             .unwrap_or(16.0);
 
                         dim.value as f64 * root_font_size

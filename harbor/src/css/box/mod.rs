@@ -331,7 +331,7 @@ impl Box {
         pos_y: f64,
         parent_x: f64,
         parent_y: f64,
-    ) -> Vec<Rc<RefCell<Box>>> {
+    ) -> Vec<Rc<RefCell<Element>>> {
         let mut hovered_elems = Vec::new();
 
         let box_borrowed = root.borrow();
@@ -339,21 +339,19 @@ impl Box {
         let box_x = parent_x + box_borrowed._position_x.unwrap_or(0.0);
         let box_y = parent_y + box_borrowed._position_y.unwrap_or(0.0);
 
-        let box_width = box_borrowed._content_width
-            + box_borrowed._padding.horizontal()
-            + box_borrowed._border.horizontal()
-            + box_borrowed._margin.horizontal();
-        let box_height = box_borrowed._content_height
-            + box_borrowed._padding.vertical()
-            + box_borrowed._border.vertical()
-            + box_borrowed._margin.vertical();
+        let box_width = box_borrowed._content_width;
+        let box_height = box_borrowed._content_height;
 
         if pos_x >= box_x
             && pos_x <= box_x + box_width
             && pos_y >= box_y
             && pos_y <= box_y + box_height
         {
-            hovered_elems.push(Rc::clone(&root));
+            if let Some(node_rc) = &box_borrowed.associated_node {
+                if let NodeKind::Element(element_rc) = node_rc.borrow().deref() {
+                    hovered_elems.push(Rc::clone(element_rc));
+                }
+            }
 
             for child in box_borrowed.children.iter() {
                 let mut child_hovered =
@@ -541,19 +539,23 @@ impl Box {
         }
     }
 
-    pub fn trigger_hover(&mut self) {
-        if let Some(node_rc) = &self.associated_node {
-            if let NodeKind::Element(element_rc) = node_rc.borrow().deref() {
-                let mut element = element_rc.borrow_mut();
-                if element.local_name == "li" {
-                    element
-                        .style_mut()
-                        .background
-                        .set_color(Color::Named(String::from("red")));
-                }
-            }
-        }
-    }
+    // pub fn trigger_hover(&mut self, parents: &Vec<Rc<RefCell<Box>>>) {
+    //     if let Some(node_rc) = &self.associated_node {
+    //         if let NodeKind::Element(element_rc) = node_rc.borrow().deref() {
+    //             let mut element = element_rc.borrow_mut();
+    //             element._element_state.is_hovered = true;
+
+    //             compute_element_styles(&mut element, Some(parents));
+
+    //             // if element.local_name == "li" {
+    //             //     element
+    //             //         .style_mut()
+    //             //         .background
+    //             //         .set_color(Color::Named(String::from("red")));
+    //             // }
+    //         }
+    //     }
+    // }
 
     pub fn style(&self) -> Option<ComputedStyle> {
         if let Some(node_rc) = &self.associated_node {
@@ -863,69 +865,7 @@ fn compute_doc_styles(doc: &Rc<RefCell<Document>>) {
         let node = node_rc.borrow();
         if let NodeKind::Element(element_rc) = node.deref() {
             let mut element = element_rc.borrow_mut();
-            compute_element_styles(&mut element, None);
-        }
-    }
-}
-
-fn compute_element_styles(
-    // document: &Document,
-    element: &mut Element,
-    parents: Option<&Vec<&Element>>,
-) {
-    // inherit
-    *element.style_mut() = parents
-        .and_then(|p| p.last())
-        .map_or(ComputedStyle::default(), |parent| parent.style().inherit());
-
-    let node_doc = &element
-        ._node
-        .borrow()
-        .node_document
-        .as_ref()
-        .unwrap()
-        .upgrade()
-        .unwrap();
-    let document = node_doc.borrow();
-    let style_sheets = document.style_sheets();
-
-    for stylesheet in style_sheets.style_sheets.iter() {
-        for rule in stylesheet.borrow().css_rules().iter() {
-            match rule.deref()._type() {
-                CSSRuleType::Style => {
-                    let style_rule = rule
-                        .deref()
-                        .as_any()
-                        .downcast_ref::<CSSRuleNode<CSSStyleRuleData>>()
-                        .unwrap();
-
-                    for selector in style_rule.selectors() {
-                        if selector.matches(element, parents) {
-                            for declaration in style_rule.declarations() {
-                                handle_declaration(declaration, element.style_mut(), parents);
-                            }
-                        }
-                    }
-                }
-                _ => {
-                    todo!("Handle other CSS rule types");
-                }
-            }
-        }
-    }
-
-    let mut new_parents = match parents {
-        Some(p) => p.clone(),
-        None => vec![],
-    };
-
-    new_parents.push(element);
-
-    for child_rc in element._node.borrow().child_nodes().iter() {
-        let child = child_rc.borrow();
-        if let NodeKind::Element(child_element_rc) = child.deref() {
-            let mut child_element = child_element_rc.borrow_mut();
-            compute_element_styles(&mut child_element, Some(&new_parents));
+            element.compute_element_styles(None);
         }
     }
 }
@@ -972,7 +912,7 @@ fn handle_background_property(declaration: &CSSDeclaration, style: &mut Computed
 fn handle_font(
     declaration: &CSSDeclaration,
     style: &mut ComputedStyle,
-    parents: Option<&Vec<&Element>>,
+    parents: Option<&Vec<Rc<RefCell<Element>>>>,
 ) {
     let mut stream = InputStream::new(&declaration.value);
 
@@ -987,7 +927,7 @@ fn handle_font(
 fn handle_font_property(
     declaration: &CSSDeclaration,
     style: &mut ComputedStyle,
-    parents: Option<&Vec<&Element>>,
+    parents: Option<&Vec<Rc<RefCell<Element>>>>,
 ) {
     let mut stream = InputStream::new(&declaration.value);
 
@@ -1069,10 +1009,10 @@ fn handle_margin_property(declaration: &CSSDeclaration, style: &mut ComputedStyl
     }
 }
 
-fn handle_declaration(
+pub fn handle_declaration(
     declaration: &CSSDeclaration,
     style: &mut ComputedStyle,
-    parents: Option<&Vec<&Element>>,
+    parents: Option<&Vec<Rc<RefCell<Element>>>>,
 ) {
     match declaration.property_name.as_str() {
         "color" => {

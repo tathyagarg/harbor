@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use std::fmt::Debug;
+use std::{cell::RefCell, fmt::Debug, ops::Deref, rc::Rc};
 
 use crate::{
     css::tokenize::{CSSToken, HashToken},
@@ -146,11 +146,11 @@ pub trait Specificity {
 }
 
 pub trait MatchesElement {
-    fn matches(&self, element: &Element, parents: Option<&Vec<&Element>>) -> bool;
+    fn matches(&self, element: &Element, parents: Option<&Vec<Rc<RefCell<Element>>>>) -> bool;
 }
 
 impl MatchesElement for CompoundSelector {
-    fn matches(&self, element: &Element, _parents: Option<&Vec<&Element>>) -> bool {
+    fn matches(&self, element: &Element, _parents: Option<&Vec<Rc<RefCell<Element>>>>) -> bool {
         if let Some(type_selector) = &self.type_selector {
             match type_selector {
                 TypeSelector::WQName(wq_name) => {
@@ -168,12 +168,32 @@ impl MatchesElement for CompoundSelector {
                         }
                     }
 
-                    // Match local name
-                    return if wq_name.local_name == "*" {
-                        true
+                    let hover_modifier = if self.subclass_selectors.iter().any(|subclass| {
+                        matches!(
+                            subclass,
+                            SubclassSelector::PseudoClassSelector(PseudoClassSelector::Raw(
+                                name
+                            )) if name == "hover"
+                        )
+                    }) {
+                        element._element_state.is_hovered
                     } else {
-                        element.local_name == wq_name.local_name
+                        true
                     };
+
+                    let res = (wq_name.local_name == "*"
+                        || element.local_name == wq_name.local_name)
+                        && hover_modifier;
+
+                    if (wq_name.local_name == element.local_name) {
+                        println!(
+                            "Selector: {:#?}\nElement: {:?}\nHover Modifier: {}\nRes: {}\n==========================",
+                            self, element.local_name, hover_modifier, res
+                        );
+                    }
+
+                    return (wq_name.local_name == "*" || element.local_name == wq_name.local_name)
+                        && hover_modifier;
                 }
                 TypeSelector::Prefixed(_ns_prefix) => {
                     // Match namespace if specified
@@ -191,7 +211,7 @@ impl MatchesElement for CompoundSelector {
 }
 
 impl MatchesElement for ComplexSelector {
-    fn matches(&self, element: &Element, parents: Option<&Vec<&Element>>) -> bool {
+    fn matches(&self, element: &Element, parents: Option<&Vec<Rc<RefCell<Element>>>>) -> bool {
         // First, match the compound selector
         if !self.compound.matches(element, parents) {
             return false;
@@ -205,7 +225,7 @@ impl MatchesElement for ComplexSelector {
                 Combinator::Child => {
                     if let Some(parents) = current_parents {
                         if let Some(parent) = parents.first() {
-                            if !compound.matches(parent, None) {
+                            if !compound.matches(parent.borrow().deref(), None) {
                                 return false;
                             }
                             current_parents = None; // Update as needed
