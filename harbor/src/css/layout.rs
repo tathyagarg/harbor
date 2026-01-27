@@ -42,8 +42,6 @@ impl Layout {
             root_box.borrow_mut().layout(
                 Some(self._window_size.0),
                 Some(self._window_size.1),
-                0.0,
-                0.0,
                 // fuhhh
                 false,
                 false,

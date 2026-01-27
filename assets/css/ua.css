@@ -50,6 +50,11 @@ ol {
   display: block;
 }
 
+marquee {
+  /* NOTE: This is actually supposed to be inline-block, but I haven't implemented that yet */
+  display: block;
+}
+
 main {
   display: block
 }
@@ -63,11 +68,11 @@ span, a, em, strong, b, i {
   display: inline;
 }
 
-b {
+strong, b {
   font-weight: bold;
 }
 
-i {
+em, i {
   font-style: italic;
 }
 

@@ -2260,10 +2260,6 @@ impl _Document {
     }
 }
 
-fn preprocess_input(input: &String) -> String {
-    input.replace("\r\n", "\n").replace("\r", "\n")
-}
-
 fn is_noncharacter(code: u32) -> bool {
     matches!(
         code,

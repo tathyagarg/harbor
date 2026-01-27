@@ -462,25 +462,22 @@ impl Box {
         }
     }
 
+    /// Container width is required for width resolution
+    /// Container height currently serves no purpose but maybe it could be used in the future for
+    /// height resolution
     pub fn layout(
         &mut self,
         container_width: Option<f64>,
         container_height: Option<f64>,
-        start_x: f64,
-        start_y: f64,
         first_child: bool,
         last_child: bool,
         parents: &mut Vec<Rc<RefCell<Element>>>,
     ) -> (f64, f64, bool) {
         match self._box_type {
-            BoxType::Block => {
-                self.layout_block(container_width, container_height, start_x, start_y, parents)
-            }
+            BoxType::Block => self.layout_block(container_width, container_height, parents),
             BoxType::Inline => self.layout_inline(
                 container_width,
                 container_height,
-                start_x,
-                start_y,
                 first_child,
                 last_child,
                 parents,
@@ -493,8 +490,6 @@ impl Box {
                 let (marker_width, marker_height, _) = marker_box.layout(
                     container_width,
                     container_height,
-                    start_x,
-                    start_y,
                     first_child,
                     last_child,
                     parents,
@@ -505,8 +500,6 @@ impl Box {
                 let (content_width, content_height, _) = content_box.layout(
                     container_width,
                     container_height,
-                    start_x,
-                    start_y,
                     first_child,
                     last_child,
                     parents,
@@ -550,8 +543,6 @@ impl Box {
         &mut self,
         container_width: Option<f64>,
         container_height: Option<f64>,
-        start_x: f64,
-        start_y: f64,
         parents: &mut Vec<Rc<RefCell<Element>>>,
     ) -> (f64, f64, bool) {
         if let Some(node_rc) = &self.associated_node {
@@ -560,8 +551,8 @@ impl Box {
             }
         }
 
-        let initial_x = start_x + self._margin.left() + self._border.3 + self._padding.3;
-        let initial_y = start_y + self._margin.top() + self._border.0 + self._padding.0;
+        let initial_x = self._margin.left() + self._border.3 + self._padding.3;
+        let initial_y = self._margin.top() + self._border.0 + self._padding.0;
 
         let mut cursor_x = initial_x;
         let mut cursor_y = initial_y;
@@ -587,21 +578,13 @@ impl Box {
                     child._position_x = Some(*cursor_x - initial_x + line_width);
                     child._position_y = Some(*cursor_y - initial_y);
 
-                    let (w, h, go_to_next_line) = child.layout(
-                        container_width,
-                        container_height,
-                        0.0,
-                        0.0,
-                        first,
-                        last,
-                        parents,
-                    );
+                    let (w, h, go_to_next_line) =
+                        child.layout(container_width, container_height, first, last, parents);
 
                     line_width += w + child._margin.horizontal();
                     line_height = line_height.max(h + child._margin.vertical());
 
                     if go_to_next_line {
-                        println!("Inline child requested line break");
                         *cursor_y += line_height;
                         *cursor_x = initial_x;
                         *content_width = content_width.max(line_width);
@@ -650,14 +633,12 @@ impl Box {
                         }
                     }
 
-                    child._position_x = Some(cursor_x - start_x);
-                    child._position_y = Some(cursor_y - start_y);
+                    child._position_x = Some(cursor_x);
+                    child._position_y = Some(cursor_y);
 
                     let (w, h, go_to_next_line) = child.layout(
                         container_width,
                         container_height,
-                        cursor_x,
-                        cursor_y,
                         i == 0,
                         i == self.children.len() - 1,
                         parents,
@@ -665,7 +646,6 @@ impl Box {
 
                     cursor_y += h + child._margin.bottom();
                     if go_to_next_line {
-                        println!("Block child requested line break");
                         cursor_x = initial_x;
                         cursor_y += child.get_line_height();
                     }
@@ -676,14 +656,12 @@ impl Box {
                 _ => {
                     let mut child = child_box_rc.borrow_mut();
 
-                    child._position_x = Some(cursor_x - start_x);
-                    child._position_y = Some(cursor_y - start_y);
+                    child._position_x = Some(cursor_x);
+                    child._position_y = Some(cursor_y);
 
                     let (w, h, go_to_next_line) = child.layout(
                         container_width,
                         container_height,
-                        cursor_x,
-                        cursor_y,
                         i == 0,
                         i == self.children.len() - 1,
                         parents,
@@ -691,7 +669,6 @@ impl Box {
 
                     cursor_y += h + child._margin.bottom();
                     if go_to_next_line {
-                        println!("Other child requested line break");
                         cursor_x = initial_x;
                         cursor_y += child.get_line_height();
                     }
@@ -710,7 +687,7 @@ impl Box {
             parents,
         );
 
-        self._content_height = cursor_y - start_y;
+        self._content_height = cursor_y;
 
         if !matches!(self.style().unwrap().width, WidthValue::Auto) {
             if let Some(node_rc) = &self.associated_node {
@@ -739,18 +716,13 @@ impl Box {
         &mut self,
         _container_width: Option<f64>,
         _container_height: Option<f64>,
-        start_x: f64,
-        start_y: f64,
         first_child: bool,
         last_child: bool,
         parents: &mut Vec<Rc<RefCell<Element>>>,
     ) -> (f64, f64, bool) {
-        let mut pen_x = start_x;
-        let mut pen_y = start_y;
+        let mut pen_x = 0.0;
+        let mut pen_y = 0.0;
 
-        if self.associated_node.is_none() {
-            println!("SELF: {:#?}", self);
-        }
         let node = self.associated_node.as_ref().unwrap().borrow().clone();
 
         match node {
@@ -806,8 +778,15 @@ impl Box {
                     }
                 };
 
+                let mut last_was_space = false;
+
                 for ch in chars {
                     if ch != '\n' && ch != '\r' && ch != '\t' {
+                        if last_was_space && ch == ' ' {
+                            continue;
+                        }
+
+                        last_was_space = ch == ' ';
                         new_data.push(ch);
                         let aw = font
                             .and_then(|font| {
@@ -834,8 +813,7 @@ impl Box {
             }
             NodeKind::Element(e) => {
                 if e.borrow().local_name.as_str() == "br" {
-                    println!("[BR Element]");
-                    pen_x = start_x;
+                    pen_x = 0.0;
                     self._content_height = self._content_height.max(
                         e.borrow()
                             .style()
@@ -843,18 +821,20 @@ impl Box {
                             .resolved_line_height()
                             .unwrap_or(19.2),
                     );
-                    return (pen_x - start_x, self._content_height, true);
+                    return (pen_x, self._content_height, true);
                 }
 
                 parents.push(e);
 
                 for (i, child_box) in self.children.iter().enumerate() {
                     let mut child_box = child_box.borrow_mut();
+
+                    child_box._position_x = Some(pen_x);
+                    child_box._position_y = Some(pen_y);
+
                     let (advance, line_height, go_to_next_line) = child_box.layout_inline(
                         None,
                         None,
-                        pen_x,
-                        pen_y,
                         i == 0,
                         i == self.children.len() - 1,
                         parents,
@@ -865,7 +845,7 @@ impl Box {
 
                     if go_to_next_line {
                         println!("Element Inline child requested line break");
-                        pen_x = start_x;
+                        pen_x = 0.0;
                         pen_y += line_height;
                     }
                 }
@@ -875,7 +855,7 @@ impl Box {
             _ => {}
         }
 
-        let total_width = pen_x - start_x;
+        let total_width = pen_x - 0.0;
         self._content_width = total_width;
 
         (total_width, self._content_height, false)
