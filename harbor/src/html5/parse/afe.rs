@@ -88,4 +88,12 @@ impl ActiveFormattingElements {
     pub fn reconstruct(&mut self, parser: &mut Parser) {
         parser._reconstruct_active_formatting_elements();
     }
+
+    pub fn push_marker(&mut self) {
+        self.elements.push(ElementOrMarker::Marker);
+    }
+
+    pub fn pop_until_marker(&mut self) {
+        while let Some(ElementOrMarker::Element(..)) = self.elements.pop() {}
+    }
 }

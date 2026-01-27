@@ -134,8 +134,6 @@ impl TextRenderer {
         )) {
             if *cached_font_size == font_size {
                 if verts[0].color != color {
-                    println!("Using cached vertices with updated color: {:?}", color);
-
                     return (
                         verts
                             .iter()
@@ -415,14 +413,6 @@ impl WindowState {
                                 font_size,
                                 (adj_position.0 as u32, adj_position.1 as u32),
                             );
-
-                            if let Some(node_rc) = &parents.last().unwrap().associated_node {
-                                if let NodeKind::Element(element) = &node_rc.borrow().deref() {
-                                    if element.borrow().local_name == "h1" {
-                                        println!("Found color: {:?}", verts[0].color);
-                                    }
-                                }
-                            }
 
                             if !verts.is_empty() {
                                 renderer.update_vertex_buffer(
@@ -930,26 +920,9 @@ impl ApplicationHandler<WindowState> for App {
             WindowEvent::Resized(size) => {
                 state.resize(size.width, size.height);
             }
-            WindowEvent::CursorMoved {
-                device_id,
-                position,
-            } => {
+            WindowEvent::CursorMoved { position, .. } => {
                 if let Some(root) = state.layout.root_box.as_ref() {
                     let elems = Box::get_hovered_elems(root, position.x, position.y, 0.0, 0.0);
-
-                    {
-                        print!("Hovered: [");
-                        for elem in &elems {
-                            print!("{}, ", elem.borrow().local_name);
-                        }
-                        println!("]");
-
-                        print!("Previously hovered: [");
-                        for elem in &state.prev_hovered_elements {
-                            print!("{}, ", elem.borrow().local_name);
-                        }
-                        println!("]");
-                    }
 
                     for (i, child) in elems.iter().enumerate() {
                         let mut child_borrow = child.borrow_mut();
@@ -966,31 +939,6 @@ impl ApplicationHandler<WindowState> for App {
                     }
 
                     state.prev_hovered_elements = elems;
-
-                    // for child in root
-                    //     .borrow()
-                    //     .get_hovered_elems(position.x, position.y, 0.0, 0.0)
-                    // {
-                    //     child
-                    //         .borrow_mut()
-                    //         .associated_style
-                    //         .background
-                    //         .set_color(Color::Named("red".to_string()));
-
-                    //     match child
-                    //         .borrow()
-                    //         .associated_node
-                    //         .as_ref()
-                    //         .unwrap()
-                    //         .borrow()
-                    //         .deref()
-                    //     {
-                    //         NodeKind::Element(elem) => {
-                    //             println!("Hovered element: {}", elem.borrow().local_name);
-                    //         }
-                    //         _ => {}
-                    //     }
-                    // }
                 }
             }
             WindowEvent::RedrawRequested => {

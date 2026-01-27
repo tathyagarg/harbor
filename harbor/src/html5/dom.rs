@@ -996,10 +996,6 @@ impl Element {
             }
         }
 
-        if self.local_name == "h1" {
-            println!("Computed style for <h1>: {:#?}", self.style());
-        }
-
         let mut new_parents = match parents {
             Some(p) => p.clone(),
             None => vec![],

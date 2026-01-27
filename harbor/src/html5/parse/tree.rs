@@ -1062,6 +1062,126 @@ impl InsertMode {
             {
                 InsertMode::_adoption_agency(parser, tag);
             }
+            Token::StartTag(ref tag)
+                if matches!(tag.name.as_str(), "applet" | "marquee" | "object") =>
+            {
+                parser._reconstruct_active_formatting_elements();
+
+                let element = parser.open_elements_stack.insert_html_element(&token);
+                parser.active_formatting_elements.push_marker();
+
+                parser.flag_frameset_ok = false;
+            }
+            Token::EndTag(ref tag)
+                if matches!(tag.name.as_str(), "applet" | "marquee" | "object") =>
+            {
+                if !parser
+                    .open_elements_stack
+                    .has_element_in_default_scope(&tag.name)
+                {
+                    parser.error(ParseError::Custom(
+                        "Unexpected applet/marquee/object end tag token in in body insertion mode",
+                    ));
+
+                    return true;
+                }
+
+                parser.open_elements_stack.generate_implied_end_tags(None);
+
+                if parser
+                    .open_elements_stack
+                    .adjusted_current_node()
+                    .is_some_and(|el| el.borrow().qualified_name() != tag.name)
+                {
+                    parser.error(ParseError::Custom(
+                        "Unexpected current node after generating implied end tags for applet/marquee/object end tag",
+                    ));
+                }
+
+                parser.open_elements_stack.pop_until(&tag.name);
+                parser.active_formatting_elements.pop_until_marker();
+            }
+            Token::StartTag(ref tag)
+                if matches!(
+                    tag.name.as_str(),
+                    "area" | "br" | "embed" | "img" | "keygen" | "wbr"
+                ) =>
+            {
+                parser._reconstruct_active_formatting_elements();
+                parser.open_elements_stack.insert_html_element(&token);
+                parser.open_elements_stack.pop();
+
+                parser.flag_frameset_ok = false;
+            }
+            Token::StartTag(ref tag) if tag.name.as_str() == "hr" => {
+                if parser.open_elements_stack.has_element_in_button_scope("p") {
+                    parser.open_elements_stack.close_p_tag();
+                }
+
+                if parser
+                    .open_elements_stack
+                    .has_element_in_default_scope("select")
+                {
+                    parser.open_elements_stack.generate_implied_end_tags(None);
+                    if parser
+                        .open_elements_stack
+                        .has_element_in_default_scope("option")
+                        || parser
+                            .open_elements_stack
+                            .has_element_in_default_scope("optgroup")
+                    {
+                        parser.error(ParseError::Custom(
+                            "Unexpected current node after generating implied end tags for hr start tag",
+                        ));
+                    }
+                }
+
+                parser.open_elements_stack.insert_html_element(&token);
+                parser.open_elements_stack.pop();
+
+                parser.flag_frameset_ok = false;
+            }
+            Token::StartTag(_) => {
+                parser._reconstruct_active_formatting_elements();
+                parser.open_elements_stack.insert_html_element(&token);
+            }
+            Token::EndTag(ref tag) => {
+                let mut node = parser.open_elements_stack.elements.last().unwrap().clone();
+
+                loop {
+                    if node.borrow().qualified_name() == tag.name {
+                        parser
+                            .open_elements_stack
+                            .generate_implied_end_tags(Some(&tag.name));
+
+                        if node
+                            != *parser
+                                .open_elements_stack
+                                .adjusted_current_node()
+                                .as_ref()
+                                .unwrap()
+                        {
+                            parser.error(ParseError::Custom(
+                                "Unexpected current node after generating implied end tags for any other end tag",
+                            ));
+                        }
+
+                        parser.open_elements_stack.pop_until(&tag.name);
+                        return true;
+                    } else if SPECIAL_CATEGORY_NAMES
+                        .contains(&node.borrow().qualified_name().as_str())
+                    {
+                        parser.error(ParseError::Custom(
+                            "Unexpected any other end tag token in in body insertion mode",
+                        ));
+                        return true;
+                    } else {
+                        node = parser.open_elements_stack.elements
+                            [parser.open_elements_stack.elements.len() - 2]
+                            .clone();
+                    }
+                }
+            }
             _ => {
                 todo!("Handle other tokens in in body insertion mode: {:?}", token);
             }

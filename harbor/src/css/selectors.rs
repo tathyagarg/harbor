@@ -181,17 +181,6 @@ impl MatchesElement for CompoundSelector {
                         true
                     };
 
-                    let res = (wq_name.local_name == "*"
-                        || element.local_name == wq_name.local_name)
-                        && hover_modifier;
-
-                    if (wq_name.local_name == element.local_name) {
-                        println!(
-                            "Selector: {:#?}\nElement: {:?}\nHover Modifier: {}\nRes: {}\n==========================",
-                            self, element.local_name, hover_modifier, res
-                        );
-                    }
-
                     return (wq_name.local_name == "*" || element.local_name == wq_name.local_name)
                         && hover_modifier;
                 }

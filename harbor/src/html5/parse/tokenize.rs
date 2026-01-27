@@ -2,8 +2,8 @@ use crate::html5::{
     dom::*,
     parse::{
         _Document, ActiveFormattingElements, DOCTYPE, ElementOrMarker, InputStream, InsertMode,
-        OpenElementsStack, Parser, Tag, TagToken, Token, is_ascii_whitespace, is_control,
-        is_noncharacter, map_character_reference,
+        NAMED_CHARACTER_REFERENCES, OpenElementsStack, Parser, Tag, TagToken, Token,
+        is_ascii_whitespace, is_control, is_noncharacter, map_character_reference,
     },
 };
 use crate::infra::is_surrogate;
@@ -54,6 +54,7 @@ pub enum ParseError {
     SurrogateCharacterReference,
     NoncharacterCharacterReference,
     ControlCharacterReference,
+    UnknownNamedCharacterReference,
     Custom(&'static str),
 }
 
@@ -2316,14 +2317,96 @@ impl<'a> Parser<'a> {
             }
             ParserState::NamedCharacterReference => {
                 // https://html.spec.whatwg.org/multipage/parsing.html#named-character-reference-state
-                // TODO: FUCK THIS
-                for _ in 0..100 {
-                    println!("TATTU YOU NEED TO DO TS ITS RELEVANT");
+                let mut last_match: Option<(&'static str, &'static str)> = None;
+                let mut consumed = String::new();
+
+                loop {
+                    let c = match self.stream.peek() {
+                        Some(ch) => ch,
+                        None => break,
+                    };
+
+                    self.temporary_buffer.push(c);
+
+                    let mut lo = 0;
+                    let mut hi = NAMED_CHARACTER_REFERENCES.len();
+
+                    while lo < hi {
+                        let mid = (lo + hi) / 2;
+                        if NAMED_CHARACTER_REFERENCES[mid].0 < &self.temporary_buffer[1..] {
+                            lo = mid + 1;
+                        } else {
+                            hi = mid;
+                        }
+                    }
+
+                    if lo >= NAMED_CHARACTER_REFERENCES.len()
+                        || !NAMED_CHARACTER_REFERENCES[lo]
+                            .0
+                            .starts_with(&self.temporary_buffer[1..])
+                    {
+                        self.temporary_buffer.pop();
+                        break;
+                    }
+
+                    self.stream.consume();
+                    consumed.push(c);
+
+                    if NAMED_CHARACTER_REFERENCES[lo].0 == &self.temporary_buffer[1..] {
+                        last_match = Some(NAMED_CHARACTER_REFERENCES[lo]);
+                    }
+                }
+
+                println!("Exited with: {:?}", last_match);
+
+                if let Some((name, value)) = last_match {
+                    let ends_with_semicolon = name.ends_with(';');
+
+                    if self.char_ref_as_part_of_attr()
+                        && !ends_with_semicolon
+                        && self
+                            .stream
+                            .peek()
+                            .is_some_and(|ch| ch.is_ascii_alphanumeric() || ch == '=')
+                    {
+                        self.flush_consumed_as_char_ref();
+                        self.state = self.return_state.clone().unwrap();
+                    } else {
+                        if !ends_with_semicolon {
+                            self.error(ParseError::MissingSemicolonAfterCharacterReference);
+                        }
+
+                        self.temporary_buffer = String::from(value);
+                        self.flush_consumed_as_char_ref();
+                        self.state = self.return_state.clone().unwrap();
+                    }
+                } else {
+                    self.flush_consumed_as_char_ref();
+                    self.state = ParserState::AmbiguousAmpersand;
                 }
             }
             ParserState::AmbiguousAmpersand => {
                 // https://html.spec.whatwg.org/multipage/parsing.html#ambiguous-ampersand-state
                 // TODO: This is only reachable through NamedCharacterReference
+                match self.stream.consume() {
+                    Some(ch) => match ch {
+                        _ if ch.is_ascii_alphanumeric() => {
+                            if self.char_ref_as_part_of_attr() {
+                                self.push_to_attr_val(ch);
+                            } else {
+                                self.emit(Token::Character(ch));
+                            }
+                        }
+                        '\u{003B}' => {
+                            self.error(ParseError::UnknownNamedCharacterReference);
+                            self.reconsume(self.return_state.clone().unwrap());
+                        }
+                        _ => self.reconsume(self.return_state.clone().unwrap()),
+                    },
+                    None => {
+                        self.reconsume(self.return_state.clone().unwrap());
+                    }
+                }
             }
             ParserState::NumericCharacterReference => {
                 // https://html.spec.whatwg.org/multipage/parsing.html#numeric-character-reference-state
