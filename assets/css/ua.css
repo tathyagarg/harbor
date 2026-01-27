@@ -46,6 +46,14 @@ html, body, h1, h2, h3, ul, p, div {
   display: block;
 }
 
+ol {
+  display: block;
+}
+
+main {
+  display: block
+}
+
 li {
   display: list-item;
   margin-left: 1.5em;

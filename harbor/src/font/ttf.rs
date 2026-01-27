@@ -438,6 +438,16 @@ impl ParsedTableDirectory {
         None
     }
 
+    pub fn last_glyph_index(&self) -> Option<u16> {
+        if let Some(hhea_record) = self.get_table_record(b"hhea") {
+            if let TableRecordData::HHea(hhea_table) = &hhea_record._data {
+                return Some(hhea_table.number_of_h_metrics - 1);
+            }
+        }
+
+        None
+    }
+
     pub fn advance_width(&self, glyph_index: usize) -> Option<uint16> {
         if let Some(hmtx_record) = self.get_table_record(b"hmtx") {
             if let TableRecordData::HMtx(hmtx_table) = &hmtx_record._data {
