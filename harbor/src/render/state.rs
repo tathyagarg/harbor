@@ -138,19 +138,30 @@ impl WindowState {
                                 })
                                 .map_or(None, |r| r.clone())
                                 .unwrap_or_else(|| {
-                                    if let Some(renderer_option) =
-                                        self.layout._renderers.get_mut(&RendererIdentifier {
-                                            font_family: "Times New Roman".to_string(),
-                                            font_weight,
-                                            italic,
-                                        })
-                                    {
-                                        if let Some(renderer) = renderer_option {
-                                            return renderer.clone();
-                                        }
-                                    }
+                                    self.layout
+                                        .get_renderer(
+                                            family
+                                                .entries
+                                                .first()
+                                                .map(|f| f.value())
+                                                .unwrap_or("Times New Roman".to_string()),
+                                        )
+                                        .cloned()
+                                        .unwrap()
 
-                                    panic!("No suitable font renderer found");
+                                    // if let Some(renderer_option) =
+                                    //     self.layout._renderers.get_mut(&RendererIdentifier {
+                                    //         font_family: "Times New Roman".to_string(),
+                                    //         font_weight,
+                                    //         italic,
+                                    //     })
+                                    // {
+                                    //     if let Some(renderer) = renderer_option {
+                                    //         return renderer.clone();
+                                    //     }
+                                    // }
+
+                                    // panic!("No suitable font renderer found");
                                 });
 
                             let mut glyph_instances: HashMap<char, Vec<GlyphInstance>> =
@@ -216,14 +227,14 @@ impl WindowState {
 
                                 glyph.instance_count = instances.len() as u32;
 
-                                assert!(glyph.instance_count > 0);
-                                assert!(glyph.vertex_count > 0);
-
-                                render_pass.set_vertex_buffer(0, glyph.vertex_buffer.slice(..));
+                                render_pass
+                                    .set_vertex_buffer(0, glyph.outline_vertex_buffer.slice(..));
                                 render_pass.set_vertex_buffer(1, glyph.instance_buffer.slice(..));
 
-                                render_pass
-                                    .draw(0..glyph.vertex_count, 0..glyph.instance_count as u32);
+                                render_pass.draw(
+                                    0..glyph.outline_vertex_count,
+                                    0..glyph.instance_count as u32,
+                                );
                             }
                         }
                         _ => {}

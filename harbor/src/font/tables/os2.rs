@@ -474,12 +474,62 @@ impl Debug for OS2Table_v432 {
     }
 }
 
+#[allow(dead_code)]
+#[derive(Clone, Debug)]
+pub struct OS2Table_v1 {
+    version: uint16,
+
+    x_avg_char_width: FWORD,
+    us_weight_class: uint16,
+    us_width_class: uint16,
+    fs_type: uint16,
+
+    y_subscript_x_size: FWORD,
+    y_subscript_y_size: FWORD,
+    y_subscript_x_offset: FWORD,
+    y_subscript_y_offset: FWORD,
+
+    y_superscript_x_size: FWORD,
+    y_superscript_y_size: FWORD,
+    y_superscript_x_offset: FWORD,
+    y_superscript_y_offset: FWORD,
+
+    y_strikeout_size: FWORD,
+    y_strikeout_position: FWORD,
+
+    s_family_class: int16,
+
+    panose: [uint8; 10],
+
+    ul_unicode_range1: uint32,
+    ul_unicode_range2: uint32,
+    ul_unicode_range3: uint32,
+    ul_unicode_range4: uint32,
+
+    ach_vend_id: Tag,
+
+    pub fs_selection: uint16,
+    us_first_char_index: uint16,
+    us_last_char_index: uint16,
+
+    pub s_typo_ascender: FWORD,
+    pub s_typo_descender: FWORD,
+    pub s_typo_line_gap: FWORD,
+
+    pub us_win_ascent: UFWORD,
+    pub us_win_descent: UFWORD,
+
+    ul_code_page_range1: uint32,
+    ul_code_page_range2: uint32,
+}
+
 #[derive(Clone, Debug)]
 pub enum OS2Table {
     V5(OS2Table_v5),
     V4(OS2Table_v432),
     V3(OS2Table_v432),
     V2(OS2Table_v432),
+    V1(OS2Table_v1),
 
     Interim(uint16),
 }
@@ -620,6 +670,52 @@ impl TableTrait for OS2Table {
                     _ => unreachable!(),
                 }
             }
+            1 => OS2Table::V1(OS2Table_v1 {
+                version,
+
+                x_avg_char_width: FWORD::from_data(&data[2..4]),
+                us_weight_class: uint16::from_data(&data[4..6]),
+                us_width_class: uint16::from_data(&data[6..8]),
+                fs_type: uint16::from_data(&data[8..10]),
+
+                y_subscript_x_size: FWORD::from_data(&data[10..12]),
+                y_subscript_y_size: FWORD::from_data(&data[12..14]),
+                y_subscript_x_offset: FWORD::from_data(&data[14..16]),
+                y_subscript_y_offset: FWORD::from_data(&data[16..18]),
+
+                y_superscript_x_size: FWORD::from_data(&data[18..20]),
+                y_superscript_y_size: FWORD::from_data(&data[20..22]),
+                y_superscript_x_offset: FWORD::from_data(&data[22..24]),
+                y_superscript_y_offset: FWORD::from_data(&data[24..26]),
+
+                y_strikeout_size: FWORD::from_data(&data[26..28]),
+                y_strikeout_position: FWORD::from_data(&data[28..30]),
+
+                s_family_class: int16::from_data(&data[30..32]),
+
+                panose: data[32..42].try_into().unwrap(),
+
+                ul_unicode_range1: uint32::from_data(&data[42..46]),
+                ul_unicode_range2: uint32::from_data(&data[46..50]),
+                ul_unicode_range3: uint32::from_data(&data[50..54]),
+                ul_unicode_range4: uint32::from_data(&data[54..58]),
+
+                ach_vend_id: data[58..62].try_into().unwrap(),
+
+                fs_selection: uint16::from_data(&data[62..64]),
+                us_first_char_index: uint16::from_data(&data[64..66]),
+                us_last_char_index: uint16::from_data(&data[66..68]),
+
+                s_typo_ascender: FWORD::from_data(&data[68..70]),
+                s_typo_descender: FWORD::from_data(&data[70..72]),
+                s_typo_line_gap: FWORD::from_data(&data[72..74]),
+
+                us_win_ascent: UFWORD::from_data(&data[74..76]),
+                us_win_descent: UFWORD::from_data(&data[76..78]),
+
+                ul_code_page_range1: uint32::from_data(&data[78..82]),
+                ul_code_page_range2: uint32::from_data(&data[82..86]),
+            }),
             _ => {
                 panic!("Unsupported OS/2 table version: {}", version);
             }
@@ -646,6 +742,7 @@ impl OS2Table {
             OS2Table::V4(table) | OS2Table::V3(table) | OS2Table::V2(table) => {
                 Some(table.us_weight_class)
             }
+            OS2Table::V1(table) => Some(table.us_weight_class),
             OS2Table::Interim(_) => None,
         }
     }
@@ -660,6 +757,9 @@ impl OS2Table {
                 (table.fs_selection & FSSelectionFlags::Italic as uint16) != 0
                     && (table._mac_style & MacStyle::Italic) != 0,
             ),
+            OS2Table::V1(table) => {
+                Some((table.fs_selection & FSSelectionFlags::Italic as uint16) != 0)
+            }
             OS2Table::Interim(_) => None,
         }
     }

@@ -49,7 +49,7 @@ fn main() {
 
     parser.parse();
 
-    let stylesheet = include_str!("../../assets/css/ua.css").to_string();
+    let stylesheet = include_str!("../../res/css/ua.css").to_string();
     let css_content = parse_stylesheet(
         &mut InputStream::new(&tokenize(&mut InputStream::new(
             &stylesheet.chars().collect::<Vec<char>>()[..],

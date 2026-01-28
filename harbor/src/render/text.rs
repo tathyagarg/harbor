@@ -80,8 +80,12 @@ impl Segment {
 
 #[derive(Clone)]
 pub struct GlyphMesh {
-    pub vertex_buffer: wgpu::Buffer,
-    pub vertex_count: u32,
+    pub outline_vertex_buffer: wgpu::Buffer,
+    pub outline_vertex_count: u32,
+
+    pub fill_vertex_buffer: wgpu::Buffer,
+    pub fill_vertex_count: u32,
+
     pub advance_width: f32,
 
     pub instance_buffer: wgpu::Buffer,

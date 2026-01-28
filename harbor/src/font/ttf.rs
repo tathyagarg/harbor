@@ -463,6 +463,12 @@ impl TableDirectory {
                         t.s_typo_descender,
                         t.s_typo_line_gap,
                     ),
+                    OS2Table::V1(t) => (
+                        t.fs_selection,
+                        t.us_win_ascent as int16,
+                        -(t.us_win_descent as int16),
+                        0,
+                    ),
                     _ => panic!(""),
                 };
 
@@ -489,6 +495,7 @@ impl TableDirectory {
                     OS2Table::V4(t) | OS2Table::V3(t) | OS2Table::V2(t) => {
                         (t.fs_selection, t.s_typo_ascender)
                     }
+                    OS2Table::V1(t) => (t.fs_selection, t.us_win_ascent as int16),
                     _ => panic!(""),
                 };
 

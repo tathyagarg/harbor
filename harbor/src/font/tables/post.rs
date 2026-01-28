@@ -429,6 +429,14 @@ impl PostTable {
 
                 // The glyph names for indices 0-257 are predefined and not stored here.
                 // We only need to read the custom glyph names starting from index 258.
+
+                if version_specific_data.num_glyphs < 258 {
+                    version_specific_data.string_data = Vec::new();
+                    return Some(PostTable_VersionSpecific::Version_2_0(
+                        version_specific_data,
+                    ));
+                }
+
                 for _ in 0..version_specific_data.num_glyphs - 258 {
                     if offset >= data.len() {
                         break;

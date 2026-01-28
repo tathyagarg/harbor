@@ -66,26 +66,6 @@ pub fn fill_descriptor() -> wgpu::VertexBufferLayout<'static> {
     }
 }
 
-// #[derive(Clone, Default)]
-// pub struct TextRenderer {
-//     pub font: Option<CompleteTTCData>,
-//
-//     pub matching_fonts: HashMap<(u16, bool), ParsedTableDirectory>,
-//
-//     /// Key: (text, weight, italic, x position, y position, font-size (rounded))
-//     /// Value: (vertices, font-size)
-//     /// The font size in the key is rounded
-//     /// When getting a value from the cache, if the required font-size matches the key but is not
-//     /// equal, the cache will not be used and new vertices will be generated. This will not update
-//     /// the cache.
-//     pub vertex_cache: HashMap<(String, u16, bool, u32, u32, u32), (Vec<text::Vertex>, f32)>,
-//
-//     pub window_size: (f32, f32),
-//
-//     pub outline_vertex_buffers:
-//         HashMap<(String, u16, bool, u32, u32, u32, [u32; 4]), (wgpu::Buffer, usize)>,
-// }
-
 #[derive(Hash, Eq, PartialEq, Clone)]
 pub struct RendererIdentifier {
     pub font_family: String,
@@ -147,13 +127,21 @@ impl TextRenderer {
                     .collect::<Vec<GlyphVertex>>();
 
                 let glyph_mesh = GlyphMesh {
-                    vertex_buffer: device.create_buffer(&wgpu::BufferDescriptor {
+                    outline_vertex_buffer: device.create_buffer(&wgpu::BufferDescriptor {
                         label: Some("Glyph Vertex Buffer"),
                         size: (glyph_verts.len() * std::mem::size_of::<GlyphVertex>()) as u64,
                         usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
                         mapped_at_creation: false,
                     }),
-                    vertex_count: glyph_verts.len() as u32,
+                    outline_vertex_count: glyph_verts.len() as u32,
+                    // TODO: THIS
+                    fill_vertex_buffer: device.create_buffer(&wgpu::BufferDescriptor {
+                        label: Some("Glyph Fill Vertex Buffer"),
+                        size: 0,
+                        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                        mapped_at_creation: false,
+                    }),
+                    fill_vertex_count: 0,
                     advance_width: self.font.advance_width(gid).unwrap_or_else(|| {
                         self.font
                             .advance_width(self.font.last_glyph_index().unwrap())
@@ -170,7 +158,7 @@ impl TextRenderer {
                 };
 
                 queue.write_buffer(
-                    &glyph_mesh.vertex_buffer,
+                    &glyph_mesh.outline_vertex_buffer,
                     0,
                     bytemuck::cast_slice(&glyph_verts),
                 );
