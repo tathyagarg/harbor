@@ -365,7 +365,6 @@ impl WindowState {
                                         / renderer.font.units_per_em() as f32);
 
                             let font_size = style.font.resolved_font_size().unwrap_or(16.0) as f32;
-                            println!("Rendering text: '{}' at size {}", text_content, font_size);
 
                             for ch in text_content.chars() {
                                 let glyph_mesh = renderer.get_from_char(
@@ -475,6 +474,7 @@ impl WindowState {
                 render_pass.set_vertex_buffer(0, circle_vertex_buffer.slice(..));
                 render_pass.draw(0..verts.len() as u32, 0..1);
             }
+            BoxType::None => return,
             _ => {}
         }
 
