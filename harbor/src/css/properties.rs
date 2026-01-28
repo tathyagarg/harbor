@@ -1176,6 +1176,22 @@ impl FontSize {
                     (*perc as f64 / 100.0) * parent_font_size
                 }
             },
+            FontSize::RelativeSize(RelativeSize::Larger) => {
+                let parent_font_size = parents
+                    .last()
+                    .and_then(|parent| parent.borrow().style().font.resolved_font_size())
+                    .unwrap_or(16.0);
+
+                parent_font_size * 1.2
+            }
+            FontSize::RelativeSize(RelativeSize::Smaller) => {
+                let parent_font_size = parents
+                    .last()
+                    .and_then(|parent| parent.borrow().style().font.resolved_font_size())
+                    .unwrap_or(16.0);
+
+                parent_font_size * 0.833
+            }
             _ => todo!("Handle other FontSize variants"),
         }
 
@@ -1414,6 +1430,7 @@ pub enum Display {
     Inline,
     Block,
     ListItem,
+    None,
 }
 
 impl CSSParseable for Display {
@@ -1427,6 +1444,7 @@ impl CSSParseable for Display {
                     "inline" => return Some(Display::Inline),
                     "block" => return Some(Display::Block),
                     "list-item" => return Some(Display::ListItem),
+                    "none" => return Some(Display::None),
                     _ => {
                         todo!("Handle more display values")
                     }
@@ -1446,6 +1464,7 @@ impl Display {
             Display::Inline => BoxType::Inline,
             Display::Block => BoxType::Block,
             Display::ListItem => BoxType::ListItem,
+            Display::None => BoxType::None,
         }
     }
 }

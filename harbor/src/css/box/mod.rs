@@ -101,13 +101,14 @@ pub enum BoxType {
     /// Created by :root
     Initial,
 
-    /// display: block | list-item | table;
     Block,
 
     Inline,
 
     ListItem,
     Marker,
+
+    None,
 }
 
 /// The CSS box model describes the rectangular boxes that are generated for elements in the document tree and laid out according to the visual formatting model.
@@ -522,6 +523,7 @@ impl Box {
 
                 (0.0, 0.0, false)
             }
+            BoxType::None => (0.0, 0.0, false),
             _ => {
                 todo!("Layout for box type: {:?}", self._box_type);
             }

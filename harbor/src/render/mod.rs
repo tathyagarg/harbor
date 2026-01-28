@@ -355,6 +355,7 @@ impl WindowState {
             }
             BoxType::Inline => {
                 render_pass.set_pipeline(&self.line_render_pipeline);
+
                 let adj_position = (
                     layout_box.position().0 as f64 + position.0,
                     layout_box.position().1 as f64 + position.1,
@@ -501,8 +502,8 @@ impl WindowState {
 
         for child in &layout_box.children {
             let new_position = (
-                layout_box.position().0 + position.0,
-                layout_box.position().1 + position.1,
+                layout_box.position().0 + position.0 + layout_box.margin().left(),
+                layout_box.position().1 + position.1 + layout_box.margin().top(),
             );
 
             self.render_box(child.borrow().clone(), new_position, parents, render_pass);

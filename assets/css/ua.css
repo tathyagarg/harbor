@@ -31,22 +31,63 @@
  * with "Alpha" font.
  * */
 
+area, base, basefont, datalist, head, link, meta, noembed,
+noframes, param, rp, script, style, template, title {
+  display: none;
+}
+
+html, body { display: block; }
+
 html {
   font-family: "Times New Roman";
 }
 
 body {
-  margin: 16px;
+  margin: 8px;
   background-color: white;
   color: black;
   font-size: 32px;
 }
 
-html, body, h1, h2, h3, ul, p, div {
+address, blockquote, center, dialog, div, figure, figcaption, footer, form,
+header, hr, legend, listing, main, p, plaintext, pre, search, xmp {
   display: block;
 }
 
-ol {
+blockquote, figure, listing, p, plaintext, pre, xmp {
+  /* NOTE: This is actually margin-block */
+  margin: 1em 0;
+}
+
+address { font-style: italic; }
+
+cite, dfn, em, i, var { font-style: italic; }
+b, strong {font-weight: bolder; }
+big { font-size: larger; }
+small { font-size: smaller; }
+
+article, aside, h1, h2, h3, h4, h5, h6, hgroup, nav, section {
+  display: block;
+}
+
+h1, h2, h3, h4, h5, h6 { font-weight: bold; }
+
+h1 { font-size: 2em; margin: 0.67em 0; }
+h2 { font-size: 1.5em; margin: 0.83em 0; }
+h3 { font-size: 1.17em; margin: 1em 0; }
+h4 { font-size: 1em; margin: 1.33em 0; }
+h5 { font-size: 0.83em; margin: 1.67em 0; }
+h6 { font-size: 0.67em; margin: 2.33em 0; }
+
+dir, dd, dl, dt, menu, ol, ul { display: block; }
+/* TODO: text-align
+ * li { display: list-item; text-align: match-parent; } */
+li { display: list-item; }
+
+/* NOTE: This is actually supposed to be margin-block */
+dir, dl, menu, ol, ul { margin: 1em 0; }
+
+ul, ol {
   display: block;
 }
 
@@ -61,61 +102,7 @@ main {
 
 li {
   display: list-item;
-  margin-left: 1.5em;
-}
-
-span, a, em, strong, b, i {
-  display: inline;
-}
-
-strong, b {
-  font-weight: bold;
-}
-
-em, i {
-  font-style: italic;
-}
-
-h1 {
-  display: block;
-  font-size: 2em;
-  font-weight: bold;
-  margin: 0.67em 0;
-}
-
-h2 {
-  display: block;
-  font-size: 1.5em;
-  font-weight: bold;
-  margin: 0.83em 0;
-}
-
-h3 {
-  display: block;
-  font-size: 1.17em;
-  font-weight: bold;
-  margin: 1em 0;
-}
-
-h4 {
-  display: block;
-  font-size: 1em;
-  font-weight: bold;
-  margin: 1.33em 0;
-}
-
-h5 {
-  display: block;
-  font-size: 0.83em;
-  font-weight: bold;
-  margin: 1.67em 0;
-}
-
-h6 {
-  display: block;
-  font-size: 0.67em;
-  font-weight: bold;
-  margin: 2.33em 0;
+  margin-left: 0.75em;
 }
 
 a {
