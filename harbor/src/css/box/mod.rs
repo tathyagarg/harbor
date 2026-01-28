@@ -11,10 +11,11 @@ use crate::{
         cssom::{CSSDeclaration, ComputedStyle},
         properties::{
             Background, CSSParseable, Display, Font, FontFamily, FontSize, FontStyle, FontWeight,
-            Image, LineHeight, Margin, MarginValue, Origin, Position, RepeatStyle, WidthValue,
+            Image, LineHeight, Margin, MarginValue, Origin, Position, PositionValue, RepeatStyle,
+            WidthValue,
         },
     },
-    globals::FONTS,
+    globals::{DEFAULT_FONT_FAMILY, FONTS},
     html5::dom::{Document, Element, NodeKind},
     infra::InputStream,
 };
@@ -750,7 +751,7 @@ impl Box {
                             break Some(f);
                         }
                     } else {
-                        break FONTS.get("Times New Roman");
+                        break FONTS.get(DEFAULT_FONT_FAMILY);
                     }
                 };
 
@@ -791,6 +792,7 @@ impl Box {
 
                         last_was_space = ch == ' ';
                         new_data.push(ch);
+
                         let aw = font
                             .and_then(|font| {
                                 font.advance_width(
@@ -800,7 +802,16 @@ impl Box {
                                 // .map(|aw| aw as f64 * self._font_size.unwrap_or(16.0))
                                 .map(|aw| aw as f64 * scale)
                             })
-                            .unwrap_or(0.0);
+                            .unwrap_or_else(|| {
+                                font.and_then(|font| {
+                                    font.rawdog_advance_width(
+                                        font.glyph_index(ch as u32)
+                                            .unwrap_or_else(|| font.last_glyph_index().unwrap()),
+                                    )
+                                })
+                                .map(|aw| aw as f64 * scale)
+                                .unwrap_or(0.0)
+                            });
 
                         pen_x += aw;
                     } else {
@@ -813,7 +824,7 @@ impl Box {
                     ._content_height
                     .max(style.font.resolved_line_height().unwrap_or(19.2));
 
-                self._content_width = pen_x;
+                self._content_width = self._content_width.max(pen_x);
             }
             NodeKind::Element(e) => {
                 if e.borrow().local_name.as_str() == "br" {
@@ -907,7 +918,7 @@ fn handle_background_property(declaration: &CSSDeclaration, style: &mut Computed
             style.background.set_repeat_styles(repeat);
         }
         "background-position" => {
-            let position = Position::parse_multiple_positions(&mut stream);
+            let position = PositionValue::parse_multiple_positions(&mut stream);
             style.background.set_positions(position);
         }
         "background-origin" => {
@@ -1053,6 +1064,10 @@ pub fn handle_declaration(
         }
         prop if prop.starts_with("margin-") => {
             handle_margin_property(declaration, style);
+        }
+        "position" => {
+            let mut stream = InputStream::new(&declaration.value);
+            style.position = Position::from_cv(&mut stream).unwrap_or_default();
         }
         _ => {
             // todo!(

@@ -266,6 +266,8 @@ impl TTCData {
                 ..
             }) = table_directory.get_table_record(b"head")
             {
+                println!("head_table.mac_style: {:?}", head_table.mac_style);
+
                 let mac_style = head_table.mac_style;
                 if mac_style & MacStyle::Italic == 0 && mac_style & MacStyle::Bold == 0 {
                     return Some(table_directory);
@@ -273,6 +275,7 @@ impl TTCData {
             }
         }
 
+        println!("No regular font found in TTCData");
         None
     }
 }

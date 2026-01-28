@@ -9,6 +9,7 @@ use crate::{
         layout::Layout,
         properties::FontStyle,
     },
+    globals::DEFAULT_FONT_FAMILY,
     html5::dom::{Document, Element, NodeKind},
     render::{
         Globals, RendererIdentifier, WindowOptions, fill_descriptor,
@@ -97,6 +98,43 @@ impl WindowState {
                 }
             }
             BoxType::Inline => {
+                let bg_color = layout_box
+                    .style()
+                    .map(|s| s.background.color().used())
+                    .unwrap_or([0.0, 0.0, 0.0, 0.0]);
+                if bg_color[3] > 0.0 {
+                    render_pass.set_pipeline(&self.fill_render_pipeline);
+
+                    let window_size = self.window.inner_size();
+
+                    let pixel_x =
+                        (layout_box.position().0 + position.0 + layout_box.margin().left()) as f32;
+                    let pixel_y =
+                        (layout_box.position().1 + position.1 + layout_box.margin().top()) as f32;
+
+                    let x_pos = (pixel_x / window_size.width as f32) * 2.0 - 1.0;
+                    let y_pos = 1.0 - (pixel_y / window_size.height as f32) * 2.0;
+
+                    let pixel_w = layout_box.content_edges().horizontal() as f32;
+                    let pixel_h = layout_box.content_edges().vertical() as f32;
+
+                    let width = (pixel_w / window_size.width as f32) * 2.0;
+                    let height = (pixel_h / window_size.height as f32) * 2.0;
+
+                    let verts = rectangle_at(x_pos, y_pos, width, height, bg_color);
+
+                    let bg_vertex_buffer =
+                        self.device
+                            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                                label: Some("Inline Background Vertex Buffer"),
+                                contents: bytemuck::cast_slice(&verts),
+                                usage: wgpu::BufferUsages::VERTEX,
+                            });
+
+                    render_pass.set_vertex_buffer(0, bg_vertex_buffer.slice(..));
+                    render_pass.draw(0..verts.len() as u32, 0..1);
+                }
+
                 render_pass.set_pipeline(&self.line_render_pipeline);
 
                 let adj_position = (
@@ -132,7 +170,7 @@ impl WindowState {
                                         .entries
                                         .first()
                                         .map(|f| f.value())
-                                        .unwrap_or("Times New Roman".to_string()),
+                                        .unwrap_or(DEFAULT_FONT_FAMILY.to_string()),
                                     font_weight,
                                     italic,
                                 })
@@ -144,7 +182,7 @@ impl WindowState {
                                                 .entries
                                                 .first()
                                                 .map(|f| f.value())
-                                                .unwrap_or("Times New Roman".to_string()),
+                                                .unwrap_or(DEFAULT_FONT_FAMILY.to_string()),
                                         )
                                         .cloned()
                                         .unwrap()

@@ -4,6 +4,8 @@ use crate::font::{self};
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock};
 
+pub const DEFAULT_FONT_FAMILY: &str = "sans-serif";
+
 pub static FONTS: LazyLock<HashMap<String, Arc<TTCData>>> = LazyLock::new(|| {
     let arial = Arc::new(font::parse_ttc(include_bytes!("../../res/fonts/Arial.ttc")));
 

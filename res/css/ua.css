@@ -39,7 +39,7 @@ noframes, param, rp, script, style, template, title {
 html, body { display: block; }
 
 html {
-  font-family: "Times New Roman";
+  font-family: "Arial", sans-serif;
 }
 
 body {

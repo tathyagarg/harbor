@@ -403,6 +403,21 @@ impl TableDirectory {
         None
     }
 
+    pub fn rawdog_advance_width(&self, glyph_index: GLYPH_ID) -> Option<uint16> {
+        if let Some(glyf_record) = self.get_table_record(b"glyf") {
+            if let TableRecordData::Glyf(glyf_table) = &glyf_record._data {
+                if let Some(glyph) = glyf_table.glyphs.get(glyph_index as usize) {
+                    let delta = glyph.header.x_max - glyph.header.x_min;
+                    let scaled = delta as f32 * 1.10;
+
+                    return Some(scaled.ceil() as uint16);
+                }
+            }
+        }
+
+        None
+    }
+
     pub fn raw_line_gap(&self) -> Option<int16> {
         if let Some(hhea_record) = self.get_table_record(b"hhea") {
             if let TableRecordData::HHea(hhea_table) = &hhea_record._data {

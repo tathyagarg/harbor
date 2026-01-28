@@ -189,10 +189,33 @@ impl MatchesElement for CompoundSelector {
             }
         } else {
             for subclass in &self.subclass_selectors {
-                todo!("Implement matching for SubclassSelector: {:?}", subclass);
+                match subclass {
+                    SubclassSelector::IDSelector(id_selector) => {
+                        if element.get_attribute("id").as_deref() != Some(&id_selector.value) {
+                            return false;
+                        }
+                    }
+                    SubclassSelector::ClassSelector(class_selector) => {
+                        let class_attr = element.get_attribute("class");
+                        if let Some(class_attr) = class_attr {
+                            let classes: Vec<&str> = class_attr.split_whitespace().collect();
+                            if !classes.contains(&class_selector.as_str()) {
+                                return false;
+                            }
+                        } else {
+                            return false;
+                        }
+                    }
+                    _ => {
+                        todo!(
+                            "Implement matching for other SubclassSelectors: {:?}",
+                            subclass
+                        );
+                    }
+                }
             }
 
-            false
+            return true;
         }
     }
 }

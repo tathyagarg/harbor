@@ -147,7 +147,7 @@ pub struct Background {
 pub struct BackgroundLayer {
     pub image: Image,
     pub color: Color,
-    pub position: Position,
+    pub position: PositionValue,
     pub repeat_style: RepeatStyle,
     pub origin: Origin,
 }
@@ -157,7 +157,7 @@ impl Default for BackgroundLayer {
         BackgroundLayer {
             image: Image::None,
             color: Color::transparent(),
-            position: Position::default(),
+            position: PositionValue::default(),
             repeat_style: RepeatStyle::Repeat,
             origin: Origin::PaddingBox,
         }
@@ -254,7 +254,7 @@ impl Background {
         }
     }
 
-    pub fn set_positions(&mut self, positions: Vec<Position>) {
+    pub fn set_positions(&mut self, positions: Vec<PositionValue>) {
         for (i, position) in positions.into_iter().enumerate() {
             if i < self.layers.len() {
                 self.layers[i].position = position;
@@ -307,7 +307,7 @@ impl BackgroundLayer {
                 continue;
             }
 
-            if let Some(position) = Position::from_cv(cvs) {
+            if let Some(position) = PositionValue::from_cv(cvs) {
                 layer.position = position;
                 continue;
             }
@@ -363,14 +363,14 @@ pub enum PositionDirection {
 }
 
 #[derive(Debug, Clone)]
-pub struct Position {
+pub struct PositionValue {
     pub x: (PositionDirection, LengthPercentage),
     pub y: (PositionDirection, LengthPercentage),
 }
 
-impl Default for Position {
+impl Default for PositionValue {
     fn default() -> Self {
-        Position {
+        Self {
             x: (
                 PositionDirection::Center,
                 LengthPercentage::Length(Dimension {
@@ -391,12 +391,12 @@ impl Default for Position {
     }
 }
 
-impl CSSParseable for Position {
+impl CSSParseable for PositionValue {
     fn from_cv(cvs: &mut InputStream<ComponentValue>) -> Option<Self> {
         if let Some(tok) = cvs.consume() {
             match tok {
                 ComponentValue::Token(CSSToken::Ident(ident)) => match ident.as_str() {
-                    "left" => Some(Position {
+                    "left" => Some(Self {
                         x: (
                             PositionDirection::Left,
                             LengthPercentage::Length(Dimension {
@@ -407,7 +407,7 @@ impl CSSParseable for Position {
                         ),
                         ..Default::default()
                     }),
-                    "center" => Some(Position {
+                    "center" => Some(Self {
                         x: (
                             PositionDirection::Center,
                             LengthPercentage::Length(Dimension {
@@ -425,7 +425,7 @@ impl CSSParseable for Position {
                             }),
                         ),
                     }),
-                    "right" => Some(Position {
+                    "right" => Some(Self {
                         x: (
                             PositionDirection::Right,
                             LengthPercentage::Length(Dimension {
@@ -436,7 +436,7 @@ impl CSSParseable for Position {
                         ),
                         ..Default::default()
                     }),
-                    "top" => Some(Position {
+                    "top" => Some(Self {
                         y: (
                             PositionDirection::Top,
                             LengthPercentage::Length(Dimension {
@@ -447,7 +447,7 @@ impl CSSParseable for Position {
                         ),
                         ..Default::default()
                     }),
-                    "bottom" => Some(Position {
+                    "bottom" => Some(Self {
                         y: (
                             PositionDirection::Bottom,
                             LengthPercentage::Length(Dimension {
@@ -463,7 +463,7 @@ impl CSSParseable for Position {
                         None
                     }
                 },
-                ComponentValue::Token(CSSToken::Percentage(perc)) => Some(Position {
+                ComponentValue::Token(CSSToken::Percentage(perc)) => Some(Self {
                     x: (
                         PositionDirection::Center,
                         LengthPercentage::Percentage(perc.clone()),
@@ -473,7 +473,7 @@ impl CSSParseable for Position {
                         LengthPercentage::Percentage(perc.clone()),
                     ),
                 }),
-                ComponentValue::Token(CSSToken::Dimension(dim)) => Some(Position {
+                ComponentValue::Token(CSSToken::Dimension(dim)) => Some(Self {
                     x: (
                         PositionDirection::Center,
                         LengthPercentage::Length(dim.clone()),
@@ -494,8 +494,8 @@ impl CSSParseable for Position {
     }
 }
 
-impl Position {
-    pub fn parse_multiple_positions(cvs: &mut InputStream<ComponentValue>) -> Vec<Position> {
+impl PositionValue {
+    pub fn parse_multiple_positions(cvs: &mut InputStream<ComponentValue>) -> Vec<Self> {
         let mut cvs = InputStream::new(
             &cvs.finish()
                 .iter()
@@ -512,7 +512,7 @@ impl Position {
 
         let mut positions = Vec::new();
 
-        while let Some(position) = Position::from_cv(&mut cvs) {
+        while let Some(position) = Self::from_cv(&mut cvs) {
             positions.push(position);
         }
 
@@ -1630,5 +1630,40 @@ impl CSSParseable for Margin {
             }),
             _ => None,
         }
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub enum Position {
+    #[default]
+    Static,
+    Relative,
+    Absolute,
+    Fixed,
+    Sticky,
+    // TODO: running()
+}
+
+impl CSSParseable for Position {
+    fn from_cv(cvs: &mut InputStream<ComponentValue>) -> Option<Self>
+    where
+        Self: Sized,
+    {
+        if let Some(tok) = cvs.consume() {
+            match tok {
+                ComponentValue::Token(CSSToken::Ident(ident)) => match ident.as_str() {
+                    "static" => return Some(Position::Static),
+                    "relative" => return Some(Position::Relative),
+                    "absolute" => return Some(Position::Absolute),
+                    "fixed" => return Some(Position::Fixed),
+                    "sticky" => return Some(Position::Sticky),
+                    _ => {}
+                },
+                _ => {}
+            }
+        }
+
+        cvs.reconsume();
+        None
     }
 }
