@@ -1,61 +1,67 @@
-use crate::{css::colors::UsedColor, render::text::Vertex};
+use crate::{css::colors::UsedColor, render::ColoredVertex};
 
 /// Gives vertices with 3D positions for a rectangle starting at (0,0) to be built with a triangle
 /// list
-pub fn rectangle_vertices(width: f32, height: f32, color: UsedColor) -> Vec<Vertex> {
+pub fn rectangle_vertices(width: f32, height: f32, color: UsedColor) -> Vec<ColoredVertex> {
     vec![
-        Vertex {
-            position: [0.0, 0.0, 0.0],
+        ColoredVertex {
+            position: [0.0, 0.0],
             color,
         },
-        Vertex {
-            position: [width, 0.0, 0.0],
+        ColoredVertex {
+            position: [width, 0.0],
             color,
         },
-        Vertex {
-            position: [width, height, 0.0],
+        ColoredVertex {
+            position: [width, height],
             color,
         },
-        Vertex {
-            position: [0.0, 0.0, 0.0],
+        ColoredVertex {
+            position: [0.0, 0.0],
             color,
         },
-        Vertex {
-            position: [width, height, 0.0],
+        ColoredVertex {
+            position: [width, height],
             color,
         },
-        Vertex {
-            position: [0.0, height, 0.0],
+        ColoredVertex {
+            position: [0.0, height],
             color,
         },
     ]
 }
 
 /// positions are in ndc
-pub fn rectangle_at(x: f32, y: f32, width: f32, height: f32, color: UsedColor) -> Vec<Vertex> {
+pub fn rectangle_at(
+    x: f32,
+    y: f32,
+    width: f32,
+    height: f32,
+    color: UsedColor,
+) -> Vec<ColoredVertex> {
     vec![
-        Vertex {
-            position: [x, y, 0.0],
+        ColoredVertex {
+            position: [x, y],
             color,
         },
-        Vertex {
-            position: [x + width, y, 0.0],
+        ColoredVertex {
+            position: [x + width, y],
             color,
         },
-        Vertex {
-            position: [x + width, y - height, 0.0],
+        ColoredVertex {
+            position: [x + width, y - height],
             color,
         },
-        Vertex {
-            position: [x, y, 0.0],
+        ColoredVertex {
+            position: [x, y],
             color,
         },
-        Vertex {
-            position: [x + width, y - height, 0.0],
+        ColoredVertex {
+            position: [x + width, y - height],
             color,
         },
-        Vertex {
-            position: [x, y - height, 0.0],
+        ColoredVertex {
+            position: [x, y - height],
             color,
         },
     ]
@@ -69,14 +75,13 @@ pub fn circle_at(
     color: UsedColor,
     screen_width: f32,
     screen_height: f32,
-) -> Vec<Vertex> {
+) -> Vec<ColoredVertex> {
     let mut vertices = Vec::with_capacity((segments * 3) as usize);
 
-    let to_clip = |x: f32, y: f32| -> [f32; 3] {
+    let to_clip = |x: f32, y: f32| -> [f32; 2] {
         [
             (x / screen_width) * 2.0 - 1.0,
             1.0 - (y / screen_height) * 2.0,
-            0.0, // z-coordinate
         ]
     };
 
@@ -93,15 +98,15 @@ pub fn circle_at(
         let y2 = center_y + radius * theta2.sin();
 
         // Triangle vertices
-        vertices.push(Vertex {
+        vertices.push(ColoredVertex {
             position: center,
             color,
         });
-        vertices.push(Vertex {
+        vertices.push(ColoredVertex {
             position: to_clip(x1, y1),
             color,
         });
-        vertices.push(Vertex {
+        vertices.push(ColoredVertex {
             position: to_clip(x2, y2),
             color,
         });

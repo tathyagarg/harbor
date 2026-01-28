@@ -14,6 +14,8 @@ pub mod otf_dtypes {
 
     use std::str::Utf8Error;
 
+    pub type GLYPH_ID = u16;
+
     pub type uint8 = u8;
     pub type int8 = i8;
     pub type uint16 = u16;

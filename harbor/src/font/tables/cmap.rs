@@ -690,7 +690,7 @@ impl CMAPTable {
         self.encoding_records.push(record);
     }
 
-    pub fn char_to_glyph_index(&self, char_code: u32) -> Option<uint16> {
+    pub fn char_to_glyph_index(&self, char_code: u32) -> Option<GLYPH_ID> {
         for subtable in &self.subtables {
             match subtable {
                 CMAPSubtable::Format0(st) => {

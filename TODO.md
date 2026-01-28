@@ -1,0 +1,3 @@
+- [ ] Cleanup redundant code
+- [ ] Update README file
+- [ ] Make a website for the project

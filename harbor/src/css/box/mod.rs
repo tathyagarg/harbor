@@ -509,7 +509,8 @@ impl Box {
                 content_box._position_x = Some(content_box._margin.left());
                 content_box._position_y = Some(content_box._margin.top());
 
-                self._content_width = marker_width + content_width + content_box._margin.left();
+                self._content_width =
+                    marker_width + content_width + content_box._margin.horizontal();
                 self._content_height = marker_height.max(content_height);
 
                 (self._content_width, self._content_height, true)
@@ -519,9 +520,9 @@ impl Box {
                 self._content_height = self.get_font_size();
 
                 self._position_x = Some(self._content_width / 2.0);
-                self._position_y = Some(self.get_line_height() * 0.67);
+                self._position_y = Some(self.get_line_height() * 0.5);
 
-                (0.0, 0.0, false)
+                (self._content_width, self._content_height, false)
             }
             BoxType::None => (0.0, 0.0, false),
             _ => {
@@ -652,7 +653,7 @@ impl Box {
                         cursor_y += child.get_line_height();
                     }
 
-                    self._content_width = self._content_width.max(w);
+                    self._content_width = self._content_width.max(w + child._margin.horizontal());
                     prev_child = Some(child_box_rc.clone());
                 }
                 _ => {
@@ -675,7 +676,7 @@ impl Box {
                         cursor_y += child.get_line_height();
                     }
 
-                    self._content_width = self._content_width.max(w);
+                    self._content_width = self._content_width.max(w + child._margin.horizontal());
                 }
             }
         }
@@ -794,8 +795,7 @@ impl Box {
                             .and_then(|font| {
                                 font.advance_width(
                                     font.glyph_index(ch as u32)
-                                        .unwrap_or_else(|| font.last_glyph_index().unwrap())
-                                        as usize,
+                                        .unwrap_or_else(|| font.last_glyph_index().unwrap()),
                                 )
                                 // .map(|aw| aw as f64 * self._font_size.unwrap_or(16.0))
                                 .map(|aw| aw as f64 * scale)
@@ -812,6 +812,8 @@ impl Box {
                 self._content_height = self
                     ._content_height
                     .max(style.font.resolved_line_height().unwrap_or(19.2));
+
+                self._content_width = pen_x;
             }
             NodeKind::Element(e) => {
                 if e.borrow().local_name.as_str() == "br" {
@@ -846,21 +848,20 @@ impl Box {
                     self._content_height = self._content_height.max(line_height);
 
                     if go_to_next_line {
-                        println!("Element Inline child requested line break");
+                        self._content_width = self._content_width.max(pen_x);
                         pen_x = 0.0;
                         pen_y += line_height;
                     }
                 }
+
+                self._content_width = self._content_width.max(pen_x);
 
                 parents.pop();
             }
             _ => {}
         }
 
-        let total_width = pen_x - 0.0;
-        self._content_width = total_width;
-
-        (total_width, self._content_height, false)
+        (self._content_width, self._content_height, false)
     }
 }
 

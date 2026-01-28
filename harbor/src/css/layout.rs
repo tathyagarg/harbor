@@ -2,8 +2,11 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::font::ttf::ParsedTableDirectory;
-use crate::render::TextRenderer;
+use wgpu::{Buffer, Device};
+
+use crate::font::ttf::TableDirectory;
+use crate::render::text::GlyphInstance;
+use crate::render::{RendererIdentifier, TextRenderer};
 
 use crate::globals::FONTS;
 
@@ -15,8 +18,7 @@ pub struct Layout {
     pub document: Rc<RefCell<Document>>,
     pub root_box: Option<Rc<RefCell<r#box::Box>>>,
 
-    pub available_fonts: HashMap<String, ParsedTableDirectory>,
-    pub _renderers: HashMap<String, Option<TextRenderer>>,
+    pub _renderers: HashMap<RendererIdentifier, Option<TextRenderer>>,
 
     _window_size: (f64, f64),
 }
@@ -26,7 +28,6 @@ impl Layout {
         Layout {
             document,
             root_box: None,
-            available_fonts: HashMap::new(),
             _renderers: HashMap::new(),
             _window_size: window_size,
         }
@@ -49,15 +50,11 @@ impl Layout {
             );
         }
 
-        for (_, renderer) in self._renderers.iter_mut() {
-            if let Some(r) = renderer {
-                r.resized((self._window_size.0 as f32, self._window_size.1 as f32));
-            }
-        }
-    }
-
-    pub fn register_font(&mut self, font_name: &str, font: ParsedTableDirectory) {
-        self.available_fonts.insert(font_name.to_string(), font);
+        // for (_, renderer) in self._renderers.iter_mut() {
+        //     if let Some(r) = renderer {
+        //         r.resized((self._window_size.0 as f32, self._window_size.1 as f32));
+        //     }
+        // }
     }
 
     pub fn resized(&mut self, new_size: (f64, f64)) {
@@ -65,14 +62,31 @@ impl Layout {
         self.layout();
     }
 
-    pub fn populate_renderers(&mut self, window_size: (f32, f32)) {
-        for (font_name, font) in FONTS.iter() {
-            let renderer = TextRenderer {
-                font: Some(font.clone()),
-                window_size,
-                ..Default::default()
-            };
-            self._renderers.insert(font_name.clone(), Some(renderer));
+    pub fn populate_renderers(&mut self, device: &Device) {
+        for (font_name, font_collection) in FONTS.iter() {
+            for font in &font_collection.table_directories {
+                let identifier = RendererIdentifier {
+                    font_family: font_name.clone(),
+                    font_weight: font.get_weight().unwrap_or(400),
+                    italic: font.is_italic(),
+                };
+
+                let renderer = TextRenderer {
+                    _associated_italic: identifier.italic,
+                    _associated_weight: identifier.font_weight,
+                    font: font.clone(),
+                    glyph_cache: HashMap::new(),
+                };
+
+                self._renderers.insert(identifier, Some(renderer));
+            }
         }
+
+        // for (font_name, font) in FONTS.iter() {
+        //     let renderer = TextRenderer {
+        //         font: Some(font.clone()),
+        //     };
+        //     self._renderers.insert(font_name.clone(), Some(renderer));
+        // }
     }
 }

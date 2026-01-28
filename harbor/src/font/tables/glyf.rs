@@ -71,28 +71,32 @@ pub struct GlyphHeader {
     pub y_max: int16,
 }
 
-#[derive(Clone, Debug)]
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Point {
-    pub x: int16,
-    pub y: int16,
+    pub x: f32,
+    pub y: f32,
 
-    pub on_curve: bool,
+    pub on_curve: uint32,
 }
+
+pub const FALSE: uint32 = 0;
+pub const TRUE: uint32 = 1;
 
 impl Point {
     pub fn empty() -> Self {
         Point {
-            x: 0,
-            y: 0,
-            on_curve: false,
+            x: 0.0,
+            y: 0.0,
+            on_curve: FALSE,
         }
     }
 
     pub fn midpoint(first: &Point, second: &Point) -> Self {
         Point {
-            x: ((first.x as i32 + second.x as i32) / 2) as int16,
-            y: ((first.y as i32 + second.y as i32) / 2) as int16,
-            on_curve: true,
+            x: (first.x + second.x) / 2.0,
+            y: (first.y + second.y) / 2.0,
+            on_curve: TRUE,
         }
     }
 
@@ -122,18 +126,18 @@ impl Point {
         if let Some(transform) = transform {
             match transform {
                 GlyphTransform::Scale(s) => Point {
-                    x: ((self.x as f32) * s) as int16,
-                    y: ((self.y as f32) * s) as int16,
+                    x: self.x * s,
+                    y: self.y * s,
                     on_curve: self.on_curve,
                 },
                 GlyphTransform::ScaleXY { x_scale, y_scale } => Point {
-                    x: ((self.x as f32) * x_scale) as int16,
-                    y: ((self.y as f32) * y_scale) as int16,
+                    x: self.x * x_scale,
+                    y: self.y * y_scale,
                     on_curve: self.on_curve,
                 },
                 GlyphTransform::Matrix { a, b, c, d } => Point {
-                    x: ((self.x as f32) * a + (self.y as f32) * c) as int16,
-                    y: ((self.x as f32) * b + (self.y as f32) * d) as int16,
+                    x: (self.x * a + self.y * c),
+                    y: (self.x * b + self.y * d),
                     on_curve: self.on_curve,
                 },
             }
@@ -142,7 +146,7 @@ impl Point {
         }
     }
 
-    pub fn translate(&self, dx: int16, dy: int16) -> Self {
+    pub fn translate(&self, dx: f32, dy: f32) -> Self {
         Point {
             x: self.x + dx,
             y: self.y + dy,
@@ -157,10 +161,10 @@ impl Point {
         (scaled_x, scaled_y)
     }
 
-    pub fn vertex_position(&self, origin: (f32, f32), scale: f32) -> [f32; 3] {
+    pub fn vertex_position(&self, origin: (f32, f32), scale: f32) -> [f32; 2] {
         let (scaled_x, scaled_y) = self.vertex_coords(origin, scale);
 
-        [scaled_x, scaled_y, 0.0]
+        [scaled_x, scaled_y]
     }
 }
 
@@ -181,15 +185,15 @@ impl Contour {
             let current_point = &self.points[i];
             let next_point = &self.points[(i + 1) % num_points];
 
-            if current_point.on_curve && next_point.on_curve {
+            if current_point.on_curve == TRUE && next_point.on_curve == TRUE {
                 // Line segment
                 segments.push(Segment::Line(current_point.clone(), next_point.clone()));
-            } else if current_point.on_curve && !next_point.on_curve {
+            } else if current_point.on_curve == TRUE && next_point.on_curve == FALSE {
                 // Quadratic Bezier segment
                 let after_next_point = &self.points[(i + 2) % num_points];
 
                 let control_point = next_point.clone();
-                let end_point = if after_next_point.on_curve {
+                let end_point = if after_next_point.on_curve == TRUE {
                     after_next_point.clone()
                 } else {
                     Point::midpoint(next_point, after_next_point)
@@ -439,13 +443,13 @@ impl TableTrait for GlyfTable {
                 for contour in &mut contours {
                     for i in 0..contour.length {
                         contour.points[i].on_curve =
-                            (flags[curr_point_index] & SimpleGlyphFlags::OnCurvePoint) != 0;
+                            (flags[curr_point_index] & SimpleGlyphFlags::OnCurvePoint) as uint32;
 
                         curr_point_index += 1;
                     }
                 }
 
-                let mut prev_x = 0;
+                let mut prev_x = 0.0;
                 let mut curr_flag_index = 0;
 
                 for contour in &mut contours {
@@ -474,14 +478,14 @@ impl TableTrait for GlyfTable {
 
                                 dx
                             }
-                        };
+                        } as f32;
 
                         contour.points[i].x = prev_x + dx;
                         prev_x = contour.points[i].x;
                     }
                 }
 
-                let mut prev_y = 0;
+                let mut prev_y = 0.0;
                 curr_flag_index = 0;
 
                 for contour in &mut contours {
@@ -510,7 +514,7 @@ impl TableTrait for GlyfTable {
 
                                 dy
                             }
-                        };
+                        } as f32;
 
                         contour.points[i].y = prev_y + dy;
                         prev_y = contour.points[i].y;

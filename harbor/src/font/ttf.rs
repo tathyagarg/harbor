@@ -3,15 +3,15 @@
 
 use std::fmt::Debug;
 
-use crate::css::colors::UsedColor;
 use crate::font::otf_dtypes::*;
-use crate::font::tables::glyf::{CompositeGlyphFlags, GlyphDataType, Point};
+use crate::font::tables::glyf::{CompositeGlyphFlags, FALSE, GlyphDataType, Point, TRUE};
+use crate::font::tables::head::MacStyle;
 use crate::font::tables::os2::OS2Table;
 use crate::font::tables::{
     ParseContext, TableTrait, cmap, cvt, fpgm, gasp, glyf, hdmx, head, hhea, hmtx, loca, maxp,
     meta, name, os2, post, prep,
 };
-use crate::render::text::{Segment, Vertex};
+use crate::render::text::Segment;
 
 #[derive(Clone)]
 pub enum TableRecordData {
@@ -265,56 +265,8 @@ impl TableRecord {
     }
 }
 
+#[derive(Clone)]
 pub struct TableDirectory {
-    /// 0x00010000 or 0x4F54544F ('OTTO') — see below.
-    pub sfnt_version: uint32,
-
-    /// Number of tables.
-    pub num_tables: uint16,
-
-    /// Maximum power of 2 less than or equal to numTables, times 16 ((2**floor(log2(numTables))) * 16,
-    /// where “**” is an exponentiation operator).
-    pub search_range: uint16,
-
-    /// Log2 of the maximum power of 2 less than or equal to numTables (log2(searchRange/16),
-    /// which is equal to floor(log2(numTables))).
-    pub entry_selector: uint16,
-
-    /// numTables times 16, minus searchRange ((numTables * 16) - searchRange).
-    pub range_shift: uint16,
-
-    /// Table records array—one for each top-level table in the font.
-    pub table_records: Vec<TableRecord>,
-
-    _maxp_num_glyphs: Option<usize>,
-    _hhea_num_h_metrics: Option<usize>,
-    _head_mac_style: Option<uint16>,
-    _head_index_to_loc_format: Option<int16>,
-    _loca_offsets: Option<Vec<uint32>>,
-
-    _deferred_parse_queue: Vec<(Tag, Offset32, uint32, Box<dyn Fn(&TableDirectory) -> bool>)>,
-}
-
-impl TableDirectory {
-    pub fn complete(&self) -> ParsedTableDirectory {
-        ParsedTableDirectory {
-            sfnt_version: self.sfnt_version,
-            num_tables: self.num_tables,
-            search_range: self.search_range,
-            entry_selector: self.entry_selector,
-            range_shift: self.range_shift,
-            table_records: self.table_records.clone(),
-            _maxp_num_glyphs: self._maxp_num_glyphs,
-            _hhea_num_h_metrics: self._hhea_num_h_metrics,
-            _head_mac_style: self._head_mac_style,
-            _head_index_to_loc_format: self._head_index_to_loc_format,
-            _loca_offsets: self._loca_offsets.clone(),
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct ParsedTableDirectory {
     /// 0x00010000 or 0x4F54544F ('OTTO') — see below.
     pub sfnt_version: uint32,
 
@@ -375,7 +327,6 @@ impl TableDirectory {
             _head_mac_style: None,
             _head_index_to_loc_format: None,
             _loca_offsets: None,
-            _deferred_parse_queue: Vec::new(),
         }
     }
 
@@ -388,16 +339,8 @@ impl TableDirectory {
             .iter()
             .find(|record| &record.table_tag == tag)
     }
-}
 
-impl ParsedTableDirectory {
-    pub fn get_table_record(&self, tag: &Tag) -> Option<&TableRecord> {
-        self.table_records
-            .iter()
-            .find(|record| &record.table_tag == tag)
-    }
-
-    pub fn cmap_lookup(&self, char_code: uint32) -> Option<uint16> {
+    pub fn cmap_lookup(&self, char_code: uint32) -> Option<GLYPH_ID> {
         if let Some(cmap_record) = self.get_table_record(b"cmap") {
             if let TableRecordData::CMAP(cmap_table) = &cmap_record._data {
                 return cmap_table.char_to_glyph_index(char_code);
@@ -428,7 +371,7 @@ impl ParsedTableDirectory {
         panic!("Head table not found.");
     }
 
-    pub fn glyph_index(&self, char_code: uint32) -> Option<uint16> {
+    pub fn glyph_index(&self, char_code: uint32) -> Option<GLYPH_ID> {
         if let Some(cmap_record) = self.get_table_record(b"cmap") {
             if let TableRecordData::CMAP(cmap_table) = &cmap_record._data {
                 return cmap_table.char_to_glyph_index(char_code);
@@ -438,7 +381,7 @@ impl ParsedTableDirectory {
         None
     }
 
-    pub fn last_glyph_index(&self) -> Option<u16> {
+    pub fn last_glyph_index(&self) -> Option<GLYPH_ID> {
         if let Some(hhea_record) = self.get_table_record(b"hhea") {
             if let TableRecordData::HHea(hhea_table) = &hhea_record._data {
                 return Some(hhea_table.number_of_h_metrics - 1);
@@ -448,12 +391,12 @@ impl ParsedTableDirectory {
         None
     }
 
-    pub fn advance_width(&self, glyph_index: usize) -> Option<uint16> {
+    pub fn advance_width(&self, glyph_index: GLYPH_ID) -> Option<uint16> {
         if let Some(hmtx_record) = self.get_table_record(b"hmtx") {
             if let TableRecordData::HMtx(hmtx_table) = &hmtx_record._data {
                 return hmtx_table
                     .h_metrics
-                    .get(glyph_index)
+                    .get(glyph_index as usize)
                     .map(|h_metric| h_metric.advance_width);
             }
         }
@@ -567,13 +510,18 @@ impl ParsedTableDirectory {
 
     pub fn advance_width_from_char_code(&self, char_code: uint32) -> Option<uint16> {
         if let Some(glyph_index) = self.glyph_index(char_code) {
-            return self.advance_width(glyph_index as usize);
+            return self.advance_width(glyph_index);
         }
 
         None
     }
 
-    pub fn make_glyph_segments(&self, glyph_index: usize, precision: f32, out: &mut Vec<Segment>) {
+    pub fn make_glyph_segments(
+        &self,
+        glyph_index: GLYPH_ID,
+        precision: f32,
+        out: &mut Vec<Segment>,
+    ) {
         let glyf = match self.get_table_record(b"glyf").unwrap().data() {
             TableRecordData::Glyf(glyf_table) => glyf_table,
             _ => {
@@ -581,7 +529,7 @@ impl ParsedTableDirectory {
             }
         };
 
-        let glyph = glyf.glyphs.get(glyph_index).unwrap();
+        let glyph = glyf.glyphs.get(glyph_index as usize).unwrap();
 
         let mut segments = Vec::<Segment>::new();
 
@@ -593,9 +541,9 @@ impl ParsedTableDirectory {
                     // populate segments
                     let contour_points = contour.points.clone();
 
-                    let mut prev = if contour_points[0].on_curve {
+                    let mut prev = if contour_points[0].on_curve == TRUE {
                         contour_points[0].clone()
-                    } else if contour_points[contour_points.len() - 1].on_curve {
+                    } else if contour_points[contour_points.len() - 1].on_curve == TRUE {
                         contour_points[contour_points.len() - 1].clone()
                     } else {
                         Point::midpoint(
@@ -609,18 +557,18 @@ impl ParsedTableDirectory {
                         let mut curr = contour_points[i % contour_points.len()].clone();
                         let mut next = contour_points[(i + 1) % contour_points.len()].clone();
 
-                        if curr.on_curve && next.on_curve {
+                        if curr.on_curve == TRUE && next.on_curve == TRUE {
                             // Line segment
                             segment_part.push(Segment::Line(curr.clone(), next));
                             prev = curr;
-                        } else if curr.on_curve && !next.on_curve {
+                        } else if curr.on_curve == TRUE && next.on_curve == FALSE {
                             // Quadratic Bezier segment
-                            while !next.on_curve {
+                            while next.on_curve == FALSE {
                                 let after_next =
                                     contour_points[(i + 2) % contour_points.len()].clone();
 
                                 let control_point = next.clone();
-                                let end_point = if after_next.on_curve {
+                                let end_point = if after_next.on_curve == TRUE {
                                     after_next.clone()
                                 } else {
                                     Point::midpoint(&next, &after_next)
@@ -640,7 +588,7 @@ impl ParsedTableDirectory {
                         } else {
                             // curr is off-curve
                             let control_point = curr.clone();
-                            let end_point = if next.on_curve {
+                            let end_point = if next.on_curve == TRUE {
                                 next.clone()
                             } else {
                                 Point::midpoint(&curr, &next)
@@ -664,7 +612,7 @@ impl ParsedTableDirectory {
             GlyphDataType::Composite(composite) => {
                 for component in &composite.components {
                     let mut segment_part = Vec::<Segment>::new();
-                    let component_glyph_index = component.glyph_index as usize;
+                    let component_glyph_index = component.glyph_index;
 
                     // if let Some(post_record) = self.get_table_record(b"post") {
                     //     if let TableRecordData::Post(post_table) = &post_record._data {
@@ -686,7 +634,7 @@ impl ParsedTableDirectory {
                         let (x, y) = (component.arg1, component.arg2);
 
                         for segment in &mut segment_part {
-                            segment.translate(x, y);
+                            segment.translate(x as f32, y as f32);
                         }
 
                         let transform = &component.transform;
@@ -704,7 +652,7 @@ impl ParsedTableDirectory {
                         let (x, y) = (component.arg1, component.arg2);
 
                         for segment in &mut segment_part {
-                            segment.translate(x, y);
+                            segment.translate(x as f32, y as f32);
                         }
                     }
 
@@ -716,7 +664,7 @@ impl ParsedTableDirectory {
         out.extend(segments);
     }
 
-    pub fn make_glyph_vertices(&self, glyph_index: usize, precision: f32, out: &mut Vec<Point>) {
+    pub fn make_glyph_points(&self, glyph_index: GLYPH_ID, precision: f32, out: &mut Vec<Point>) {
         let mut segments: Vec<Segment> = Vec::new();
         self.make_glyph_segments(glyph_index, precision, &mut segments);
 
@@ -725,62 +673,98 @@ impl ParsedTableDirectory {
         }
     }
 
-    pub fn make_glyph_vertices_from_char_code(
+    pub fn make_glyph_points_from_char_code(
         &self,
         char_code: uint32,
         precision: f32,
         out: &mut Vec<Point>,
     ) {
         if let Some(glyph_index) = self.glyph_index(char_code) {
-            self.make_glyph_vertices(glyph_index as usize, precision, out);
+            self.make_glyph_points(glyph_index, precision, out);
         }
     }
 
-    pub fn make_glyph_array(&self, char_codes: &[uint32], precision: f32, out: &mut Vec<Point>) {
+    pub fn make_glyph_array_points(
+        &self,
+        char_codes: &[uint32],
+        precision: f32,
+        out: &mut Vec<Point>,
+    ) {
         for &char_code in char_codes {
             if let Some(glyph_index) = self.glyph_index(char_code) {
-                self.make_glyph_vertices(glyph_index as usize, precision, out);
+                self.make_glyph_points(glyph_index, precision, out);
             }
         }
     }
 
-    pub fn make_glyph_array_from_str(&self, text: &str, precision: f32, out: &mut Vec<Point>) {
-        let char_codes: Vec<uint32> = text.chars().map(|c| c as uint32).collect();
-        self.make_glyph_array(&char_codes, precision, out);
-    }
-
-    pub fn rasterize(
+    pub fn make_glyph_array_points_from_str(
         &self,
         text: &str,
-        color: UsedColor,
-        scale: f32,
         precision: f32,
-        origin: (f32, f32),
-        window_size: (f32, f32),
-    ) -> Vec<Vertex> {
-        let mut vertices: Vec<Vertex> = Vec::new();
+        out: &mut Vec<Point>,
+    ) {
+        let char_codes: Vec<uint32> = text.chars().map(|c| c as uint32).collect();
+        self.make_glyph_array_points(&char_codes, precision, out);
+    }
 
-        let mut pen_x = origin.0;
-        let pen_y = origin.1;
+    // pub fn rasterize(
+    //     &self,
+    //     text: &str,
+    //     color: UsedColor,
+    //     scale: f32,
+    //     precision: f32,
+    //     origin: (f32, f32),
+    //     window_size: (f32, f32),
+    // ) -> Vec<ColoredVertex> {
+    //     let mut vertices: Vec<ColoredVertex> = Vec::new();
 
-        for c in text.chars() {
-            let char_code = c as uint32;
+    //     let mut pen_x = origin.0;
+    //     let pen_y = origin.1;
 
-            if let Some(glyph_index) = self.glyph_index(char_code) {
-                let mut glyph_points: Vec<Point> = Vec::new();
-                self.make_glyph_vertices(glyph_index as usize, precision, &mut glyph_points);
+    //     for c in text.chars() {
+    //         let char_code = c as uint32;
 
-                vertices.extend(glyph_points.iter().map(|point| {
-                    Vertex::clipped_from_point(point, (pen_x, pen_y), scale, window_size, color)
-                }));
+    //         if let Some(glyph_index) = self.glyph_index(char_code) {
+    //             let mut glyph_points: Vec<Point> = Vec::new();
+    //             self.make_glyph_points(glyph_index, precision, &mut glyph_points);
 
-                if let Some(aw) = self.advance_width(glyph_index as usize) {
-                    pen_x += aw as f32 * scale;
-                }
+    //             vertices.extend(glyph_points.iter().map(|point| {
+    //                 ColoredVertex::clipped_from_point(
+    //                     point,
+    //                     (pen_x, pen_y),
+    //                     scale,
+    //                     window_size,
+    //                     color,
+    //                 )
+    //             }));
+
+    //             if let Some(aw) = self.advance_width(glyph_index) {
+    //                 pen_x += aw as f32 * scale;
+    //             }
+    //         }
+    //     }
+
+    //     vertices
+    // }
+
+    pub fn is_italic(&self) -> bool {
+        if let Some(head_record) = self.get_table_record(b"head") {
+            if let TableRecordData::Head(head_table) = &head_record._data {
+                return (head_table.mac_style & MacStyle::Italic) != 0;
             }
         }
 
-        vertices
+        false
+    }
+
+    pub fn get_weight(&self) -> Option<uint16> {
+        if let Some(os2_record) = self.get_table_record(b"OS/2") {
+            if let TableRecordData::OS2(os2_table) = &os2_record._data {
+                return os2_table.weight();
+            }
+        }
+
+        None
     }
 }
 
@@ -840,6 +824,13 @@ pub fn parse_table_directory(data: &[u8], offset: Option<usize>) -> TableDirecto
         range_shift,
     );
 
+    let mut deferred_parse_queue: Vec<(
+        Tag,
+        Offset32,
+        uint32,
+        Box<dyn Fn(&TableDirectory) -> bool>,
+    )> = Vec::new();
+
     let mut record_offset = start_offset + 12;
 
     for _ in 0..num_tables {
@@ -850,9 +841,7 @@ pub fn parse_table_directory(data: &[u8], offset: Option<usize>) -> TableDirecto
 
         if let Some(req) = TableRecord::has_unmet_requirements(table_tag) {
             if !req(&table_directory) {
-                table_directory
-                    ._deferred_parse_queue
-                    .push((table_tag, offset, length, req));
+                deferred_parse_queue.push((table_tag, offset, length, req));
                 record_offset += 16;
                 continue;
             }
@@ -868,7 +857,7 @@ pub fn parse_table_directory(data: &[u8], offset: Option<usize>) -> TableDirecto
             recorded_updates = false;
 
             'req_update: for (i, (tag, offset, length, req)) in
-                table_directory._deferred_parse_queue.iter().enumerate()
+                deferred_parse_queue.iter().enumerate()
             {
                 if req(&table_directory) {
                     recorded_updates = true;
@@ -879,7 +868,7 @@ pub fn parse_table_directory(data: &[u8], offset: Option<usize>) -> TableDirecto
                     table_directory.table_records.push(table_record);
                     update_table_directory_with_record(&mut table_directory);
 
-                    _ = table_directory._deferred_parse_queue.remove(i);
+                    _ = deferred_parse_queue.remove(i);
 
                     break 'req_update;
                 }

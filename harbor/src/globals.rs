@@ -1,19 +1,23 @@
-use crate::font::ttc::{CompleteTTCData, TTCData};
+use crate::font::ttc::TTCData;
 use crate::font::{self};
 
 use std::collections::HashMap;
-use std::sync::LazyLock;
+use std::sync::{Arc, LazyLock};
 
-pub static FONTS: LazyLock<HashMap<String, CompleteTTCData>> = LazyLock::new(|| {
+pub static FONTS: LazyLock<HashMap<String, Arc<TTCData>>> = LazyLock::new(|| {
     let fira_code_ttf = font::parse_ttf(include_bytes!("../../assets/fonts/FiraCode.ttf"));
-    let fira_code = TTCData::new(vec![fira_code_ttf]).complete();
+    let fira_code = Arc::new(TTCData::new(vec![fira_code_ttf]));
 
-    let times = font::parse_ttc(include_bytes!("../../assets/fonts/Times.ttc")).complete();
+    let times = Arc::new(font::parse_ttc(include_bytes!(
+        "../../assets/fonts/Times.ttc"
+    )));
 
     let sfns_ttf = font::parse_ttf(include_bytes!("../../assets/fonts/SFNS.ttf"));
-    let sfns = TTCData::new(vec![sfns_ttf]).complete();
+    let sfns = Arc::new(TTCData::new(vec![sfns_ttf]));
 
-    let andika = font::parse_ttc(include_bytes!("../../assets/fonts/Andika.ttc")).complete();
+    let andika = Arc::new(font::parse_ttc(include_bytes!(
+        "../../assets/fonts/Andika.ttc"
+    )));
 
     let mut map = HashMap::new();
     map.insert("FiraCode".to_string(), fira_code);

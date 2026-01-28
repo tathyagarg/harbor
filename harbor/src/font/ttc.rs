@@ -5,9 +5,7 @@ use std::fmt::Debug;
 
 use crate::font::otf_dtypes::*;
 use crate::font::tables::head::MacStyle;
-use crate::font::ttf::{
-    ParsedTableDirectory, TableDirectory, TableRecord, TableRecordData, parse_table_directory,
-};
+use crate::font::ttf::{TableDirectory, TableRecord, TableRecordData, parse_table_directory};
 
 pub struct TTCHeader_v1_0 {
     /// Font Collection ID string: 'ttcf' (used for fonts with CFF or CFF2 outlines,
@@ -184,27 +182,8 @@ impl TTCData {
         }
     }
 
-    pub fn complete(self) -> CompleteTTCData {
-        let parsed_table_directories = self
-            .table_directories
-            .into_iter()
-            .map(|td| td.complete())
-            .collect();
-
-        CompleteTTCData(parsed_table_directories)
-    }
-}
-
-#[derive(Clone)]
-pub struct CompleteTTCData(Vec<ParsedTableDirectory>);
-
-impl CompleteTTCData {
-    pub fn table_directories(&self) -> &Vec<ParsedTableDirectory> {
-        &self.0
-    }
-
-    pub fn get_font_by_weight(&self, weight: uint16) -> Option<&ParsedTableDirectory> {
-        for table_directory in self.table_directories() {
+    pub fn get_font_by_weight(&self, weight: uint16) -> Option<&TableDirectory> {
+        for table_directory in &self.table_directories {
             if let Some(TableRecord {
                 _data: TableRecordData::OS2(os2_table),
                 ..
@@ -221,8 +200,8 @@ impl CompleteTTCData {
         None
     }
 
-    pub fn get_italic_font(&self) -> Option<&ParsedTableDirectory> {
-        for table_directory in self.table_directories() {
+    pub fn get_italic_font(&self) -> Option<&TableDirectory> {
+        for table_directory in &self.table_directories {
             if let Some(TableRecord {
                 _data: TableRecordData::Head(head_table),
                 ..
@@ -238,8 +217,8 @@ impl CompleteTTCData {
         None
     }
 
-    pub fn get_bold_italic_font(&self) -> Option<&ParsedTableDirectory> {
-        for table_directory in self.table_directories() {
+    pub fn get_bold_italic_font(&self) -> Option<&TableDirectory> {
+        for table_directory in &self.table_directories {
             if let Some(TableRecord {
                 _data: TableRecordData::Head(head_table),
                 ..
@@ -255,8 +234,8 @@ impl CompleteTTCData {
         None
     }
 
-    pub fn get_italic_font_by_weight(&self, weight: uint16) -> Option<&ParsedTableDirectory> {
-        for table_directory in self.table_directories() {
+    pub fn get_italic_font_by_weight(&self, weight: uint16) -> Option<&TableDirectory> {
+        for table_directory in &self.table_directories {
             if let Some(TableRecord {
                 _data: TableRecordData::Head(head_table),
                 ..
@@ -281,8 +260,8 @@ impl CompleteTTCData {
         None
     }
 
-    pub fn get_regular_font(&self) -> Option<&ParsedTableDirectory> {
-        for table_directory in self.table_directories() {
+    pub fn get_regular_font(&self) -> Option<&TableDirectory> {
+        for table_directory in &self.table_directories {
             if let Some(TableRecord {
                 _data: TableRecordData::Head(head_table),
                 ..

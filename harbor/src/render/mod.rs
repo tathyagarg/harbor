@@ -4,6 +4,8 @@ use std::ops::Deref;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use bytemuck::NoUninit;
+use env_logger::fmt::style::Color;
 use wgpu::util::DeviceExt;
 
 use winit::application::ApplicationHandler;
@@ -12,15 +14,18 @@ use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{Window, WindowId};
 
-use wgpu;
+use wgpu::{self, Device};
 
 use crate::css::r#box::{Box, BoxType};
 use crate::css::colors::UsedColor;
 use crate::css::layout::Layout;
 use crate::css::properties::FontStyle;
-use crate::font::ttc::CompleteTTCData;
-use crate::font::ttf::ParsedTableDirectory;
+use crate::font::otf_dtypes::GLYPH_ID;
+use crate::font::tables::glyf::Point;
+use crate::font::ttc::TTCData;
+use crate::font::ttf::TableDirectory;
 use crate::html5::dom::{Document, Element, NodeKind};
+use crate::render::text::{GlyphInstance, GlyphMesh, GlyphVertex};
 
 pub mod shapes;
 pub mod text;
@@ -36,184 +41,180 @@ pub fn rgba_to_color(r: u8, g: u8, b: u8, a: u8) -> wgpu::Color {
     }
 }
 
-#[derive(Clone, Default)]
+// pub fn glyph_descriptor() -> [wgpu::VertexBufferLayout<'static>] {
+//     [wgpu::VertexBufferLayout {
+//         array_stride: (std::mem::size_of::<Point>() + std::mem::size_of::<GlyphInstance>())
+//             as wgpu::BufferAddress,
+//         step_mode: wgpu::VertexStepMode::Vertex,
+//         attributes: &[
+//             wgpu::VertexAttribute {
+//                 offset: 0,
+//                 shader_location: 0,
+//                 format: wgpu::VertexFormat::Float32x2,
+//             },
+//             wgpu::VertexAttribute {
+//                 offset: std::mem::size_of::<[f32; 2]>() as wgpu::BufferAddress,
+//                 shader_location: 1,
+//                 format: wgpu::VertexFormat::Float32x2,
+//             },
+//             wgpu::VertexAttribute {
+//                 offset: std::mem::size_of::<[f32; 4]>() as wgpu::BufferAddress,
+//                 shader_location: 2,
+//                 format: wgpu::VertexFormat::Float32x4,
+//             },
+//         ],
+//     }]
+// }
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct Globals {
+    pub screen_size: [f32; 2],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct ColoredVertex {
+    pub position: [f32; 2],
+    pub color: UsedColor,
+}
+
+pub fn fill_descriptor() -> wgpu::VertexBufferLayout<'static> {
+    wgpu::VertexBufferLayout {
+        array_stride: (std::mem::size_of::<ColoredVertex>() as wgpu::BufferAddress),
+        step_mode: wgpu::VertexStepMode::Vertex,
+        attributes: &[
+            wgpu::VertexAttribute {
+                offset: 0,
+                shader_location: 0,
+                format: wgpu::VertexFormat::Float32x2,
+            },
+            wgpu::VertexAttribute {
+                offset: std::mem::size_of::<[f32; 2]>() as wgpu::BufferAddress,
+                shader_location: 1,
+                format: wgpu::VertexFormat::Float32x4,
+            },
+        ],
+    }
+}
+
+// #[derive(Clone, Default)]
+// pub struct TextRenderer {
+//     pub font: Option<CompleteTTCData>,
+//
+//     pub matching_fonts: HashMap<(u16, bool), ParsedTableDirectory>,
+//
+//     /// Key: (text, weight, italic, x position, y position, font-size (rounded))
+//     /// Value: (vertices, font-size)
+//     /// The font size in the key is rounded
+//     /// When getting a value from the cache, if the required font-size matches the key but is not
+//     /// equal, the cache will not be used and new vertices will be generated. This will not update
+//     /// the cache.
+//     pub vertex_cache: HashMap<(String, u16, bool, u32, u32, u32), (Vec<text::Vertex>, f32)>,
+//
+//     pub window_size: (f32, f32),
+//
+//     pub outline_vertex_buffers:
+//         HashMap<(String, u16, bool, u32, u32, u32, [u32; 4]), (wgpu::Buffer, usize)>,
+// }
+
+#[derive(Hash, Eq, PartialEq, Clone)]
+pub struct RendererIdentifier {
+    pub font_family: String,
+    pub font_weight: u16,
+    pub italic: bool,
+}
+
+#[derive(Clone)]
 pub struct TextRenderer {
-    pub font: Option<CompleteTTCData>,
+    pub _associated_weight: u16,
+    pub _associated_italic: bool,
 
-    pub matching_fonts: HashMap<(u16, bool), ParsedTableDirectory>,
+    pub font: TableDirectory,
 
-    /// Key: (text, weight, italic, x position, y position, font-size (rounded))
-    /// Value: (vertices, font-size)
-    /// The font size in the key is rounded
-    /// When getting a value from the cache, if the required font-size matches the key but is not
-    /// equal, the cache will not be used and new vertices will be generated. This will not update
-    /// the cache.
-    pub vertex_cache: HashMap<(String, u16, bool, u32, u32, u32), (Vec<text::Vertex>, f32)>,
-
-    pub window_size: (f32, f32),
-
-    pub outline_vertex_buffers:
-        HashMap<(String, u16, bool, u32, u32, u32, [u32; 4]), (wgpu::Buffer, usize)>,
+    /// Key: (glyph_id, font size)
+    pub glyph_cache: HashMap<(GLYPH_ID, u32), GlyphMesh>,
 }
 
 impl TextRenderer {
-    pub fn vertices(
+    pub fn get_from_char(
         &mut self,
-        text: String,
-        weight: u16,
-        italic: bool,
-        color: UsedColor,
-        font_size: f32,
-        position: (u32, u32),
-    ) -> (Vec<text::Vertex>, bool) {
-        let update_cache = if let Some((verts, cached_font_size)) = self.vertex_cache.get(&(
-            text.clone(),
-            weight,
-            italic,
-            position.0,
-            position.1,
-            font_size as u32,
-        )) {
-            if *cached_font_size == font_size {
-                if verts[0].color != color {
-                    return (
-                        verts
-                            .iter()
-                            .map(|v| text::Vertex {
-                                position: v.position,
-                                color,
-                            })
-                            .collect(),
-                        false,
-                    );
+        ch: char,
+        font_size: u32,
+        device: &Device,
+        queue: &wgpu::Queue,
+    ) -> Option<GlyphMesh> {
+        let glyph_id = self.font.cmap_lookup(ch as u32);
+
+        if let Some(gid) = glyph_id {
+            if let Some(glyph) = self.glyph_cache.get(&(gid, font_size)) {
+                return Some(glyph.clone());
+            } else {
+                let mut points: Vec<Point> = Vec::new();
+                self.font.make_glyph_points(gid, 5.0, &mut points);
+
+                if points.len() == 0 {
+                    return None;
                 }
 
-                return (verts.clone(), true);
-            }
+                let mut min_x = f32::INFINITY;
+                let mut min_y = f32::INFINITY;
+                let mut max_x = f32::NEG_INFINITY;
+                let mut max_y = f32::NEG_INFINITY;
 
-            false
-        } else {
-            true
-        };
+                for p in &points {
+                    min_x = min_x.min(p.x);
+                    min_y = min_y.min(p.y);
+                    max_x = max_x.max(p.x);
+                    max_y = max_y.max(p.y);
+                }
 
-        let ttc = match &self.font {
-            Some(f) => f,
-            None => return (vec![], false),
-        };
+                let scale = font_size as f32 / self.font.units_per_em() as f32;
 
-        let font = if let Some(cached_font) = self.matching_fonts.get(&(weight, italic)) {
-            cached_font
-        } else {
-            let font = if italic {
-                ttc.get_italic_font_by_weight(weight)
-            } else {
-                ttc.get_font_by_weight(weight)
-            }
-            .unwrap_or(ttc.get_regular_font().unwrap());
-
-            self.matching_fonts.insert((weight, italic), font.clone());
-
-            font
-        };
-
-        let scale = font_size / font.units_per_em() as f32;
-
-        let mut y = position.1 as f32;
-        y += (font.ascent().unwrap_or(0) as f32) * scale;
-
-        let float_position = (position.0 as f32, y);
-
-        let verts = font.rasterize(
-            text.as_str(),
-            color,
-            scale,
-            self.window_size.0 / font_size,
-            float_position,
-            self.window_size,
-        );
-
-        if update_cache {
-            self.vertex_cache.insert(
-                (
-                    text.clone(),
-                    weight,
-                    italic,
-                    position.0,
-                    position.1,
-                    font_size as u32,
-                ),
-                (verts.clone(), font_size),
-            );
-
-            self.outline_vertex_buffers.remove(&(
-                text,
-                weight,
-                italic,
-                position.0,
-                position.1,
-                font_size as u32,
-                color
+                let glyph_verts = points
                     .iter()
-                    .map(|c| c.to_bits())
-                    .collect::<Vec<u32>>()
-                    .try_into()
-                    .unwrap(),
-            ));
-        }
+                    .map(|p| GlyphVertex {
+                        position: [(p.x - min_x) * scale, (p.y) * scale],
+                    })
+                    .collect::<Vec<GlyphVertex>>();
 
-        (verts, false)
-    }
+                let glyph_mesh = GlyphMesh {
+                    vertex_buffer: device.create_buffer(&wgpu::BufferDescriptor {
+                        label: Some("Glyph Vertex Buffer"),
+                        size: (glyph_verts.len() * std::mem::size_of::<GlyphVertex>()) as u64,
+                        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                        mapped_at_creation: false,
+                    }),
+                    vertex_count: glyph_verts.len() as u32,
+                    advance_width: self.font.advance_width(gid).unwrap_or_else(|| {
+                        self.font
+                            .advance_width(self.font.last_glyph_index().unwrap())
+                            .unwrap_or(0)
+                    }) as f32
+                        * scale,
+                    instance_buffer: device.create_buffer(&wgpu::BufferDescriptor {
+                        label: Some("Glyph Instance Buffer"),
+                        size: 10_000 * std::mem::size_of::<GlyphInstance>() as u64,
+                        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                        mapped_at_creation: false,
+                    }),
+                    instance_count: 0,
+                };
 
-    pub fn update_vertex_buffer(
-        &mut self,
-        device: &wgpu::Device,
-        text: String,
-        weight: u16,
-        italic: bool,
-        color: UsedColor,
-        font_size: f32,
-        position: (u32, u32),
-    ) {
-        let (verts, hit) = self.vertices(text.clone(), weight, italic, color, font_size, position);
+                queue.write_buffer(
+                    &glyph_mesh.vertex_buffer,
+                    0,
+                    bytemuck::cast_slice(&glyph_verts),
+                );
 
-        let key = (
-            text,
-            weight,
-            italic,
-            position.0,
-            position.1,
-            font_size as u32,
-            color
-                .iter()
-                .map(|c| c.to_bits())
-                .collect::<Vec<u32>>()
-                .try_into()
-                .unwrap(),
-        );
+                self.glyph_cache
+                    .insert((gid, font_size), glyph_mesh.clone());
 
-        let existing_buffer = self.outline_vertex_buffers.get_mut(&key);
-
-        let new_buffer = if let Some((_, _)) = existing_buffer
-            && hit
-        {
-            return;
+                Some(glyph_mesh)
+            }
         } else {
-            let new_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Vertex Buffer"),
-                contents: bytemuck::cast_slice(&verts),
-                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-            });
-
-            new_buffer
-        };
-
-        self.outline_vertex_buffers
-            .insert(key, (new_buffer.clone(), verts.len()));
-    }
-
-    pub fn resized(&mut self, new_size: (f32, f32)) {
-        self.window_size = new_size;
-        self.vertex_cache.clear();
+            None
+        }
     }
 }
 
@@ -236,9 +237,6 @@ pub struct WindowState {
     fill_render_pipeline: wgpu::RenderPipeline,
     circle_render_pipeline: wgpu::RenderPipeline,
 
-    vertex_buffer: wgpu::Buffer,
-    number_of_vertices: u32,
-
     is_surface_configured: bool,
 
     window: Arc<Window>,
@@ -247,6 +245,9 @@ pub struct WindowState {
     document: Document,
 
     prev_hovered_elements: Vec<Rc<RefCell<Element>>>,
+
+    globals_buffer: wgpu::Buffer,
+    globals_bind_group: wgpu::BindGroup,
 }
 
 impl WindowState {
@@ -267,11 +268,13 @@ impl WindowState {
 
                     // println!("Box: {:#?}", layout_box);
 
-                    let pixel_x = layout_box.position().0 as f32 + position.0 as f32;
-                    let pixel_y = layout_box.position().1 as f32 + position.1 as f32;
+                    let pixel_x =
+                        (layout_box.position().0 + position.0 + layout_box.margin().left()) as f32;
+                    let pixel_y =
+                        (layout_box.position().1 + position.1 + layout_box.margin().top()) as f32;
 
                     let x_pos = (pixel_x / window_size.width as f32) * 2.0 - 1.0;
-                    let y_pos = -((pixel_y / window_size.height as f32) * 2.0 - 1.0);
+                    let y_pos = 1.0 - (pixel_y / window_size.height as f32) * 2.0;
 
                     let pixel_w = layout_box.content_edges().horizontal() as f32;
                     let pixel_h = layout_box.content_edges().vertical() as f32;
@@ -317,80 +320,115 @@ impl WindowState {
                             let style = parents.last().unwrap().style().unwrap();
 
                             let family = style.font.family();
-                            let mut font_iter = family.entries.iter();
-                            let renderer = loop {
-                                if let Some(font_family) = font_iter.next() {
-                                    if let Some(renderer_option) =
-                                        self.layout._renderers.get_mut(&font_family.value())
-                                    {
-                                        if let Some(renderer) = renderer_option {
-                                            break renderer;
-                                        }
-                                    }
-                                } else {
-                                    // Fallback to default font
-                                    if let Some(renderer_option) =
-                                        self.layout._renderers.get_mut("Times New Roman")
-                                    {
-                                        if let Some(renderer) = renderer_option {
-                                            break renderer;
-                                        }
-                                    } else {
-                                        return;
-                                    }
-                                }
-                            };
-
-                            let font_size = style.font.resolved_font_size().unwrap_or(16.0) as f32;
 
                             let font_weight =
                                 style.font.resolved_font_weight().unwrap_or(400) as u16;
 
                             let italic = matches!(style.font.style(), FontStyle::Italic);
 
-                            let (verts, _) = renderer.vertices(
-                                text_content.clone(),
-                                font_weight,
-                                italic,
-                                style.color.used(),
-                                font_size,
-                                (adj_position.0 as u32, adj_position.1 as u32),
-                            );
-
-                            if !verts.is_empty() {
-                                renderer.update_vertex_buffer(
-                                    &self.device,
-                                    text_content.clone(),
+                            let mut renderer = self
+                                .layout
+                                ._renderers
+                                .get_mut(&RendererIdentifier {
+                                    font_family: family
+                                        .entries
+                                        .first()
+                                        .map(|f| f.value())
+                                        .unwrap_or("Times New Roman".to_string()),
                                     font_weight,
                                     italic,
-                                    style.color.used(),
-                                    font_size,
-                                    (adj_position.0 as u32, adj_position.1 as u32),
-                                );
+                                })
+                                .map_or(None, |r| r.clone())
+                                .unwrap_or_else(|| {
+                                    if let Some(renderer_option) =
+                                        self.layout._renderers.get_mut(&RendererIdentifier {
+                                            font_family: "Times New Roman".to_string(),
+                                            font_weight,
+                                            italic,
+                                        })
+                                    {
+                                        if let Some(renderer) = renderer_option {
+                                            return renderer.clone();
+                                        }
+                                    }
 
-                                let key = (
-                                    text_content.clone(),
-                                    font_weight,
-                                    italic,
-                                    adj_position.0 as u32,
-                                    adj_position.1 as u32,
+                                    panic!("No suitable font renderer found");
+                                });
+
+                            let mut glyph_instances: HashMap<char, Vec<GlyphInstance>> =
+                                HashMap::new();
+
+                            let mut pen_x = adj_position.0 as f32;
+                            let pen_y = adj_position.1 as f32
+                                + renderer.font.ascent().unwrap() as f32
+                                    * (style.font.resolved_font_size().unwrap_or(16.0) as f32
+                                        / renderer.font.units_per_em() as f32);
+
+                            let font_size = style.font.resolved_font_size().unwrap_or(16.0) as f32;
+                            println!("Rendering text: '{}' at size {}", text_content, font_size);
+
+                            for ch in text_content.chars() {
+                                let glyph_mesh = renderer.get_from_char(
+                                    ch,
                                     font_size as u32,
-                                    style
-                                        .color
-                                        .used()
-                                        .iter()
-                                        .map(|c| c.to_bits())
-                                        .collect::<Vec<u32>>()
-                                        .try_into()
-                                        .unwrap(),
+                                    &self.device,
+                                    &self.queue,
                                 );
 
-                                if let Some((buffer, count)) =
-                                    renderer.outline_vertex_buffers.get(&key)
-                                {
-                                    render_pass.set_vertex_buffer(0, buffer.slice(..));
-                                    render_pass.draw(0..*count as u32, 0..1);
+                                if let Some(glyph) = glyph_mesh {
+                                    glyph_instances.entry(ch).or_default().push(
+                                        text::GlyphInstance {
+                                            offset: [pen_x, pen_y],
+                                            color: style.color.used(),
+                                        },
+                                    );
+
+                                    pen_x += glyph.advance_width;
+                                } else {
+                                    pen_x += renderer
+                                        .font
+                                        .advance_width(
+                                            renderer.font.cmap_lookup(ch as u32).unwrap_or_else(
+                                                || {
+                                                    renderer
+                                                        .font
+                                                        .advance_width(
+                                                            renderer
+                                                                .font
+                                                                .last_glyph_index()
+                                                                .unwrap(),
+                                                        )
+                                                        .unwrap_or(0)
+                                                },
+                                            ),
+                                        )
+                                        .unwrap_or(0)
+                                        as f32
+                                        * (font_size / renderer.font.units_per_em() as f32);
                                 }
+                            }
+
+                            for (ch, instances) in glyph_instances {
+                                let mut glyph = renderer
+                                    .get_from_char(ch, font_size as u32, &self.device, &self.queue)
+                                    .unwrap();
+
+                                self.queue.write_buffer(
+                                    &glyph.instance_buffer,
+                                    0,
+                                    bytemuck::cast_slice(&instances),
+                                );
+
+                                glyph.instance_count = instances.len() as u32;
+
+                                assert!(glyph.instance_count > 0);
+                                assert!(glyph.vertex_count > 0);
+
+                                render_pass.set_vertex_buffer(0, glyph.vertex_buffer.slice(..));
+                                render_pass.set_vertex_buffer(1, glyph.instance_buffer.slice(..));
+
+                                render_pass
+                                    .draw(0..glyph.vertex_count, 0..glyph.instance_count as u32);
                             }
                         }
                         _ => {}
@@ -499,6 +537,8 @@ impl WindowState {
                 timestamp_writes: None,
             });
 
+            _render_pass.set_bind_group(0, &self.globals_bind_group, &[]);
+
             let root_box = self.layout.root_box.as_ref().unwrap().borrow().clone();
 
             self.render_box(root_box, (0.0, 0.0), &mut vec![], &mut _render_pass);
@@ -590,13 +630,60 @@ impl WindowState {
                 push_constant_ranges: &[],
             });
 
+        let globals_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("Globals Bind Group Layout"),
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+            });
+
         let line_render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Render Pipeline"),
-            layout: Some(&render_pipeline_layout),
+            layout: Some(
+                &device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                    label: Some("Line Render Pipeline Layout"),
+                    bind_group_layouts: &[&globals_bind_group_layout],
+                    push_constant_ranges: &[],
+                }),
+            ),
             vertex: wgpu::VertexState {
                 module: &shader,
-                entry_point: Some("vs_main"),
-                buffers: &[text::Vertex::desc()],
+                entry_point: Some("glyph_vs_main"),
+                buffers: &[
+                    wgpu::VertexBufferLayout {
+                        array_stride: std::mem::size_of::<GlyphVertex>() as wgpu::BufferAddress,
+                        step_mode: wgpu::VertexStepMode::Vertex,
+                        attributes: &[wgpu::VertexAttribute {
+                            offset: 0,
+                            shader_location: 0,
+                            format: wgpu::VertexFormat::Float32x2,
+                        }],
+                    },
+                    wgpu::VertexBufferLayout {
+                        array_stride: std::mem::size_of::<GlyphInstance>() as wgpu::BufferAddress,
+                        step_mode: wgpu::VertexStepMode::Instance,
+                        attributes: &[
+                            wgpu::VertexAttribute {
+                                offset: 0,
+                                shader_location: 1,
+                                format: wgpu::VertexFormat::Float32x2,
+                            },
+                            wgpu::VertexAttribute {
+                                offset: std::mem::size_of::<[f32; 2]>() as wgpu::BufferAddress,
+                                shader_location: 2,
+                                format: wgpu::VertexFormat::Float32x4,
+                            },
+                        ],
+                    },
+                ],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(wgpu::FragmentState {
@@ -624,7 +711,7 @@ impl WindowState {
                 topology: wgpu::PrimitiveTopology::LineList,
                 strip_index_format: None,
                 front_face: wgpu::FrontFace::Ccw,
-                cull_mode: Some(wgpu::Face::Back),
+                cull_mode: None,
                 unclipped_depth: false,
                 polygon_mode: wgpu::PolygonMode::Fill,
                 conservative: false,
@@ -645,7 +732,7 @@ impl WindowState {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: Some("vs_main"),
-                buffers: &[text::Vertex::desc()],
+                buffers: &[fill_descriptor()],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(wgpu::FragmentState {
@@ -695,7 +782,7 @@ impl WindowState {
                 vertex: wgpu::VertexState {
                     module: &shader,
                     entry_point: Some("vs_main"),
-                    buffers: &[text::Vertex::desc()],
+                    buffers: &[fill_descriptor()],
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
                 },
                 fragment: Some(wgpu::FragmentState {
@@ -738,18 +825,25 @@ impl WindowState {
                 cache: None,
             });
 
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(&[] as &[text::Vertex]),
-            usage: wgpu::BufferUsages::VERTEX,
+        let mut populated_layout = layout.clone();
+        populated_layout.populate_renderers(&device);
+
+        let globals_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Globals Buffer"),
+            contents: bytemuck::cast_slice(&[Globals {
+                screen_size: [size.width as f32, size.height as f32],
+            }]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
-        let number_of_vertices = 0;
-
-        let window_size = (size.width as f32, size.height as f32);
-
-        let mut populated_layout = layout.clone();
-        populated_layout.populate_renderers(window_size);
+        let globals_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Globals Bind Group"),
+            layout: &globals_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: globals_buffer.as_entire_binding(),
+            }],
+        });
 
         Self {
             surface,
@@ -763,12 +857,12 @@ impl WindowState {
             line_render_pipeline,
             fill_render_pipeline,
             circle_render_pipeline,
-            vertex_buffer,
-            number_of_vertices,
             is_surface_configured: false,
             window_options,
             document,
             prev_hovered_elements: vec![],
+            globals_buffer,
+            globals_bind_group,
         }
     }
 
@@ -788,6 +882,14 @@ impl WindowState {
             self.is_surface_configured = false;
 
             self.layout.resized((width as f64, height as f64));
+
+            self.queue.write_buffer(
+                &self.globals_buffer,
+                0,
+                bytemuck::cast_slice(&[Globals {
+                    screen_size: [width as f32, height as f32],
+                }]),
+            );
 
             let msaa_texture = self.device.create_texture(&wgpu::TextureDescriptor {
                 label: Some("Multisampled Texture"),
@@ -831,7 +933,6 @@ impl ApplicationHandler<WindowState> for App {
             .with_title("Harbor Browser")
             // TODO: Change this to not have any decorations
             .with_decorations(true);
-        // .with_inner_size(winit::dpi::PhysicalSize::new(600, 600));
 
         if self.window_options.use_transparent {
             window_attributes = window_attributes.with_transparent(true);
