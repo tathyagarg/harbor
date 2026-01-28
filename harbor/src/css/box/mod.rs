@@ -1,5 +1,6 @@
 use std::{
     cell::RefCell,
+    collections::HashMap,
     fmt::Debug,
     ops::{Add, Deref},
     rc::{Rc, Weak},
@@ -18,6 +19,7 @@ use crate::{
     globals::{DEFAULT_FONT_FAMILY, FONTS},
     html5::dom::{Document, Element, NodeKind},
     infra::InputStream,
+    render::{RendererIdentifier, TextRenderer},
 };
 
 /// Represents the edges of a box: top, right, bottom, left
@@ -474,15 +476,19 @@ impl Box {
         first_child: bool,
         last_child: bool,
         parents: &mut Vec<Rc<RefCell<Element>>>,
+        renderers: &HashMap<RendererIdentifier, Option<TextRenderer>>,
     ) -> (f64, f64, bool) {
         match self._box_type {
-            BoxType::Block => self.layout_block(container_width, container_height, parents),
+            BoxType::Block => {
+                self.layout_block(container_width, container_height, parents, renderers)
+            }
             BoxType::Inline => self.layout_inline(
                 container_width,
                 container_height,
                 first_child,
                 last_child,
                 parents,
+                renderers,
             ),
             BoxType::ListItem => {
                 let marker_box_rc = self.children.get(0).unwrap().clone();
@@ -495,6 +501,7 @@ impl Box {
                     first_child,
                     last_child,
                     parents,
+                    renderers,
                 );
 
                 let mut content_box = content_box_rc.borrow_mut();
@@ -505,6 +512,7 @@ impl Box {
                     first_child,
                     last_child,
                     parents,
+                    renderers,
                 );
 
                 content_box._position_x = Some(content_box._margin.left());
@@ -548,6 +556,7 @@ impl Box {
         container_width: Option<f64>,
         container_height: Option<f64>,
         parents: &mut Vec<Rc<RefCell<Element>>>,
+        renderers: &HashMap<RendererIdentifier, Option<TextRenderer>>,
     ) -> (f64, f64, bool) {
         if let Some(node_rc) = &self.associated_node {
             if let NodeKind::Element(element_rc) = node_rc.borrow().deref() {
@@ -568,7 +577,8 @@ impl Box {
              cursor_x: &mut f64,
              cursor_y: &mut f64,
              content_width: &mut f64,
-             parents: &mut Vec<Rc<RefCell<Element>>>| {
+             parents: &mut Vec<Rc<RefCell<Element>>>,
+             renderers: &HashMap<RendererIdentifier, Option<TextRenderer>>| {
                 if run.is_empty() {
                     return;
                 }
@@ -582,8 +592,14 @@ impl Box {
                     child._position_x = Some(*cursor_x - initial_x + line_width);
                     child._position_y = Some(*cursor_y - initial_y);
 
-                    let (w, h, go_to_next_line) =
-                        child.layout(container_width, container_height, first, last, parents);
+                    let (w, h, go_to_next_line) = child.layout(
+                        container_width,
+                        container_height,
+                        first,
+                        last,
+                        parents,
+                        &renderers,
+                    );
 
                     line_width += w + child._margin.horizontal();
                     line_height = line_height.max(h + child._margin.vertical());
@@ -618,6 +634,7 @@ impl Box {
                         &mut cursor_y,
                         &mut self._content_width,
                         parents,
+                        &renderers,
                     );
 
                     let mut child = child_box_rc.borrow_mut();
@@ -646,6 +663,7 @@ impl Box {
                         i == 0,
                         i == self.children.len() - 1,
                         parents,
+                        renderers,
                     );
 
                     cursor_y += h + child._margin.bottom();
@@ -669,6 +687,7 @@ impl Box {
                         i == 0,
                         i == self.children.len() - 1,
                         parents,
+                        renderers,
                     );
 
                     cursor_y += h + child._margin.bottom();
@@ -689,6 +708,7 @@ impl Box {
             &mut cursor_y,
             &mut self._content_width,
             parents,
+            &renderers,
         );
 
         self._content_height = cursor_y;
@@ -723,6 +743,7 @@ impl Box {
         first_child: bool,
         last_child: bool,
         parents: &mut Vec<Rc<RefCell<Element>>>,
+        renderers: &HashMap<RendererIdentifier, Option<TextRenderer>>,
     ) -> (f64, f64, bool) {
         let mut pen_x = 0.0;
         let mut pen_y = 0.0;
@@ -755,16 +776,34 @@ impl Box {
                     }
                 };
 
-                let font = if matches!(style.font.style(), FontStyle::Italic) {
-                    ttc.and_then(|ttc| ttc.get_italic_font_by_weight(weight))
-                        .or(ttc.and_then(|ttc| ttc.get_font_by_weight(weight)))
-                } else {
-                    ttc.and_then(|ttc| ttc.get_font_by_weight(weight))
-                }
-                .or(ttc.and_then(|ttc| ttc.get_regular_font()));
+                let font = renderers
+                    .get(&RendererIdentifier {
+                        font_family: family.entries[0].value(),
+                        font_weight: weight,
+                        italic: matches!(style.font.style(), FontStyle::Italic),
+                    })
+                    .and_then(|r| r.as_ref())
+                    .map_or(None, |r| Some(r.clone()))
+                    .unwrap_or_else(|| {
+                        renderers
+                            .iter()
+                            .find(|(id, _)| id.font_family == family.entries[0].value())
+                            .and_then(|(_, r)| r.as_ref())
+                            .map_or(None, |r| Some(r.clone()))
+                            .unwrap()
+                    })
+                    .font;
 
-                let scale = style.font.resolved_font_size().unwrap_or(16.0)
-                    / font.unwrap().units_per_em() as f64;
+                // let font = if matches!(style.font.style(), FontStyle::Italic) {
+                //     ttc.and_then(|ttc| ttc.get_italic_font_by_weight(weight))
+                //         .or(ttc.and_then(|ttc| ttc.get_font_by_weight(weight)))
+                // } else {
+                //     ttc.and_then(|ttc| ttc.get_font_by_weight(weight))
+                // }
+                // .or(ttc.and_then(|ttc| ttc.get_regular_font()));
+
+                let scale =
+                    style.font.resolved_font_size().unwrap_or(16.0) / font.units_per_em() as f64;
 
                 let mut new_data = String::new();
 
@@ -794,21 +833,17 @@ impl Box {
                         new_data.push(ch);
 
                         let aw = font
-                            .and_then(|font| {
-                                font.advance_width(
+                            .advance_width(
+                                font.glyph_index(ch as u32)
+                                    .unwrap_or_else(|| font.last_glyph_index().unwrap()),
+                            )
+                            // .map(|aw| aw as f64 * self._font_size.unwrap_or(16.0))
+                            .map(|aw| aw as f64 * scale)
+                            .unwrap_or_else(|| {
+                                font.rawdog_advance_width(
                                     font.glyph_index(ch as u32)
                                         .unwrap_or_else(|| font.last_glyph_index().unwrap()),
                                 )
-                                // .map(|aw| aw as f64 * self._font_size.unwrap_or(16.0))
-                                .map(|aw| aw as f64 * scale)
-                            })
-                            .unwrap_or_else(|| {
-                                font.and_then(|font| {
-                                    font.rawdog_advance_width(
-                                        font.glyph_index(ch as u32)
-                                            .unwrap_or_else(|| font.last_glyph_index().unwrap()),
-                                    )
-                                })
                                 .map(|aw| aw as f64 * scale)
                                 .unwrap_or(0.0)
                             });
@@ -847,12 +882,13 @@ impl Box {
                     child_box._position_x = Some(pen_x);
                     child_box._position_y = Some(pen_y);
 
-                    let (advance, line_height, go_to_next_line) = child_box.layout_inline(
+                    let (advance, line_height, go_to_next_line) = child_box.layout(
                         None,
                         None,
                         i == 0,
                         i == self.children.len() - 1,
                         parents,
+                        &renderers,
                     );
 
                     pen_x += advance;

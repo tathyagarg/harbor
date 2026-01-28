@@ -47,6 +47,7 @@ impl Layout {
                 false,
                 false,
                 &mut vec![],
+                &self._renderers,
             );
         }
 
