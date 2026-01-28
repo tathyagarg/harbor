@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use std::{cell::RefCell, fmt::Debug, ops::Deref, rc::Rc};
 
 use crate::{

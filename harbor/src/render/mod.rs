@@ -4,8 +4,6 @@ use std::ops::Deref;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use bytemuck::NoUninit;
-use env_logger::fmt::style::Color;
 use wgpu::util::DeviceExt;
 
 use winit::application::ApplicationHandler;
@@ -22,7 +20,6 @@ use crate::css::layout::Layout;
 use crate::css::properties::FontStyle;
 use crate::font::otf_dtypes::GLYPH_ID;
 use crate::font::tables::glyf::Point;
-use crate::font::ttc::TTCData;
 use crate::font::ttf::TableDirectory;
 use crate::html5::dom::{Document, Element, NodeKind};
 use crate::render::text::{GlyphInstance, GlyphMesh, GlyphVertex};
@@ -40,31 +37,6 @@ pub fn rgba_to_color(r: u8, g: u8, b: u8, a: u8) -> wgpu::Color {
         a: (a as f64) / 100.0,
     }
 }
-
-// pub fn glyph_descriptor() -> [wgpu::VertexBufferLayout<'static>] {
-//     [wgpu::VertexBufferLayout {
-//         array_stride: (std::mem::size_of::<Point>() + std::mem::size_of::<GlyphInstance>())
-//             as wgpu::BufferAddress,
-//         step_mode: wgpu::VertexStepMode::Vertex,
-//         attributes: &[
-//             wgpu::VertexAttribute {
-//                 offset: 0,
-//                 shader_location: 0,
-//                 format: wgpu::VertexFormat::Float32x2,
-//             },
-//             wgpu::VertexAttribute {
-//                 offset: std::mem::size_of::<[f32; 2]>() as wgpu::BufferAddress,
-//                 shader_location: 1,
-//                 format: wgpu::VertexFormat::Float32x2,
-//             },
-//             wgpu::VertexAttribute {
-//                 offset: std::mem::size_of::<[f32; 4]>() as wgpu::BufferAddress,
-//                 shader_location: 2,
-//                 format: wgpu::VertexFormat::Float32x4,
-//             },
-//         ],
-//     }]
-// }
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -220,7 +192,6 @@ impl TextRenderer {
 
 /// WindowState
 /// Holds all data about the WGPU state, along with the window
-#[allow(dead_code)]
 pub struct WindowState {
     /// Basic WGPU state variables
     surface: wgpu::Surface<'static>,

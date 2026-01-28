@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 #![allow(non_camel_case_types)]
 // Is this a hackclub #meta reference?
 // https://hackclub.enterprise.slack.com/archives/C0188CY57PZ

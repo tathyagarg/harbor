@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use std::num::{IntErrorKind, ParseIntError};
 
 use encoding_rs;

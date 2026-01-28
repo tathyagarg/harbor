@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 pub mod dom;
 /// Custom implementation of the HTML5 spec:
 /// https://html.spec.whatwg.org/

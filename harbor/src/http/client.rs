@@ -54,7 +54,6 @@ impl fmt::Display for RequestIntegrityError {
 /// but I decided that HTTP protocols, unlike methods, are too standardized
 /// to allow customization - not to mention the impact that the HTTP protocol
 /// has on the overall structure of the request itself as well as how it's sent
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub enum Protocol {
     HTTP0_9,
@@ -672,10 +671,6 @@ pub struct Client {
     permissive: bool,
 }
 
-/// We're allowing dead code because code that may not be used directly right now might still have
-/// a purpose in the future, and the warning gets annoying to look at and distracts from actual
-/// issues
-#[allow(dead_code)]
 impl Client {
     pub fn new(prefers: Protocol, permissive: bool) -> Self {
         Self {

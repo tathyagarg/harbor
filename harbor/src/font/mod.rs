@@ -82,7 +82,6 @@ pub mod otf_dtypes {
         str::from_utf8(t).map(|s| s.to_string())
     }
 
-    #[allow(dead_code)]
     pub type Offset8 = uint8;
     pub type Offset16 = uint16;
 
