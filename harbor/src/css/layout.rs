@@ -67,10 +67,11 @@ impl Layout {
 
     pub fn populate_renderers(&mut self, window_size: (f32, f32)) {
         for (font_name, font) in FONTS.iter() {
-            let renderer = TextRenderer::new()
-                .with_font(font.clone())
-                .with_window_size(window_size)
-                .build();
+            let renderer = TextRenderer {
+                font: Some(font.clone()),
+                window_size,
+                ..Default::default()
+            };
             self._renderers.insert(font_name.clone(), Some(renderer));
         }
     }

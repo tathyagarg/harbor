@@ -1,8 +1,5 @@
-// #![allow(warnings)]
-
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::fmt::Debug;
 use std::ops::Deref;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -18,13 +15,12 @@ use winit::window::{Window, WindowId};
 use wgpu;
 
 use crate::css::r#box::{Box, BoxType};
-use crate::css::colors::{Color, UsedColor};
-use crate::css::cssom::ComputedStyle;
+use crate::css::colors::UsedColor;
 use crate::css::layout::Layout;
 use crate::css::properties::FontStyle;
 use crate::font::ttc::CompleteTTCData;
 use crate::font::ttf::ParsedTableDirectory;
-use crate::html5::dom::{Document, Element, Node, NodeKind};
+use crate::html5::dom::{Document, Element, NodeKind};
 
 pub mod shapes;
 pub mod text;
@@ -41,55 +37,6 @@ pub fn rgba_to_color(r: u8, g: u8, b: u8, a: u8) -> wgpu::Color {
 }
 
 #[derive(Clone, Default)]
-pub struct TextRendererCreator {
-    pub font: Option<CompleteTTCData>,
-    pub window_size: (f32, f32),
-
-    pub buffer: Option<wgpu::Buffer>,
-
-    pub color: [f32; 3],
-}
-
-impl TextRendererCreator {
-    pub fn with_font(mut self, font: CompleteTTCData) -> Self {
-        self.font = Some(font);
-        self
-    }
-
-    pub fn with_window_size(mut self, window_size: (f32, f32)) -> Self {
-        self.window_size = window_size;
-        self
-    }
-
-    pub fn with_device(mut self, device: &wgpu::Device) -> Self {
-        self.buffer = Some(
-            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Vertex Buffer"),
-                contents: bytemuck::cast_slice(&[] as &[text::Vertex]),
-                usage: wgpu::BufferUsages::VERTEX,
-            }),
-        );
-        self
-    }
-
-    pub fn with_color(mut self, color: [f32; 3]) -> Self {
-        self.color = color;
-        self
-    }
-
-    pub fn build(self) -> TextRenderer {
-        TextRenderer {
-            font: self.font,
-            matching_fonts: HashMap::new(),
-            window_size: self.window_size,
-            vertex_cache: HashMap::new(),
-            _empty_buffer: self.buffer,
-            outline_vertex_buffers: HashMap::new(),
-        }
-    }
-}
-
-#[derive(Clone)]
 pub struct TextRenderer {
     pub font: Option<CompleteTTCData>,
 
@@ -105,16 +52,11 @@ pub struct TextRenderer {
 
     pub window_size: (f32, f32),
 
-    _empty_buffer: Option<wgpu::Buffer>,
-    outline_vertex_buffers:
+    pub outline_vertex_buffers:
         HashMap<(String, u16, bool, u32, u32, u32, [u32; 4]), (wgpu::Buffer, usize)>,
 }
 
 impl TextRenderer {
-    pub fn new() -> TextRendererCreator {
-        TextRendererCreator::default()
-    }
-
     pub fn vertices(
         &mut self,
         text: String,
