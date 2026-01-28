@@ -1,63 +1,9 @@
 use std::fmt::Debug;
 
-use bytemuck::NoUninit;
-
 use crate::{
     css::colors::UsedColor,
     font::tables::glyf::{GlyphTransform, Point},
 };
-
-// #[repr(C)]
-// #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-// pub struct Vertex {
-//     pub position: [f32; 2],
-//     pub color: UsedColor,
-// }
-
-// impl Vertex {
-//     pub fn desc() -> wgpu::VertexBufferLayout<'static> {
-//         wgpu::VertexBufferLayout {
-//             array_stride: (std::mem::size_of::<Point>() as wgpu::BufferAddress)
-//                 + (std::mem::size_of::<GlyphInstance>() as wgpu::BufferAddress),
-//             step_mode: wgpu::VertexStepMode::Vertex,
-//             attributes: &[
-//                 wgpu::VertexAttribute {
-//                     offset: 0,
-//                     shader_location: 0,
-//                     format: wgpu::VertexFormat::Float32x2,
-//                 },
-//                 wgpu::VertexAttribute {
-//                     offset: std::mem::size_of::<[f32; 2]>() as wgpu::BufferAddress,
-//                     shader_location: 1,
-//                     format: wgpu::VertexFormat::Float32x2,
-//                 },
-//                 wgpu::VertexAttribute {
-//                     offset: std::mem::size_of::<[f32; 4]>() as wgpu::BufferAddress,
-//                     shader_location: 2,
-//                     format: wgpu::VertexFormat::Float32x4,
-//                 },
-//             ],
-//         }
-//     }
-//
-//     pub fn clipped_from_point(
-//         point: &Point,
-//         origin: (f32, f32),
-//         scale: f32,
-//         window_size: (f32, f32),
-//         color: UsedColor,
-//     ) -> Vertex {
-//         let vertex_position = point.vertex_position(origin, scale);
-//
-//         Vertex {
-//             position: [
-//                 (vertex_position[0] / window_size.0) * 2.0 - 1.0,
-//                 1.0 - (vertex_position[1] / window_size.1) * 2.0,
-//             ],
-//             color,
-//         }
-//     }
-// }
 
 #[derive(Clone)]
 pub enum Segment {

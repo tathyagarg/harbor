@@ -770,10 +770,6 @@ fn parse_complex_selector(tokens: &mut InputStream<CSSToken>) -> Option<ComplexS
     })
 }
 
-fn flatten_complex_selector(complex_selector: ComplexSelector) -> Vec<ComplexSelector> {
-    vec![complex_selector]
-}
-
 /// <complex-selector-list> = <complex-selector>#
 fn parse_complex_selector_list(tokens: &mut InputStream<CSSToken>) -> Option<ComplexSelectorList> {
     let mut selectors = Vec::new();

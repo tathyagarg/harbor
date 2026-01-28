@@ -11,12 +11,11 @@ use crate::css::cssom::{
 use crate::css::selectors::MatchesElement;
 use crate::infra::Serializable;
 use crate::{
-    html5::{HTML_NAMESPACE, parse::Token, tag_groups::*},
+    html5::{parse::Token, tag_groups::*},
     http::{self},
 };
 
 type DOMString = String;
-type USVString = String;
 
 pub struct InsertLocation {
     parent: Rc<RefCell<NodeKind>>,
@@ -1040,27 +1039,6 @@ impl Element {
         match &self.namespace_prefix {
             Some(prefix) => format!("{}:{}", prefix, self.local_name),
             None => self.local_name.clone(),
-        }
-    }
-
-    fn uppercase_qualified_name(&self) -> DOMString {
-        let qualified_name = self.qualified_name();
-
-        if self
-            .namespace
-            .as_ref()
-            .is_some_and(|n| n.as_str() == HTML_NAMESPACE)
-            && self
-                .node()
-                .borrow()
-                .node_document()
-                .as_ref()
-                .unwrap()
-                .is_html()
-        {
-            qualified_name.to_uppercase()
-        } else {
-            qualified_name
         }
     }
 

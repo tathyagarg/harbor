@@ -286,6 +286,7 @@ fn fs_selection_to_string(fs_selection: uint16, mac_style: uint16) -> String {
 }
 
 // TODO: Custom implement Debug
+#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct OS2Table_v5 {
     version: uint16,

@@ -2,10 +2,6 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use wgpu::{Buffer, Device};
-
-use crate::font::ttf::TableDirectory;
-use crate::render::text::GlyphInstance;
 use crate::render::{RendererIdentifier, TextRenderer};
 
 use crate::globals::FONTS;
@@ -25,12 +21,16 @@ pub struct Layout {
 
 impl Layout {
     pub fn new(document: Rc<RefCell<Document>>, window_size: (f64, f64)) -> Self {
-        Layout {
+        let mut this = Layout {
             document,
             root_box: None,
             _renderers: HashMap::new(),
             _window_size: window_size,
-        }
+        };
+
+        this.populate_renderers();
+
+        this
     }
 
     pub fn make_tree(&mut self) {
@@ -62,7 +62,7 @@ impl Layout {
         self.layout();
     }
 
-    pub fn populate_renderers(&mut self, device: &Device) {
+    pub fn populate_renderers(&mut self) {
         for (font_name, font_collection) in FONTS.iter() {
             for font in &font_collection.table_directories {
                 let identifier = RendererIdentifier {

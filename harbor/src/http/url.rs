@@ -789,10 +789,6 @@ impl URLPath {
     fn is_empty_list(&self) -> bool {
         self._ensure_list().is_empty()
     }
-
-    fn len_list(&self) -> usize {
-        self._ensure_list().len()
-    }
 }
 
 impl Default for URLPath {

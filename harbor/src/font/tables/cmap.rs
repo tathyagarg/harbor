@@ -188,9 +188,9 @@ pub trait CMAPSubtableTrait {
 #[derive(Clone, Debug)]
 pub struct CMAPSubtable0 {
     /// This is the length in bytes of the subtable.
-    length: uint16,
+    _length: uint16,
 
-    language: uint16,
+    _language: uint16,
 
     /// An array that maps character codes to glyph index values.
     glyph_id_array: [u8; 256],
@@ -199,8 +199,8 @@ pub struct CMAPSubtable0 {
 impl Default for CMAPSubtable0 {
     fn default() -> Self {
         CMAPSubtable0 {
-            length: 0,
-            language: 0,
+            _length: 0,
+            _language: 0,
             glyph_id_array: [0; 256],
         }
     }
@@ -211,16 +211,16 @@ impl CMAPSubtableTrait for CMAPSubtable0 {
     where
         Self: Sized,
     {
-        let length = uint16::from_data(&data[2..]);
+        let _length = uint16::from_data(&data[2..]);
 
-        let language = interpret_language(encoding.platform_id, uint16::from_data(&data[4..]));
+        let _language = interpret_language(encoding.platform_id, uint16::from_data(&data[4..]));
 
         let mut glyph_id_array = [0u8; 256];
         glyph_id_array.copy_from_slice(&data[6..262]);
 
         CMAPSubtable0 {
-            length,
-            language,
+            _length,
+            _language,
             glyph_id_array,
         }
     }
@@ -525,12 +525,12 @@ pub struct CMAPSubtable12 {
     /// reserved: uint16,
 
     /// Byte length of this subtable (including the header)
-    length: uint32,
+    _length: uint32,
 
-    language: uint32,
+    _language: uint32,
 
     /// Number of groupings which follow
-    n_groups: uint32,
+    _n_groups: uint32,
 
     /// Array of SequentialMapGroup records.
     groups: Vec<SequentialMapGroup>,
@@ -541,15 +541,15 @@ impl CMAPSubtableTrait for CMAPSubtable12 {
     where
         Self: Sized,
     {
-        let length = uint32::from_data(&_data[4..]);
+        let _length = uint32::from_data(&_data[4..]);
 
-        let language = uint32::from_data(&_data[8..]);
+        let _language = uint32::from_data(&_data[8..]);
 
-        let n_groups = uint32::from_data(&_data[12..]);
-        let mut groups = Vec::with_capacity(n_groups as usize);
+        let _n_groups = uint32::from_data(&_data[12..]);
+        let mut groups = Vec::with_capacity(_n_groups as usize);
 
         let mut offset = 16;
-        for _ in 0..n_groups {
+        for _ in 0.._n_groups {
             let start_char_code = uint32::from_data(&_data[offset..]);
             let end_char_code = uint32::from_data(&_data[offset + 4..]);
             let start_glyph_id = uint32::from_data(&_data[offset + 8..]);
@@ -564,9 +564,9 @@ impl CMAPSubtableTrait for CMAPSubtable12 {
         }
 
         CMAPSubtable12 {
-            length,
-            language,
-            n_groups,
+            _length,
+            _language,
+            _n_groups,
             groups,
         }
     }
