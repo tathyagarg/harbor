@@ -937,18 +937,16 @@ impl Box {
                         .rposition(|b| {
                             let b_borrow = b.borrow();
                             if let Some(node_rc) = &b_borrow.associated_node {
-                                if let NodeKind::Element(_) = node_rc.borrow().deref() {
+                                if let NodeKind::Element(e) = node_rc.borrow().deref() {
                                     let style = b_borrow.style().unwrap_or_default();
 
-                                    return style.position == Position::Relative
-                                        || style.position == Position::Absolute
-                                        || style.position == Position::Fixed;
+                                    return style.position != Position::Static;
                                 }
                             }
 
                             false
                         })
-                        .map(|idx| idx + 1);
+                        .map(|idx| parents.len() - 1 - idx);
 
                     return (0.0, 0.0, false);
                 }
@@ -1157,7 +1155,6 @@ pub fn handle_declaration(
         }
         "top" => {
             style.top = Top::from_cv(&mut stream).unwrap_or_default();
-            println!("resolving top for {:?}", style.top);
             style.top.resolve(parents.unwrap_or(&vec![]));
         }
         "left" => {

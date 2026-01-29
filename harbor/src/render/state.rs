@@ -79,11 +79,6 @@ impl WindowState {
             layout_box.position().1 + respected_parent.1.1 + layout_box.margin().top(),
         );
 
-        // println!(
-        //     "adj position: {:?}, respected parent: {:#?} ({:?}), this: {:#?}",
-        //     adj_position, respected_parent, layout_box.position_relative_to, layout_box
-        // );
-
         let bg_color = layout_box
             .style()
             .map(|s| s.background.color().used())

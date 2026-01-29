@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>tattuuuu</title>
+  <style>
+    h2 { font-family: monospace; }
+
+    span { font-size: 100px; font-family: monospace; color: white; }
+
+    #abs-wrapper, #rel-wrapper {
+      position: relative;
+      margin-bottom: 50px;
+    }
+
+    .a { background-color: red; }
+    .b { background-color: green; top: 100px; left: 150px; }
+    .c { background-color: blue; }
+
+    .abs { position: absolute; }
+    .rel { position: relative; }
+  </style>
+</head>
+<body>
+  <h1>Positioning example</h1>
+  <p>The B <code>span</code> have <code>top: 100px; left: 150px;</code> style associated to them.</p>
+
+  <div id="abs-wrapper">
+  <h2>position: absolute;</h2>
+  <div>
+    <span class="a">A</span>
+    <span class="b abs">B</span>
+    <span class="c">C</span>
+  </div>
+</div>
+
+    <div id="rel-wrapper">
+  <h2>position: relative</h2>
+  <div>
+    <span class="a">A</span>
+    <span class="b rel">B</span>
+    <span class="c">C</span>
+  </div>
+</div>
+</body>
+</html>

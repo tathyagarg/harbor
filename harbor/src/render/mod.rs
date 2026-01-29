@@ -105,24 +105,12 @@ impl TextRenderer {
                     return None;
                 }
 
-                let mut min_x = f32::INFINITY;
-                let mut min_y = f32::INFINITY;
-                let mut max_x = f32::NEG_INFINITY;
-                let mut max_y = f32::NEG_INFINITY;
-
-                for p in &points {
-                    min_x = min_x.min(p.x);
-                    min_y = min_y.min(p.y);
-                    max_x = max_x.max(p.x);
-                    max_y = max_y.max(p.y);
-                }
-
                 let scale = font_size as f32 / self.font.units_per_em() as f32;
 
                 let glyph_verts = points
                     .iter()
                     .map(|p| GlyphVertex {
-                        position: [(p.x - min_x) * scale, (p.y) * scale],
+                        position: [p.x * scale, p.y * scale],
                     })
                     .collect::<Vec<GlyphVertex>>();
 
