@@ -395,7 +395,7 @@ impl TableDirectory {
             if let TableRecordData::HMtx(hmtx_table) = &hmtx_record._data {
                 return hmtx_table
                     .h_metrics
-                    .get(glyph_index as usize)
+                    .get((hmtx_table.h_metrics.len() - 1).min(glyph_index as usize))
                     .map(|h_metric| h_metric.advance_width);
             }
         }
@@ -408,7 +408,7 @@ impl TableDirectory {
             if let TableRecordData::Glyf(glyf_table) = &glyf_record._data {
                 if let Some(glyph) = glyf_table.glyphs.get(glyph_index as usize) {
                     let delta = glyph.header.x_max - glyph.header.x_min;
-                    let scaled = delta as f32 * 1.10;
+                    let scaled = delta as f32 * 1.25;
 
                     return Some(scaled.ceil() as uint16);
                 }
