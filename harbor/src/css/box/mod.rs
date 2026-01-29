@@ -899,6 +899,38 @@ impl Box {
                 let e = parents.pop().unwrap();
                 let style = e.borrow().style().unwrap_or_default();
 
+                if style.position != Position::Static {
+                    let y = if !matches!(style.top.kind, PositioningValueKind::Auto) {
+                        style.top.resolved()
+                    } else if !matches!(style.bottom.kind, PositioningValueKind::Auto) {
+                        style.bottom.resolved().map(|v| -v)
+                    } else {
+                        Some(0.0)
+                    };
+
+                    let x = if !matches!(style.left.kind, PositioningValueKind::Auto) {
+                        style.left.resolved()
+                    } else if !matches!(style.right.kind, PositioningValueKind::Auto) {
+                        style.right.resolved().map(|v| -v)
+                    } else {
+                        Some(0.0)
+                    };
+
+                    match style.position {
+                        Position::Relative => {
+                            self._position_x =
+                                Some(self._position_x.unwrap_or(0.0) + x.unwrap_or(0.0));
+                            self._position_y =
+                                Some(self._position_y.unwrap_or(0.0) + y.unwrap_or(0.0));
+                        }
+                        Position::Absolute | Position::Fixed => {
+                            self._position_x = Some(x.unwrap_or(0.0));
+                            self._position_y = Some(y.unwrap_or(0.0));
+                        }
+                        _ => {}
+                    }
+                }
+
                 if style.position == Position::Absolute {
                     self.position_relative_to = parents
                         .iter()
@@ -916,23 +948,7 @@ impl Box {
 
                             false
                         })
-                        .map(|idx| idx + 2);
-
-                    if !matches!(style.top.kind, PositioningValueKind::Auto) {
-                        self._position_y = style.top.resolved();
-                    } else if !matches!(style.bottom.kind, PositioningValueKind::Auto) {
-                        self._position_y = style.bottom.resolved().map(|v| -v);
-                    } else {
-                        self._position_y = Some(0.0);
-                    }
-
-                    if !matches!(style.left.kind, PositioningValueKind::Auto) {
-                        self._position_x = style.left.resolved();
-                    } else if !matches!(style.right.kind, PositioningValueKind::Auto) {
-                        self._position_x = style.right.resolved().map(|v| -v);
-                    } else {
-                        self._position_x = Some(0.0);
-                    }
+                        .map(|idx| idx + 1);
 
                     return (0.0, 0.0, false);
                 }

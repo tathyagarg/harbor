@@ -79,6 +79,11 @@ impl WindowState {
             layout_box.position().1 + respected_parent.1.1 + layout_box.margin().top(),
         );
 
+        // println!(
+        //     "adj position: {:?}, respected parent: {:#?} ({:?}), this: {:#?}",
+        //     adj_position, respected_parent, layout_box.position_relative_to, layout_box
+        // );
+
         let bg_color = layout_box
             .style()
             .map(|s| s.background.color().used())
@@ -115,11 +120,6 @@ impl WindowState {
             BoxType::Block => {}
             BoxType::Inline => {
                 render_pass.set_pipeline(&self.line_render_pipeline);
-
-                println!(
-                    "Adjparent_position: {:#?} relparent_position: {:?}",
-                    adj_position, respected_parent.1
-                );
 
                 if layout_box.associated_node.is_some() {
                     let node = layout_box.associated_node.as_ref().unwrap();
