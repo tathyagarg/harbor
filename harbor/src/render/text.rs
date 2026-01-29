@@ -31,7 +31,6 @@ impl TextRenderer {
         ch: char,
         font_size: u32,
         device: &Device,
-        queue: &wgpu::Queue,
     ) -> Option<GlyphMesh> {
         let glyph_id = self.font.cmap_lookup(ch as u32);
 
@@ -335,12 +334,23 @@ pub fn build_filled_glyph_mesh(contours: Vec<Vec<Point>>) -> Vec<GlyphVertex> {
     let mut vertices: Vec<GlyphVertex> = Vec::new();
 
     for contour in contours {
-        let contour_vertices: Vec<GlyphVertex> = contour
-            .iter()
-            .map(|p| GlyphVertex {
+        let mut contour_vertices: Vec<GlyphVertex> = Vec::new();
+
+        for p in contour.iter() {
+            // only unique points go in contour_vertices
+            if contour_vertices
+                .iter()
+                .any(|v| v.position[0] == p.x && v.position[1] == p.y)
+            {
+                continue;
+            }
+
+            contour_vertices.push(GlyphVertex {
                 position: [p.x, p.y],
-            })
-            .collect::<Vec<_>>();
+            });
+        }
+
+        println!("Contour vertices: {:#?}", contour_vertices);
 
         // .filter_map(|(i, p)| {
         //     if i % 2 == 0 {

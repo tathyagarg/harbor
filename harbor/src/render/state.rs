@@ -173,12 +173,8 @@ impl WindowState {
                             let font_size = style.font.resolved_font_size().unwrap_or(16.0) as f32;
 
                             for ch in text_content.chars() {
-                                let glyph_mesh = renderer.get_from_char(
-                                    ch,
-                                    font_size as u32,
-                                    &self.device,
-                                    &self.queue,
-                                );
+                                let glyph_mesh =
+                                    renderer.get_from_char(ch, font_size as u32, &self.device);
 
                                 if let Some(glyph) = glyph_mesh {
                                     glyph_instances.entry(ch).or_default().push(GlyphInstance {
@@ -213,7 +209,7 @@ impl WindowState {
 
                             for (ch, instances) in glyph_instances {
                                 let mut glyph = renderer
-                                    .get_from_char(ch, font_size as u32, &self.device, &self.queue)
+                                    .get_from_char(ch, font_size as u32, &self.device)
                                     .unwrap();
 
                                 render_pass.set_pipeline(&self.line_render_pipeline);
