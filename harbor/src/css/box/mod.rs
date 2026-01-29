@@ -18,7 +18,7 @@ use crate::{
     },
     html5::dom::{Document, Element, NodeKind},
     infra::InputStream,
-    render::{RendererIdentifier, TextRenderer},
+    render::{RendererIdentifier, text::TextRenderer},
 };
 
 /// Represents the edges of a box: top, right, bottom, left
@@ -937,7 +937,7 @@ impl Box {
                         .rposition(|b| {
                             let b_borrow = b.borrow();
                             if let Some(node_rc) = &b_borrow.associated_node {
-                                if let NodeKind::Element(e) = node_rc.borrow().deref() {
+                                if let NodeKind::Element(_) = node_rc.borrow().deref() {
                                     let style = b_borrow.style().unwrap_or_default();
 
                                     return style.position != Position::Static;

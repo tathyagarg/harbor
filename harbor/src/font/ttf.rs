@@ -685,12 +685,176 @@ impl TableDirectory {
         out.extend(segments);
     }
 
+    pub fn make_glyph_segments_contours(
+        &self,
+        glyph_index: GLYPH_ID,
+        precision: f32,
+        out: &mut Vec<Vec<Segment>>,
+    ) {
+        let glyf = match self.get_table_record(b"glyf").unwrap().data() {
+            TableRecordData::Glyf(glyf_table) => glyf_table,
+            _ => {
+                panic!("Glyf table not found.");
+            }
+        };
+
+        let glyph = glyf.glyphs.get(glyph_index as usize).unwrap();
+
+        match &glyph.data {
+            GlyphDataType::Simple(simple) => {
+                for contour in &simple.contours {
+                    let mut segment_part = Vec::<Segment>::new();
+
+                    // populate segments
+                    let contour_points = contour.points.clone();
+
+                    let mut prev = if contour_points[0].on_curve == TRUE {
+                        contour_points[0].clone()
+                    } else if contour_points[contour_points.len() - 1].on_curve == TRUE {
+                        contour_points[contour_points.len() - 1].clone()
+                    } else {
+                        Point::midpoint(
+                            &contour_points[0],
+                            &contour_points[contour_points.len() - 1],
+                        )
+                    };
+
+                    let mut i = contour_points.len() - 1;
+                    while segment_part.len() < contour_points.len() {
+                        let mut curr = contour_points[i % contour_points.len()].clone();
+                        let mut next = contour_points[(i + 1) % contour_points.len()].clone();
+
+                        if curr.on_curve == TRUE && next.on_curve == TRUE {
+                            // Line segment
+                            segment_part.push(Segment::Line(curr.clone(), next));
+                            prev = curr;
+                        } else if curr.on_curve == TRUE && next.on_curve == FALSE {
+                            // Quadratic Bezier segment
+                            while next.on_curve == FALSE {
+                                let after_next =
+                                    contour_points[(i + 2) % contour_points.len()].clone();
+
+                                let control_point = next.clone();
+                                let end_point = if after_next.on_curve == TRUE {
+                                    after_next.clone()
+                                } else {
+                                    Point::midpoint(&next, &after_next)
+                                };
+
+                                segment_part.push(Segment::Quadratic(
+                                    curr.clone(),
+                                    control_point,
+                                    end_point.clone(),
+                                ));
+
+                                curr = end_point;
+                                next = after_next;
+                                i += 1;
+                            }
+                            prev = curr;
+                        } else {
+                            // curr is off-curve
+                            let control_point = curr.clone();
+                            let end_point = if next.on_curve == TRUE {
+                                next.clone()
+                            } else {
+                                Point::midpoint(&curr, &next)
+                            };
+
+                            segment_part.push(Segment::Quadratic(
+                                prev.clone(),
+                                control_point,
+                                end_point.clone(),
+                            ));
+
+                            prev = end_point;
+                        }
+
+                        i += 1;
+                    }
+
+                    out.push(segment_part);
+                }
+            }
+            GlyphDataType::Composite(composite) => {
+                for component in &composite.components {
+                    let mut segment_part = Vec::<Segment>::new();
+                    let component_glyph_index = component.glyph_index;
+
+                    // if let Some(post_record) = self.get_table_record(b"post") {
+                    //     if let TableRecordData::Post(post_table) = &post_record._data {
+                    //         println!(
+                    //             "Component Glyph Name: {}",
+                    //             post_table.glyph_name(component_glyph_index as u16).unwrap()
+                    //         );
+                    //     }
+                    // }
+
+                    let mut component_segments: Vec<Segment> = Vec::new();
+                    self.make_glyph_segments(
+                        component_glyph_index,
+                        precision,
+                        &mut component_segments,
+                    );
+
+                    if component.flags & CompositeGlyphFlags::ScaledComponentOffset != 0 {
+                        let (x, y) = (component.arg1, component.arg2);
+
+                        for segment in &mut segment_part {
+                            segment.translate(x as f32, y as f32);
+                        }
+
+                        let transform = &component.transform;
+
+                        for segment in component_segments {
+                            segment_part.push(segment.transformed(transform.clone()));
+                        }
+                    } else {
+                        let transform = &component.transform;
+
+                        for segment in component_segments {
+                            segment_part.push(segment.transformed(transform.clone()));
+                        }
+
+                        let (x, y) = (component.arg1, component.arg2);
+
+                        for segment in &mut segment_part {
+                            segment.translate(x as f32, y as f32);
+                        }
+                    }
+
+                    out.push(segment_part);
+                }
+            }
+        }
+    }
+
     pub fn make_glyph_points(&self, glyph_index: GLYPH_ID, precision: f32, out: &mut Vec<Point>) {
         let mut segments: Vec<Segment> = Vec::new();
         self.make_glyph_segments(glyph_index, precision, &mut segments);
 
         for segment in &segments {
             segment.flatten(out, 5.0);
+        }
+    }
+
+    pub fn make_glyph_points_contours(
+        &self,
+        glyph_index: GLYPH_ID,
+        precision: f32,
+        out: &mut Vec<Vec<Point>>,
+    ) {
+        let mut segment_contours: Vec<Vec<Segment>> = Vec::new();
+        self.make_glyph_segments_contours(glyph_index, precision, &mut segment_contours);
+
+        for contour in &segment_contours {
+            let mut points: Vec<Point> = Vec::new();
+
+            for segment in contour {
+                segment.flatten_no_dup(&mut points, 5.0);
+            }
+
+            out.push(points);
         }
     }
 

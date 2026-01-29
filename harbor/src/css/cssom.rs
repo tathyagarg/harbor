@@ -12,8 +12,7 @@ use crate::{
         colors::{Color, is_color},
         parser::{AtRule, ComponentValue, parse_css_declaration_block},
         properties::{
-            Background, Bottom, Display, Font, Left, LengthPercentage, Margin, Position, Right,
-            Top, WidthValue,
+            Background, Bottom, Display, Font, Left, Margin, Position, Right, Top, WidthValue,
         },
         selectors::SelectorList,
         tokenize::{CSSToken, Dimension},

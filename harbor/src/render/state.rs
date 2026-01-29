@@ -33,6 +33,7 @@ pub struct WindowState {
     pub msaa_view: wgpu::TextureView,
 
     pub line_render_pipeline: wgpu::RenderPipeline,
+    pub glyph_fill_render_pipeline: wgpu::RenderPipeline,
     pub fill_render_pipeline: wgpu::RenderPipeline,
     pub circle_render_pipeline: wgpu::RenderPipeline,
 
@@ -215,6 +216,7 @@ impl WindowState {
                                     .get_from_char(ch, font_size as u32, &self.device, &self.queue)
                                     .unwrap();
 
+                                render_pass.set_pipeline(&self.line_render_pipeline);
                                 self.queue.write_buffer(
                                     &glyph.instance_buffer,
                                     0,
@@ -229,6 +231,16 @@ impl WindowState {
 
                                 render_pass.draw(
                                     0..glyph.outline_vertex_count,
+                                    0..glyph.instance_count as u32,
+                                );
+
+                                render_pass.set_pipeline(&self.glyph_fill_render_pipeline);
+                                render_pass
+                                    .set_vertex_buffer(0, glyph.fill_vertex_buffer.slice(..));
+                                render_pass.set_vertex_buffer(1, glyph.instance_buffer.slice(..));
+
+                                render_pass.draw(
+                                    0..glyph.fill_vertex_count,
                                     0..glyph.instance_count as u32,
                                 );
                             }
@@ -519,6 +531,89 @@ impl WindowState {
             cache: None,
         });
 
+        let glyph_fill_render_pipeline =
+            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("Render Pipeline"),
+                layout: Some(
+                    &device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                        label: Some("Glyph Fill Render Pipeline Layout"),
+                        bind_group_layouts: &[&globals_bind_group_layout],
+                        push_constant_ranges: &[],
+                    }),
+                ),
+                vertex: wgpu::VertexState {
+                    module: &shader,
+                    entry_point: Some("glyph_vs_main"),
+                    buffers: &[
+                        wgpu::VertexBufferLayout {
+                            array_stride: std::mem::size_of::<GlyphVertex>() as wgpu::BufferAddress,
+                            step_mode: wgpu::VertexStepMode::Vertex,
+                            attributes: &[wgpu::VertexAttribute {
+                                offset: 0,
+                                shader_location: 0,
+                                format: wgpu::VertexFormat::Float32x2,
+                            }],
+                        },
+                        wgpu::VertexBufferLayout {
+                            array_stride: std::mem::size_of::<GlyphInstance>()
+                                as wgpu::BufferAddress,
+                            step_mode: wgpu::VertexStepMode::Instance,
+                            attributes: &[
+                                wgpu::VertexAttribute {
+                                    offset: 0,
+                                    shader_location: 1,
+                                    format: wgpu::VertexFormat::Float32x2,
+                                },
+                                wgpu::VertexAttribute {
+                                    offset: std::mem::size_of::<[f32; 2]>() as wgpu::BufferAddress,
+                                    shader_location: 2,
+                                    format: wgpu::VertexFormat::Float32x4,
+                                },
+                            ],
+                        },
+                    ],
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: &shader,
+                    entry_point: Some("fs_main"),
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format: config.format,
+                        blend: Some(wgpu::BlendState {
+                            color: wgpu::BlendComponent {
+                                src_factor: wgpu::BlendFactor::SrcAlpha,
+                                dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                                operation: wgpu::BlendOperation::Add,
+                            },
+                            alpha: wgpu::BlendComponent {
+                                src_factor: wgpu::BlendFactor::One,
+                                dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                                operation: wgpu::BlendOperation::Add,
+                            },
+                        }),
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                }),
+                primitive: wgpu::PrimitiveState {
+                    topology: wgpu::PrimitiveTopology::TriangleList,
+                    strip_index_format: None,
+                    front_face: wgpu::FrontFace::Ccw,
+                    cull_mode: None,
+                    unclipped_depth: false,
+                    polygon_mode: wgpu::PolygonMode::Fill,
+                    conservative: false,
+                },
+                depth_stencil: None,
+                multisample: wgpu::MultisampleState {
+                    count: 4,
+                    mask: !0,
+                    alpha_to_coverage_enabled: false,
+                },
+                multiview: None,
+                cache: None,
+            });
+
         let fill_render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Fill Render Pipeline"),
             layout: Some(&render_pipeline_layout),
@@ -645,6 +740,7 @@ impl WindowState {
             msaa_view,
             layout,
             line_render_pipeline,
+            glyph_fill_render_pipeline,
             fill_render_pipeline,
             circle_render_pipeline,
             is_surface_configured: false,

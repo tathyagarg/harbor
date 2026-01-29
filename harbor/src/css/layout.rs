@@ -2,12 +2,13 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::render::{RendererIdentifier, TextRenderer};
+use crate::render::RendererIdentifier;
 
 use crate::globals::FONTS;
 
 use crate::css::r#box;
 use crate::html5::dom::Document;
+use crate::render::text::TextRenderer;
 
 #[derive(Clone)]
 pub struct Layout {
