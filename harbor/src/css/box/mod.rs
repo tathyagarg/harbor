@@ -11,9 +11,9 @@ use crate::{
         colors::Color,
         cssom::{CSSDeclaration, ComputedStyle},
         properties::{
-            Background, CSSParseable, Display, Font, FontFamily, FontSize, FontStyle, FontWeight,
-            Image, LineHeight, Margin, MarginValue, Origin, Position, PositionValue, RepeatStyle,
-            WidthValue,
+            Background, Bottom, CSSParseable, Display, Font, FontFamily, FontSize, FontStyle,
+            FontWeight, Image, Left, LineHeight, Margin, MarginValue, Origin, Position,
+            PositionValue, PositioningValueKind, RepeatStyle, Right, Top, WidthValue,
         },
     },
     html5::dom::{Document, Element, NodeKind},
@@ -897,23 +897,16 @@ impl Box {
                 self._content_width = self._content_width.max(pen_x);
 
                 let e = parents.pop().unwrap();
+                let style = e.borrow().style().unwrap_or_default();
 
-                if e.borrow().style().unwrap_or_default().position == Position::Absolute {
+                if style.position == Position::Absolute {
                     self.position_relative_to = parents
                         .iter()
                         .rposition(|b| {
                             let b_borrow = b.borrow();
                             if let Some(node_rc) = &b_borrow.associated_node {
-                                if let NodeKind::Element(e) = node_rc.borrow().deref() {
+                                if let NodeKind::Element(_) = node_rc.borrow().deref() {
                                     let style = b_borrow.style().unwrap_or_default();
-
-                                    // if style.position != Position::Static
-                                    // {
-                                    //     println!(
-                                    //         "Found positioned ancestor for absolute positioning: {:?}",
-                                    //         e
-                                    //     );
-                                    // }
 
                                     return style.position == Position::Relative
                                         || style.position == Position::Absolute
@@ -925,8 +918,22 @@ impl Box {
                         })
                         .map(|idx| idx + 2);
 
-                    self._position_x = Some(100.0);
-                    self._position_y = Some(100.0);
+                    if !matches!(style.top.kind, PositioningValueKind::Auto) {
+                        self._position_y = style.top.resolved();
+                    } else if !matches!(style.bottom.kind, PositioningValueKind::Auto) {
+                        self._position_y = style.bottom.resolved().map(|v| -v);
+                    } else {
+                        self._position_y = Some(0.0);
+                    }
+
+                    if !matches!(style.left.kind, PositioningValueKind::Auto) {
+                        self._position_x = style.left.resolved();
+                    } else if !matches!(style.right.kind, PositioningValueKind::Auto) {
+                        self._position_x = style.right.resolved().map(|v| -v);
+                    } else {
+                        self._position_x = Some(0.0);
+                    }
+
                     return (0.0, 0.0, false);
                 }
             }
@@ -1099,9 +1106,10 @@ pub fn handle_declaration(
     style: &mut ComputedStyle,
     parents: Option<&Vec<Rc<RefCell<Element>>>>,
 ) {
+    let mut stream = InputStream::new(&declaration.value);
+
     match declaration.property_name.as_str() {
         "color" => {
-            let mut stream = InputStream::new(&declaration.value);
             style.color = Color::from_cv(&mut stream).unwrap_or(Color::default());
         }
         "background" => {
@@ -1117,11 +1125,9 @@ pub fn handle_declaration(
             handle_font_property(declaration, style, parents);
         }
         "width" => {
-            let mut stream = InputStream::new(&declaration.value);
             style.width = WidthValue::from_cv(&mut stream).unwrap_or_default();
         }
         "display" => {
-            let mut stream = InputStream::new(&declaration.value);
             style.display = Display::from_cv(&mut stream).unwrap_or_default();
         }
         "margin" => {
@@ -1131,8 +1137,24 @@ pub fn handle_declaration(
             handle_margin_property(declaration, style);
         }
         "position" => {
-            let mut stream = InputStream::new(&declaration.value);
             style.position = Position::from_cv(&mut stream).unwrap_or_default();
+        }
+        "top" => {
+            style.top = Top::from_cv(&mut stream).unwrap_or_default();
+            println!("resolving top for {:?}", style.top);
+            style.top.resolve(parents.unwrap_or(&vec![]));
+        }
+        "left" => {
+            style.left = Left::from_cv(&mut stream).unwrap_or_default();
+            style.left.resolve(parents.unwrap_or(&vec![]));
+        }
+        "right" => {
+            style.right = Right::from_cv(&mut stream).unwrap_or_default();
+            style.right.resolve(parents.unwrap_or(&vec![]));
+        }
+        "bottom" => {
+            style.bottom = Bottom::from_cv(&mut stream).unwrap_or_default();
+            style.bottom.resolve(parents.unwrap_or(&vec![]));
         }
         _ => {
             // todo!(

@@ -353,6 +353,38 @@ pub enum LengthPercentage {
     Percentage(Percentage),
 }
 
+impl LengthPercentage {
+    pub fn resolve(&self, parents: &Vec<Rc<RefCell<Element>>>) -> f64 {
+        match self {
+            LengthPercentage::Length(dim) => match dim.unit.as_str() {
+                "px" => dim.value as f64,
+                "em" => {
+                    let parent_font_size = parents
+                        .last()
+                        .and_then(|parent| parent.borrow().style().font.resolved_font_size())
+                        .unwrap_or(16.0);
+
+                    dim.value as f64 * parent_font_size
+                }
+                "rem" => {
+                    let root_font_size = parents
+                        .first()
+                        .and_then(|root| root.borrow().style().font.resolved_font_size())
+                        .unwrap_or(16.0);
+
+                    dim.value as f64 * root_font_size
+                }
+                _ => todo!("Handle other length units"),
+            },
+            LengthPercentage::Percentage(perc) => {
+                // For now, assume parent font size is 16px
+                let parent_font_size = 16.0;
+                (*perc as f64 / 100.0) * parent_font_size
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum PositionDirection {
     Left,
@@ -1667,3 +1699,76 @@ impl CSSParseable for Position {
         None
     }
 }
+
+#[derive(Debug, Clone, Default)]
+pub enum PositioningValueKind {
+    #[default]
+    Auto,
+    LengthPercentage(LengthPercentage),
+    // TODO: anchor(), anchor-size()
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct Top {
+    _resolved: Option<f64>,
+
+    pub kind: PositioningValueKind,
+}
+
+impl CSSParseable for Top {
+    fn from_cv(cvs: &mut InputStream<ComponentValue>) -> Option<Self>
+    where
+        Self: Sized,
+    {
+        if let Some(tok) = cvs.consume() {
+            match tok {
+                ComponentValue::Token(CSSToken::Ident(ident)) if ident == "auto" => {
+                    return Some(Top {
+                        kind: PositioningValueKind::Auto,
+                        _resolved: None,
+                    });
+                }
+                ComponentValue::Token(CSSToken::Dimension(dim)) => {
+                    return Some(Top {
+                        kind: PositioningValueKind::LengthPercentage(LengthPercentage::Length(
+                            dim.clone(),
+                        )),
+                        _resolved: None,
+                    });
+                }
+                ComponentValue::Token(CSSToken::Percentage(perc)) => {
+                    return Some(Top {
+                        kind: PositioningValueKind::LengthPercentage(LengthPercentage::Percentage(
+                            perc.clone(),
+                        )),
+                        _resolved: None,
+                    });
+                }
+                _ => {}
+            }
+        }
+
+        cvs.reconsume();
+        None
+    }
+}
+
+impl Top {
+    pub fn resolve(&mut self, parents: &Vec<Rc<RefCell<Element>>>) -> Option<f64> {
+        let res = match &self.kind {
+            PositioningValueKind::Auto => None,
+            PositioningValueKind::LengthPercentage(lp) => Some(lp.resolve(parents)),
+        };
+
+        self._resolved = res;
+        res
+    }
+
+    pub fn resolved(&self) -> Option<f64> {
+        self._resolved
+    }
+}
+
+pub type Bottom = Top;
+pub type Left = Top;
+pub type Right = Top;

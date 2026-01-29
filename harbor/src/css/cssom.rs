@@ -11,7 +11,10 @@ use crate::{
     css::{
         colors::{Color, is_color},
         parser::{AtRule, ComponentValue, parse_css_declaration_block},
-        properties::{Background, Display, Font, Margin, Position, WidthValue},
+        properties::{
+            Background, Bottom, Display, Font, Left, LengthPercentage, Margin, Position, Right,
+            Top, WidthValue,
+        },
         selectors::SelectorList,
         tokenize::{CSSToken, Dimension},
         values::angles::{is_angle_unit, to_canonical_angle},
@@ -701,6 +704,11 @@ pub struct ComputedStyle {
     pub margin: Margin,
 
     pub width: WidthValue,
+
+    pub top: Top,
+    pub right: Right,
+    pub bottom: Bottom,
+    pub left: Left,
 }
 
 impl ComputedStyle {

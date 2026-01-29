@@ -59,7 +59,6 @@ impl WindowState {
     pub fn render_box(
         &mut self,
         layout_box: Box,
-        parent_position: (f64, f64),
         parents: &mut Vec<(Box, (f64, f64))>,
         render_pass: &mut wgpu::RenderPass,
     ) {
@@ -285,7 +284,7 @@ impl WindowState {
         parents.push((layout_box.clone(), adj_position));
 
         for child in &layout_box.children {
-            self.render_box(child.borrow().clone(), adj_position, parents, render_pass);
+            self.render_box(child.borrow().clone(), parents, render_pass);
         }
 
         parents.pop();
@@ -340,7 +339,7 @@ impl WindowState {
 
             let root_box = self.layout.root_box.as_ref().unwrap().borrow().clone();
 
-            self.render_box(root_box, (0.0, 0.0), &mut vec![], &mut _render_pass);
+            self.render_box(root_box, &mut vec![], &mut _render_pass);
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
