@@ -50,6 +50,12 @@ pub struct WindowState {
 }
 
 impl WindowState {
+    /// Renders a layout box and its children recursively
+    /// # Arguments
+    /// * `layout_box` - The layout box to render
+    /// * `position` - The position offset to apply to the box
+    /// * `parents` - A mutable reference to a vector of parent boxes
+    /// * `render_pass` - A mutable reference to the current render pass
     pub fn render_box(
         &mut self,
         layout_box: Box,
@@ -63,14 +69,17 @@ impl WindowState {
                 let bg_color = layout_box.style().unwrap().background.color().used();
 
                 if bg_color[3] > 0.0 {
+                    let adj_position = (
+                        layout_box.position().0 as f64 + position.0 + layout_box.margin().left(),
+                        layout_box.position().1 as f64 + position.1 + layout_box.margin().top(),
+                    );
+
                     let window_size = self.window.inner_size();
 
                     // println!("Box: {:#?}", layout_box);
 
-                    let pixel_x =
-                        (layout_box.position().0 + position.0 + layout_box.margin().left()) as f32;
-                    let pixel_y =
-                        (layout_box.position().1 + position.1 + layout_box.margin().top()) as f32;
+                    let pixel_x = adj_position.0 as f32;
+                    let pixel_y = adj_position.1 as f32;
 
                     let x_pos = (pixel_x / window_size.width as f32) * 2.0 - 1.0;
                     let y_pos = 1.0 - (pixel_y / window_size.height as f32) * 2.0;

@@ -1633,7 +1633,7 @@ impl CSSParseable for Margin {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Eq, PartialEq)]
 pub enum Position {
     #[default]
     Static,

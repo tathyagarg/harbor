@@ -16,7 +16,6 @@ use crate::{
             WidthValue,
         },
     },
-    globals::{DEFAULT_FONT_FAMILY, FONTS},
     html5::dom::{Document, Element, NodeKind},
     infra::InputStream,
     render::{RendererIdentifier, TextRenderer},
@@ -151,6 +150,8 @@ pub struct Box {
 
     /// The Y position of the box, set during layout formation
     _position_y: Option<f64>,
+
+    pub position_relative_to: Option<Weak<RefCell<Box>>>,
 
     pub children: Vec<Rc<RefCell<Box>>>,
 
@@ -308,6 +309,7 @@ impl Box {
             _box_type: BoxType::Block,
             _position_x: Some(0.0),
             _position_y: Some(0.0),
+            position_relative_to: None,
             children: vec![],
 
             associated_node: None,
@@ -386,6 +388,7 @@ impl Box {
                     _box_type: element.style().display.to_box_type(),
                     _position_x: None,
                     _position_y: None,
+                    position_relative_to: parents.last().cloned(),
                     children: vec![],
 
                     associated_node: Some(Rc::clone(tree)),
@@ -403,6 +406,7 @@ impl Box {
                             _box_type: BoxType::Marker,
                             _position_x: None,
                             _position_y: None,
+                            position_relative_to: parents.last().cloned(),
                             children: vec![],
 
                             associated_node: None,
@@ -416,6 +420,7 @@ impl Box {
                             _box_type: BoxType::Block,
                             _position_x: None,
                             _position_y: None,
+                            position_relative_to: parents.last().cloned(),
                             children: vec![],
 
                             associated_node: Some(Rc::clone(tree)),
@@ -455,6 +460,7 @@ impl Box {
                     _box_type: BoxType::Inline,
                     _position_x: None,
                     _position_y: None,
+                    position_relative_to: parents.last().cloned(),
                     children: vec![],
 
                     associated_node: Some(Rc::clone(tree)),
@@ -522,7 +528,11 @@ impl Box {
                     marker_width + content_width + content_box._margin.horizontal();
                 self._content_height = marker_height.max(content_height);
 
-                (self._content_width, self._content_height, true)
+                (
+                    self._content_width + self._margin.horizontal(),
+                    self._content_height + self._margin.vertical(),
+                    true,
+                )
             }
             BoxType::Marker => {
                 self._content_width = self.get_font_size();
@@ -601,8 +611,8 @@ impl Box {
                         &renderers,
                     );
 
-                    line_width += w + child._margin.horizontal();
-                    line_height = line_height.max(h + child._margin.vertical());
+                    line_width += w;
+                    line_height = line_height.max(h);
 
                     if go_to_next_line {
                         *cursor_y += line_height;
@@ -666,13 +676,13 @@ impl Box {
                         renderers,
                     );
 
-                    cursor_y += h + child._margin.bottom();
+                    cursor_y += h;
                     if go_to_next_line {
                         cursor_x = initial_x;
                         cursor_y += child.get_line_height();
                     }
 
-                    self._content_width = self._content_width.max(w + child._margin.horizontal());
+                    self._content_width = self._content_width.max(w);
                     prev_child = Some(child_box_rc.clone());
                 }
                 _ => {
@@ -731,7 +741,11 @@ impl Box {
             }
         }
 
-        (self._content_width, self._content_height, false)
+        (
+            self._content_width + self._margin.horizontal(),
+            self._content_height + self._margin.vertical(),
+            false,
+        )
     }
 
     /// Layout for inline boxes
@@ -763,19 +777,6 @@ impl Box {
                 let family = style.font.family();
                 let weight = style.font.resolved_font_weight().unwrap_or(400) as u16;
 
-                let mut iterator = family.entries.iter();
-
-                let ttc = loop {
-                    let entry = iterator.next();
-                    if let Some(entry) = entry {
-                        if let Some(f) = FONTS.get(&entry.value()) {
-                            break Some(f);
-                        }
-                    } else {
-                        break FONTS.get(DEFAULT_FONT_FAMILY);
-                    }
-                };
-
                 let font = renderers
                     .get(&RendererIdentifier {
                         font_family: family.entries[0].value(),
@@ -793,14 +794,6 @@ impl Box {
                             .unwrap()
                     })
                     .font;
-
-                // let font = if matches!(style.font.style(), FontStyle::Italic) {
-                //     ttc.and_then(|ttc| ttc.get_italic_font_by_weight(weight))
-                //         .or(ttc.and_then(|ttc| ttc.get_font_by_weight(weight)))
-                // } else {
-                //     ttc.and_then(|ttc| ttc.get_font_by_weight(weight))
-                // }
-                // .or(ttc.and_then(|ttc| ttc.get_regular_font()));
 
                 let scale =
                     style.font.resolved_font_size().unwrap_or(16.0) / font.units_per_em() as f64;
@@ -903,12 +896,35 @@ impl Box {
 
                 self._content_width = self._content_width.max(pen_x);
 
-                parents.pop();
+                let e = parents.pop().unwrap();
+
+                if e.borrow().style().position == Position::Absolute {
+                    // self.position_relative_to = parents.iter().find(|p| {
+                    //     if let Some(node_rc) = &p.borrow().associated_node {
+                    //         if let NodeKind::Element(_) = node_rc.borrow().deref() {
+                    //             let style = p.borrow().style();
+                    //             return style.position == Position::Relative
+                    //                 || style.position == Position::Absolute
+                    //                 || style.position == Position::Fixed;
+                    //         }
+                    //     }
+
+                    //     false
+                    // }).map(|p| Rc::downgrade(p));
+
+                    self._position_x = Some(100.0);
+                    self._position_y = Some(100.0);
+                    return (0.0, 0.0, false);
+                }
             }
             _ => {}
         }
 
-        (self._content_width, self._content_height, false)
+        (
+            self._content_width + self._margin.horizontal(),
+            self._content_height + self._margin.vertical(),
+            false,
+        )
     }
 }
 
