@@ -54,101 +54,72 @@ impl WindowState {
     /// # Arguments
     /// * `layout_box` - The layout box to render
     /// * `position` - The position offset to apply to the box
-    /// * `parents` - A mutable reference to a vector of parent boxes
+    /// * `parents` - A mutable reference to a vector of parent boxes and their positions
     /// * `render_pass` - A mutable reference to the current render pass
     pub fn render_box(
         &mut self,
         layout_box: Box,
-        position: (f64, f64),
-        parents: &mut Vec<Box>,
+        parent_position: (f64, f64),
+        parents: &mut Vec<(Box, (f64, f64))>,
         render_pass: &mut wgpu::RenderPass,
     ) {
-        match layout_box._box_type {
-            BoxType::Block => {
-                render_pass.set_pipeline(&self.fill_render_pipeline);
-                let bg_color = layout_box.style().unwrap().background.color().used();
+        let _maybe_res = (layout_box.clone(), (0.0, 0.0));
 
-                if bg_color[3] > 0.0 {
-                    let adj_position = (
-                        layout_box.position().0 as f64 + position.0 + layout_box.margin().left(),
-                        layout_box.position().1 as f64 + position.1 + layout_box.margin().top(),
-                    );
-
-                    let window_size = self.window.inner_size();
-
-                    // println!("Box: {:#?}", layout_box);
-
-                    let pixel_x = adj_position.0 as f32;
-                    let pixel_y = adj_position.1 as f32;
-
-                    let x_pos = (pixel_x / window_size.width as f32) * 2.0 - 1.0;
-                    let y_pos = 1.0 - (pixel_y / window_size.height as f32) * 2.0;
-
-                    let pixel_w = layout_box.content_edges().horizontal() as f32;
-                    let pixel_h = layout_box.content_edges().vertical() as f32;
-
-                    let width = (pixel_w / window_size.width as f32) * 2.0;
-                    let height = (pixel_h / window_size.height as f32) * 2.0;
-
-                    let verts = rectangle_at(x_pos, y_pos, width, height, bg_color);
-
-                    // println!("verts: {:#?}", verts);
-
-                    let bg_vertex_buffer =
-                        self.device
-                            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                                label: Some("Background Vertex Buffer"),
-                                contents: bytemuck::cast_slice(&verts),
-                                usage: wgpu::BufferUsages::VERTEX,
-                            });
-
-                    render_pass.set_vertex_buffer(0, bg_vertex_buffer.slice(..));
-                    render_pass.draw(0..verts.len() as u32, 0..1);
-                }
+        let respected_parent = if let Some(rel_to) = layout_box.position_relative_to {
+            if rel_to > parents.len() {
+                parents.last().unwrap_or(&_maybe_res)
+            } else {
+                &parents[parents.len() - rel_to]
             }
+        } else {
+            parents.first().unwrap_or(&_maybe_res)
+        };
+
+        let adj_position = (
+            layout_box.position().0 + respected_parent.1.0 + layout_box.margin().left(),
+            layout_box.position().1 + respected_parent.1.1 + layout_box.margin().top(),
+        );
+
+        let bg_color = layout_box
+            .style()
+            .map(|s| s.background.color().used())
+            .unwrap_or([0.0, 0.0, 0.0, 0.0]);
+        if bg_color[3] > 0.0 {
+            render_pass.set_pipeline(&self.fill_render_pipeline);
+
+            let window_size = self.window.inner_size();
+
+            let x_pos = (adj_position.0 as f32 / window_size.width as f32) * 2.0 - 1.0;
+            let y_pos = 1.0 - (adj_position.1 as f32 / window_size.height as f32) * 2.0;
+
+            let pixel_w = layout_box.content_edges().horizontal() as f32;
+            let pixel_h = layout_box.content_edges().vertical() as f32;
+
+            let width = (pixel_w / window_size.width as f32) * 2.0;
+            let height = (pixel_h / window_size.height as f32) * 2.0;
+
+            let verts = rectangle_at(x_pos, y_pos, width, height, bg_color);
+
+            let bg_vertex_buffer =
+                self.device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("Background Vertex Buffer"),
+                        contents: bytemuck::cast_slice(&verts),
+                        usage: wgpu::BufferUsages::VERTEX,
+                    });
+
+            render_pass.set_vertex_buffer(0, bg_vertex_buffer.slice(..));
+            render_pass.draw(0..verts.len() as u32, 0..1);
+        }
+
+        match layout_box._box_type {
+            BoxType::Block => {}
             BoxType::Inline => {
-                let bg_color = layout_box
-                    .style()
-                    .map(|s| s.background.color().used())
-                    .unwrap_or([0.0, 0.0, 0.0, 0.0]);
-                if bg_color[3] > 0.0 {
-                    render_pass.set_pipeline(&self.fill_render_pipeline);
-
-                    let window_size = self.window.inner_size();
-
-                    let pixel_x =
-                        (layout_box.position().0 + position.0 + layout_box.margin().left()) as f32;
-                    let pixel_y =
-                        (layout_box.position().1 + position.1 + layout_box.margin().top()) as f32;
-
-                    let x_pos = (pixel_x / window_size.width as f32) * 2.0 - 1.0;
-                    let y_pos = 1.0 - (pixel_y / window_size.height as f32) * 2.0;
-
-                    let pixel_w = layout_box.content_edges().horizontal() as f32;
-                    let pixel_h = layout_box.content_edges().vertical() as f32;
-
-                    let width = (pixel_w / window_size.width as f32) * 2.0;
-                    let height = (pixel_h / window_size.height as f32) * 2.0;
-
-                    let verts = rectangle_at(x_pos, y_pos, width, height, bg_color);
-
-                    let bg_vertex_buffer =
-                        self.device
-                            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                                label: Some("Inline Background Vertex Buffer"),
-                                contents: bytemuck::cast_slice(&verts),
-                                usage: wgpu::BufferUsages::VERTEX,
-                            });
-
-                    render_pass.set_vertex_buffer(0, bg_vertex_buffer.slice(..));
-                    render_pass.draw(0..verts.len() as u32, 0..1);
-                }
-
                 render_pass.set_pipeline(&self.line_render_pipeline);
 
-                let adj_position = (
-                    layout_box.position().0 as f64 + position.0,
-                    layout_box.position().1 as f64 + position.1,
+                println!(
+                    "Adjparent_position: {:#?} relparent_position: {:?}",
+                    adj_position, respected_parent.1
                 );
 
                 if layout_box.associated_node.is_some() {
@@ -157,13 +128,11 @@ impl WindowState {
                     match node.borrow().deref() {
                         NodeKind::Text(text_node) => {
                             let text_content = text_node.borrow().data().to_string();
-
                             if text_content.trim().is_empty() {
                                 return;
                             }
 
-                            let style = parents.last().unwrap().style().unwrap();
-
+                            let style = parents.last().unwrap().0.style().unwrap();
                             let family = style.font.family();
 
                             let font_weight =
@@ -195,20 +164,6 @@ impl WindowState {
                                         )
                                         .cloned()
                                         .unwrap()
-
-                                    // if let Some(renderer_option) =
-                                    //     self.layout._renderers.get_mut(&RendererIdentifier {
-                                    //         font_family: "Times New Roman".to_string(),
-                                    //         font_weight,
-                                    //         italic,
-                                    //     })
-                                    // {
-                                    //     if let Some(renderer) = renderer_option {
-                                    //         return renderer.clone();
-                                    //     }
-                                    // }
-
-                                    // panic!("No suitable font renderer found");
                                 });
 
                             let mut glyph_instances: HashMap<char, Vec<GlyphInstance>> =
@@ -292,11 +247,6 @@ impl WindowState {
                 // use circle render pipeline
                 render_pass.set_pipeline(&self.circle_render_pipeline);
 
-                let adj_position = (
-                    layout_box.position().0 as f64 + position.0,
-                    layout_box.position().1 as f64 + position.1,
-                );
-
                 let window_size = self.window.inner_size();
 
                 let pixel_x = adj_position.0 as f32;
@@ -332,15 +282,10 @@ impl WindowState {
             _ => {}
         }
 
-        parents.push(layout_box.clone());
+        parents.push((layout_box.clone(), adj_position));
 
         for child in &layout_box.children {
-            let new_position = (
-                layout_box.position().0 + position.0 + layout_box.margin().left(),
-                layout_box.position().1 + position.1 + layout_box.margin().top(),
-            );
-
-            self.render_box(child.borrow().clone(), new_position, parents, render_pass);
+            self.render_box(child.borrow().clone(), adj_position, parents, render_pass);
         }
 
         parents.pop();

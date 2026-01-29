@@ -151,7 +151,7 @@ pub struct Box {
     /// The Y position of the box, set during layout formation
     _position_y: Option<f64>,
 
-    pub position_relative_to: Option<Weak<RefCell<Box>>>,
+    pub position_relative_to: Option<usize>,
 
     pub children: Vec<Rc<RefCell<Box>>>,
 
@@ -388,7 +388,7 @@ impl Box {
                     _box_type: element.style().display.to_box_type(),
                     _position_x: None,
                     _position_y: None,
-                    position_relative_to: parents.last().cloned(),
+                    position_relative_to: Some(1),
                     children: vec![],
 
                     associated_node: Some(Rc::clone(tree)),
@@ -406,7 +406,7 @@ impl Box {
                             _box_type: BoxType::Marker,
                             _position_x: None,
                             _position_y: None,
-                            position_relative_to: parents.last().cloned(),
+                            position_relative_to: Some(1),
                             children: vec![],
 
                             associated_node: None,
@@ -420,7 +420,7 @@ impl Box {
                             _box_type: BoxType::Block,
                             _position_x: None,
                             _position_y: None,
-                            position_relative_to: parents.last().cloned(),
+                            position_relative_to: Some(1),
                             children: vec![],
 
                             associated_node: Some(Rc::clone(tree)),
@@ -460,7 +460,7 @@ impl Box {
                     _box_type: BoxType::Inline,
                     _position_x: None,
                     _position_y: None,
-                    position_relative_to: parents.last().cloned(),
+                    position_relative_to: Some(1),
                     children: vec![],
 
                     associated_node: Some(Rc::clone(tree)),
@@ -481,7 +481,7 @@ impl Box {
         container_height: Option<f64>,
         first_child: bool,
         last_child: bool,
-        parents: &mut Vec<Rc<RefCell<Element>>>,
+        parents: &mut Vec<Rc<RefCell<Box>>>,
         renderers: &HashMap<RendererIdentifier, Option<TextRenderer>>,
     ) -> (f64, f64, bool) {
         match self._box_type {
@@ -565,12 +565,12 @@ impl Box {
         &mut self,
         container_width: Option<f64>,
         container_height: Option<f64>,
-        parents: &mut Vec<Rc<RefCell<Element>>>,
+        parents: &mut Vec<Rc<RefCell<Box>>>,
         renderers: &HashMap<RendererIdentifier, Option<TextRenderer>>,
     ) -> (f64, f64, bool) {
         if let Some(node_rc) = &self.associated_node {
-            if let NodeKind::Element(element_rc) = node_rc.borrow().deref() {
-                parents.push(element_rc.clone());
+            if matches!(node_rc.borrow().deref(), NodeKind::Element(_)) {
+                parents.push(Rc::new(RefCell::new(self.clone())));
             }
         }
 
@@ -587,7 +587,7 @@ impl Box {
              cursor_x: &mut f64,
              cursor_y: &mut f64,
              content_width: &mut f64,
-             parents: &mut Vec<Rc<RefCell<Element>>>,
+             parents: &mut Vec<Rc<RefCell<Box>>>,
              renderers: &HashMap<RendererIdentifier, Option<TextRenderer>>| {
                 if run.is_empty() {
                     return;
@@ -756,7 +756,7 @@ impl Box {
         _container_height: Option<f64>,
         first_child: bool,
         last_child: bool,
-        parents: &mut Vec<Rc<RefCell<Element>>>,
+        parents: &mut Vec<Rc<RefCell<Box>>>,
         renderers: &HashMap<RendererIdentifier, Option<TextRenderer>>,
     ) -> (f64, f64, bool) {
         let mut pen_x = 0.0;
@@ -772,7 +772,7 @@ impl Box {
                 }
 
                 let parent_borrow = parents.last().unwrap().borrow();
-                let style = parent_borrow.style();
+                let style = parent_borrow.style().unwrap_or_default();
 
                 let family = style.font.family();
                 let weight = style.font.resolved_font_weight().unwrap_or(400) as u16;
@@ -867,7 +867,7 @@ impl Box {
                     return (pen_x, self._content_height, true);
                 }
 
-                parents.push(e);
+                parents.push(Rc::new(RefCell::new(self.clone())));
 
                 for (i, child_box) in self.children.iter().enumerate() {
                     let mut child_box = child_box.borrow_mut();
@@ -898,19 +898,32 @@ impl Box {
 
                 let e = parents.pop().unwrap();
 
-                if e.borrow().style().position == Position::Absolute {
-                    // self.position_relative_to = parents.iter().find(|p| {
-                    //     if let Some(node_rc) = &p.borrow().associated_node {
-                    //         if let NodeKind::Element(_) = node_rc.borrow().deref() {
-                    //             let style = p.borrow().style();
-                    //             return style.position == Position::Relative
-                    //                 || style.position == Position::Absolute
-                    //                 || style.position == Position::Fixed;
-                    //         }
-                    //     }
+                if e.borrow().style().unwrap_or_default().position == Position::Absolute {
+                    self.position_relative_to = parents
+                        .iter()
+                        .rposition(|b| {
+                            let b_borrow = b.borrow();
+                            if let Some(node_rc) = &b_borrow.associated_node {
+                                if let NodeKind::Element(e) = node_rc.borrow().deref() {
+                                    let style = b_borrow.style().unwrap_or_default();
 
-                    //     false
-                    // }).map(|p| Rc::downgrade(p));
+                                    // if style.position != Position::Static
+                                    // {
+                                    //     println!(
+                                    //         "Found positioned ancestor for absolute positioning: {:?}",
+                                    //         e
+                                    //     );
+                                    // }
+
+                                    return style.position == Position::Relative
+                                        || style.position == Position::Absolute
+                                        || style.position == Position::Fixed;
+                                }
+                            }
+
+                            false
+                        })
+                        .map(|idx| idx + 2);
 
                     self._position_x = Some(100.0);
                     self._position_y = Some(100.0);
