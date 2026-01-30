@@ -1059,6 +1059,24 @@ impl WindowState {
             });
 
             self.msaa_view = msaa_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+            let stencil_texture = self.device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("Stencil Texture"),
+                size: wgpu::Extent3d {
+                    width: self.config.width,
+                    height: self.config.height,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Depth24PlusStencil8,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                view_formats: &[],
+            });
+
+            self.stencil_view =
+                stencil_texture.create_view(&wgpu::TextureViewDescriptor::default());
         }
     }
 }

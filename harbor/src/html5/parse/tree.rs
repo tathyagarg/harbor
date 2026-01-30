@@ -38,10 +38,6 @@ impl Tag {
     pub fn attribute_names_iter(&self) -> impl Iterator<Item = String> {
         self.attributes.iter().map(|x| x.0.clone())
     }
-
-    fn attribute_names(&self) -> Vec<String> {
-        self.attribute_names_iter().collect()
-    }
 }
 
 pub enum TagToken {
@@ -1067,7 +1063,7 @@ impl InsertMode {
             {
                 parser._reconstruct_active_formatting_elements();
 
-                let element = parser.open_elements_stack.insert_html_element(&token);
+                parser.open_elements_stack.insert_html_element(&token);
                 parser.active_formatting_elements.push_marker();
 
                 parser.flag_frameset_ok = false;
@@ -1181,9 +1177,6 @@ impl InsertMode {
                             .clone();
                     }
                 }
-            }
-            _ => {
-                todo!("Handle other tokens in in body insertion mode: {:?}", token);
             }
         }
 
