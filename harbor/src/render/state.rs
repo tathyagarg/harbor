@@ -31,9 +31,11 @@ pub struct WindowState {
     pub layout: Layout,
 
     pub msaa_view: wgpu::TextureView,
+    pub stencil_view: wgpu::TextureView,
 
     pub line_render_pipeline: wgpu::RenderPipeline,
     pub glyph_fill_render_pipeline: wgpu::RenderPipeline,
+    pub glyph_stencil_render_pipeline: wgpu::RenderPipeline,
     pub fill_render_pipeline: wgpu::RenderPipeline,
     pub circle_render_pipeline: wgpu::RenderPipeline,
 
@@ -212,7 +214,6 @@ impl WindowState {
                                     .get_from_char(ch, font_size as u32, &self.device)
                                     .unwrap();
 
-                                render_pass.set_pipeline(&self.line_render_pipeline);
                                 self.queue.write_buffer(
                                     &glyph.instance_buffer,
                                     0,
@@ -221,24 +222,71 @@ impl WindowState {
 
                                 glyph.instance_count = instances.len() as u32;
 
-                                render_pass
-                                    .set_vertex_buffer(0, glyph.outline_vertex_buffer.slice(..));
-                                render_pass.set_vertex_buffer(1, glyph.instance_buffer.slice(..));
+                                // render_pass.set_pipeline(&self.line_render_pipeline);
+                                // render_pass
+                                //     .set_vertex_buffer(0, glyph.outline_vertex_buffer.slice(..));
+                                // render_pass.set_vertex_buffer(1, glyph.instance_buffer.slice(..));
 
-                                render_pass.draw(
-                                    0..glyph.outline_vertex_count,
-                                    0..glyph.instance_count as u32,
-                                );
+                                // render_pass.draw(
+                                //     0..glyph.outline_vertex_count,
+                                //     0..glyph.instance_count as u32,
+                                // );
 
-                                render_pass.set_pipeline(&self.glyph_fill_render_pipeline);
+                                render_pass.set_pipeline(&self.glyph_stencil_render_pipeline);
                                 render_pass
                                     .set_vertex_buffer(0, glyph.fill_vertex_buffer.slice(..));
                                 render_pass.set_vertex_buffer(1, glyph.instance_buffer.slice(..));
-
                                 render_pass.draw(
                                     0..glyph.fill_vertex_count,
                                     0..glyph.instance_count as u32,
                                 );
+
+                                render_pass.set_pipeline(&self.glyph_fill_render_pipeline);
+                                render_pass.set_stencil_reference(0);
+
+                                // let quad_vertex_buffer = self.device.create_buffer_init(
+                                //     &wgpu::util::BufferInitDescriptor {
+                                //         label: Some("Glyph Quad Vertex Buffer"),
+                                //         contents: bytemuck::cast_slice(&[
+                                //             GlyphVertex {
+                                //                 position: [0.0, 0.0],
+                                //             },
+                                //             GlyphVertex {
+                                //                 position: [200.0, 0.0],
+                                //             },
+                                //             GlyphVertex {
+                                //                 position: [0.0, 200.0],
+                                //             },
+                                //             GlyphVertex {
+                                //                 position: [200.0, 0.0],
+                                //             },
+                                //             GlyphVertex {
+                                //                 position: [200.0, 200.0],
+                                //             },
+                                //             GlyphVertex {
+                                //                 position: [0.0, 200.0],
+                                //             },
+                                //         ]),
+                                //         usage: wgpu::BufferUsages::VERTEX,
+                                //     },
+                                // );
+
+                                render_pass
+                                    .set_vertex_buffer(0, glyph.fill_vertex_buffer.slice(..));
+                                render_pass.set_vertex_buffer(1, glyph.instance_buffer.slice(..));
+                                render_pass.draw(
+                                    0..glyph.fill_vertex_count,
+                                    0..glyph.instance_count as u32,
+                                );
+
+                                // render_pass
+                                //     .set_vertex_buffer(0, glyph.fill_vertex_buffer.slice(..));
+                                // render_pass.set_vertex_buffer(1, glyph.instance_buffer.slice(..));
+
+                                // render_pass.draw(
+                                //     0..glyph.fill_vertex_count,
+                                //     0..glyph.instance_count as u32,
+                                // );
                             }
                         }
                         _ => {}
@@ -325,15 +373,25 @@ impl WindowState {
             let mut _render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &self.msaa_view,
-                    resolve_target: Some(&view),
+                    view: &view,
+                    resolve_target: None,
                     depth_slice: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(self.window_options.background_color),
                         store: wgpu::StoreOp::Store,
                     },
                 })],
-                depth_stencil_attachment: None,
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &self.stencil_view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(0),
+                        store: wgpu::StoreOp::Store,
+                    }),
+                }),
                 occlusion_query_set: None,
                 timestamp_writes: None,
             });
@@ -413,7 +471,7 @@ impl WindowState {
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
-            sample_count: 4,
+            sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: config.format,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
@@ -517,15 +575,142 @@ impl WindowState {
                 polygon_mode: wgpu::PolygonMode::Fill,
                 conservative: false,
             },
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState {
-                count: 4,
-                mask: !0,
-                alpha_to_coverage_enabled: false,
-            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: wgpu::TextureFormat::Depth24PlusStencil8,
+                depth_write_enabled: false,
+                depth_compare: wgpu::CompareFunction::Always,
+                stencil: wgpu::StencilState {
+                    front: wgpu::StencilFaceState {
+                        compare: wgpu::CompareFunction::Always,
+                        pass_op: wgpu::StencilOperation::Keep,
+                        fail_op: wgpu::StencilOperation::Keep,
+                        depth_fail_op: wgpu::StencilOperation::Keep,
+                    },
+                    back: wgpu::StencilFaceState {
+                        compare: wgpu::CompareFunction::Always,
+                        pass_op: wgpu::StencilOperation::Keep,
+                        fail_op: wgpu::StencilOperation::Keep,
+                        depth_fail_op: wgpu::StencilOperation::Keep,
+                    },
+                    read_mask: 0x0,
+                    write_mask: 0x0,
+                },
+                bias: wgpu::DepthBiasState::default(),
+            }),
+            multisample: wgpu::MultisampleState::default(),
+            // multisample: wgpu::MultisampleState {
+            //     count: 1,
+            //     mask: !0,
+            //     alpha_to_coverage_enabled: false,
+            // },
             multiview: None,
             cache: None,
         });
+
+        let glyph_stencil_render_pipeline =
+            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("Glyph Stencil Render Pipeline"),
+                layout: Some(
+                    &device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                        label: Some("Glyph Stencil Render Pipeline Layout"),
+                        bind_group_layouts: &[&globals_bind_group_layout],
+                        push_constant_ranges: &[],
+                    }),
+                ),
+                vertex: wgpu::VertexState {
+                    module: &shader,
+                    entry_point: Some("glyph_vs_main"),
+                    buffers: &[
+                        wgpu::VertexBufferLayout {
+                            array_stride: std::mem::size_of::<GlyphVertex>() as wgpu::BufferAddress,
+                            step_mode: wgpu::VertexStepMode::Vertex,
+                            attributes: &[wgpu::VertexAttribute {
+                                offset: 0,
+                                shader_location: 0,
+                                format: wgpu::VertexFormat::Float32x2,
+                            }],
+                        },
+                        wgpu::VertexBufferLayout {
+                            array_stride: std::mem::size_of::<GlyphInstance>()
+                                as wgpu::BufferAddress,
+                            step_mode: wgpu::VertexStepMode::Instance,
+                            attributes: &[
+                                wgpu::VertexAttribute {
+                                    offset: 0,
+                                    shader_location: 1,
+                                    format: wgpu::VertexFormat::Float32x2,
+                                },
+                                wgpu::VertexAttribute {
+                                    offset: std::mem::size_of::<[f32; 2]>() as wgpu::BufferAddress,
+                                    shader_location: 2,
+                                    format: wgpu::VertexFormat::Float32x4,
+                                },
+                            ],
+                        },
+                    ],
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: &shader,
+                    entry_point: Some("fs_main"),
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format: config.format,
+                        blend: Some(wgpu::BlendState {
+                            color: wgpu::BlendComponent {
+                                src_factor: wgpu::BlendFactor::SrcAlpha,
+                                dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                                operation: wgpu::BlendOperation::Add,
+                            },
+                            alpha: wgpu::BlendComponent {
+                                src_factor: wgpu::BlendFactor::One,
+                                dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                                operation: wgpu::BlendOperation::Add,
+                            },
+                        }),
+                        write_mask: wgpu::ColorWrites::empty(),
+                    })],
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                }),
+                primitive: wgpu::PrimitiveState {
+                    topology: wgpu::PrimitiveTopology::TriangleList,
+                    strip_index_format: None,
+                    front_face: wgpu::FrontFace::Ccw,
+                    cull_mode: None,
+                    unclipped_depth: false,
+                    polygon_mode: wgpu::PolygonMode::Fill,
+                    conservative: false,
+                },
+                depth_stencil: Some(wgpu::DepthStencilState {
+                    format: wgpu::TextureFormat::Depth24PlusStencil8,
+                    depth_write_enabled: false,
+                    depth_compare: wgpu::CompareFunction::Always,
+                    stencil: wgpu::StencilState {
+                        front: wgpu::StencilFaceState {
+                            compare: wgpu::CompareFunction::Always,
+                            pass_op: wgpu::StencilOperation::Invert,
+                            fail_op: wgpu::StencilOperation::Keep,
+                            depth_fail_op: wgpu::StencilOperation::Keep,
+                        },
+                        back: wgpu::StencilFaceState {
+                            compare: wgpu::CompareFunction::Always,
+                            pass_op: wgpu::StencilOperation::Invert,
+                            fail_op: wgpu::StencilOperation::Keep,
+                            depth_fail_op: wgpu::StencilOperation::Keep,
+                        },
+                        read_mask: 0x1,
+                        write_mask: 0x1,
+                    },
+                    bias: wgpu::DepthBiasState::default(),
+                }),
+                multisample: wgpu::MultisampleState::default(),
+                // multisample: wgpu::MultisampleState {
+                //     count: 1,
+                //     mask: !0,
+                //     alpha_to_coverage_enabled: false,
+                // },
+                multiview: None,
+                cache: None,
+            });
 
         let glyph_fill_render_pipeline =
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -600,12 +785,34 @@ impl WindowState {
                     polygon_mode: wgpu::PolygonMode::Fill,
                     conservative: false,
                 },
-                depth_stencil: None,
-                multisample: wgpu::MultisampleState {
-                    count: 4,
-                    mask: !0,
-                    alpha_to_coverage_enabled: false,
-                },
+                depth_stencil: Some(wgpu::DepthStencilState {
+                    format: wgpu::TextureFormat::Depth24PlusStencil8,
+                    depth_write_enabled: false,
+                    depth_compare: wgpu::CompareFunction::Always,
+                    stencil: wgpu::StencilState {
+                        front: wgpu::StencilFaceState {
+                            compare: wgpu::CompareFunction::NotEqual,
+                            pass_op: wgpu::StencilOperation::Keep,
+                            fail_op: wgpu::StencilOperation::Keep,
+                            depth_fail_op: wgpu::StencilOperation::Keep,
+                        },
+                        back: wgpu::StencilFaceState {
+                            compare: wgpu::CompareFunction::NotEqual,
+                            pass_op: wgpu::StencilOperation::Keep,
+                            fail_op: wgpu::StencilOperation::Keep,
+                            depth_fail_op: wgpu::StencilOperation::Keep,
+                        },
+                        read_mask: 0x1,
+                        write_mask: 0x0,
+                    },
+                    bias: wgpu::DepthBiasState::default(),
+                }),
+                multisample: wgpu::MultisampleState::default(),
+                // multisample: wgpu::MultisampleState {
+                //     count: 1,
+                //     mask: !0,
+                //     alpha_to_coverage_enabled: false,
+                // },
                 multiview: None,
                 cache: None,
             });
@@ -649,12 +856,34 @@ impl WindowState {
                 polygon_mode: wgpu::PolygonMode::Fill,
                 conservative: false,
             },
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState {
-                count: 4,
-                mask: !0,
-                alpha_to_coverage_enabled: false,
-            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: wgpu::TextureFormat::Depth24PlusStencil8,
+                depth_write_enabled: false,
+                depth_compare: wgpu::CompareFunction::Always,
+                stencil: wgpu::StencilState {
+                    front: wgpu::StencilFaceState {
+                        compare: wgpu::CompareFunction::Equal,
+                        pass_op: wgpu::StencilOperation::Keep,
+                        fail_op: wgpu::StencilOperation::Keep,
+                        depth_fail_op: wgpu::StencilOperation::Keep,
+                    },
+                    back: wgpu::StencilFaceState {
+                        compare: wgpu::CompareFunction::Equal,
+                        pass_op: wgpu::StencilOperation::Keep,
+                        fail_op: wgpu::StencilOperation::Keep,
+                        depth_fail_op: wgpu::StencilOperation::Keep,
+                    },
+                    read_mask: 0x1,
+                    write_mask: 0x1,
+                },
+                bias: wgpu::DepthBiasState::default(),
+            }),
+            multisample: wgpu::MultisampleState::default(),
+            // multisample: wgpu::MultisampleState {
+            //     count: 1,
+            //     mask: !0,
+            //     alpha_to_coverage_enabled: false,
+            // },
             multiview: None,
             cache: None,
         });
@@ -699,12 +928,34 @@ impl WindowState {
                     polygon_mode: wgpu::PolygonMode::Fill,
                     conservative: false,
                 },
-                depth_stencil: None,
-                multisample: wgpu::MultisampleState {
-                    count: 4,
-                    mask: !0,
-                    alpha_to_coverage_enabled: false,
-                },
+                depth_stencil: Some(wgpu::DepthStencilState {
+                    format: wgpu::TextureFormat::Depth24PlusStencil8,
+                    depth_write_enabled: false,
+                    depth_compare: wgpu::CompareFunction::Always,
+                    stencil: wgpu::StencilState {
+                        front: wgpu::StencilFaceState {
+                            compare: wgpu::CompareFunction::Equal,
+                            pass_op: wgpu::StencilOperation::Keep,
+                            fail_op: wgpu::StencilOperation::Keep,
+                            depth_fail_op: wgpu::StencilOperation::Keep,
+                        },
+                        back: wgpu::StencilFaceState {
+                            compare: wgpu::CompareFunction::Equal,
+                            pass_op: wgpu::StencilOperation::Keep,
+                            fail_op: wgpu::StencilOperation::Keep,
+                            depth_fail_op: wgpu::StencilOperation::Keep,
+                        },
+                        read_mask: 0x1,
+                        write_mask: 0x1,
+                    },
+                    bias: wgpu::DepthBiasState::default(),
+                }),
+                multisample: wgpu::MultisampleState::default(),
+                // multisample: wgpu::MultisampleState {
+                //     count: 1,
+                //     mask: !0,
+                //     alpha_to_coverage_enabled: false,
+                // },
                 multiview: None,
                 cache: None,
             });
@@ -726,6 +977,23 @@ impl WindowState {
             }],
         });
 
+        let stencil_texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Stencil Texture"),
+            size: wgpu::Extent3d {
+                width: config.width,
+                height: config.height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Depth24PlusStencil8,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        });
+
+        let stencil_view = stencil_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
         Self {
             surface,
             window,
@@ -734,8 +1002,10 @@ impl WindowState {
             queue,
             config,
             msaa_view,
+            stencil_view,
             layout,
             line_render_pipeline,
+            glyph_stencil_render_pipeline,
             glyph_fill_render_pipeline,
             fill_render_pipeline,
             circle_render_pipeline,
@@ -781,7 +1051,7 @@ impl WindowState {
                     depth_or_array_layers: 1,
                 },
                 mip_level_count: 1,
-                sample_count: 4,
+                sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
                 format: self.config.format,
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT,

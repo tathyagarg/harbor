@@ -66,8 +66,6 @@ impl TextRenderer {
                     })
                     .collect::<Vec<GlyphVertex>>();
 
-                println!("Filled verts count: {}", filled_verts.len());
-
                 let glyph_mesh = GlyphMesh {
                     outline_vertex_buffer: device.create_buffer_init(&BufferInitDescriptor {
                         label: Some("Glyph Outline Vertex Buffer"),
@@ -268,15 +266,13 @@ pub fn is_ear(
     i_next: usize,
     indices: &[usize],
     vertices: &[GlyphVertex],
+    winding: bool,
 ) -> bool {
     let a = &vertices[i_prev];
     let b = &vertices[i_curr];
     let c = &vertices[i_next];
 
-    println!("Checking ear: a={:?}, b={:?}, c={:?}", a, b, c);
-
-    if !is_convex(a, b, c) {
-        println!("Denied: convex");
+    if (winding && !is_convex(a, b, c)) || (!winding && is_convex(a, b, c)) {
         return false;
     }
 
@@ -284,17 +280,15 @@ pub fn is_ear(
         if i != i_prev && i != i_curr && i != i_next {
             let p = &vertices[i];
             if point_in_triangle(p, a, b, c) {
-                println!("Denied: point in triangle {:?}", p);
                 return false;
             }
         }
     }
 
-    println!("Accepted");
     true
 }
 
-pub fn triangulate_polygon(vertices: &[GlyphVertex]) -> Vec<[GlyphVertex; 3]> {
+pub fn triangulate_polygon(vertices: &[GlyphVertex], winding: bool) -> Vec<[GlyphVertex; 3]> {
     let mut indices: Vec<usize> = (0..vertices.len()).collect();
     let mut triangles: Vec<[GlyphVertex; 3]> = Vec::new();
 
@@ -306,7 +300,7 @@ pub fn triangulate_polygon(vertices: &[GlyphVertex]) -> Vec<[GlyphVertex; 3]> {
             let i_curr = indices[i];
             let i_next = indices[(i + 1) % indices.len()];
 
-            if is_ear(i_prev, i_curr, i_next, &indices, vertices) {
+            if is_ear(i_prev, i_curr, i_next, &indices, vertices, winding) {
                 triangles.push([
                     vertices[i_prev].clone(),
                     vertices[i_curr].clone(),
@@ -325,19 +319,16 @@ pub fn triangulate_polygon(vertices: &[GlyphVertex]) -> Vec<[GlyphVertex; 3]> {
         }
     }
 
-    println!("Triangles: {:#?}", triangles);
-
     triangles
 }
 
 pub fn build_filled_glyph_mesh(contours: Vec<Vec<Point>>) -> Vec<GlyphVertex> {
     let mut vertices: Vec<GlyphVertex> = Vec::new();
 
-    for contour in contours {
+    for contour in &contours {
         let mut contour_vertices: Vec<GlyphVertex> = Vec::new();
 
         for p in contour.iter() {
-            // only unique points go in contour_vertices
             if contour_vertices
                 .iter()
                 .any(|v| v.position[0] == p.x && v.position[1] == p.y)
@@ -350,22 +341,18 @@ pub fn build_filled_glyph_mesh(contours: Vec<Vec<Point>>) -> Vec<GlyphVertex> {
             });
         }
 
-        println!("Contour vertices: {:#?}", contour_vertices);
+        let winding = {
+            let mut sum = 0.0;
+            for i in 0..contour_vertices.len() {
+                let current = &contour_vertices[i];
+                let next = &contour_vertices[(i + 1) % contour_vertices.len()];
+                sum += (next.position[0] - current.position[0])
+                    * (next.position[1] + current.position[1]);
+            }
+            sum > 0.0
+        };
 
-        // .filter_map(|(i, p)| {
-        //     if i % 2 == 0 {
-        //         Some(GlyphVertex {
-        //             position: [p.x, p.y],
-        //         })
-        //     } else {
-        //         None
-        //     }
-        // })
-        // .collect();
-
-        let triangles = triangulate_polygon(&contour_vertices[..contour_vertices.len() - 1]);
-
-        println!("Triangulated contour into {} triangles", triangles.len());
+        let triangles = triangulate_polygon(&contour_vertices, winding);
 
         for triangle in triangles {
             vertices.push(triangle[0]);
@@ -374,6 +361,5 @@ pub fn build_filled_glyph_mesh(contours: Vec<Vec<Point>>) -> Vec<GlyphVertex> {
         }
     }
 
-    println!("Built filled glyph mesh with {} vertices", vertices.len());
     vertices
 }
