@@ -1,12 +1,10 @@
-use std::{
-    cell::RefCell,
-    rc::{Rc, Weak},
-};
+use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     css::{
-        r#box::{Box, BoxType, Edges},
+        r#box::{BoxType, Edges},
         colors::Color,
+        cssom::ComputedStyle,
         parser::{ComponentValue, Function},
         tokenize::{CSSToken, Dimension, NumberType, Percentage},
     },
@@ -20,8 +18,20 @@ pub trait CSSParseable {
         Self: Sized;
 }
 
+pub trait Resolvable<T> {
+    fn resolve(&mut self, parents: &Vec<Rc<RefCell<Element>>>) -> T;
+
+    fn resolve_with_curr(
+        &mut self,
+        parents: &Vec<Rc<RefCell<Element>>>,
+        current: &ComputedStyle,
+    ) -> T;
+
+    fn resolved(&self) -> T;
+}
+
 #[derive(Default, Debug, Clone)]
-pub enum WidthValue {
+pub enum WidthValueKind {
     Length(Dimension),
     Percentage(Percentage),
 
@@ -34,26 +44,42 @@ pub enum WidthValue {
     Stretch,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct WidthValue {
+    pub kind: WidthValueKind,
+
+    _resolved: Option<f64>,
+}
+
+impl WidthValue {
+    pub fn new(kind: WidthValueKind) -> Self {
+        WidthValue {
+            kind,
+            _resolved: None,
+        }
+    }
+}
+
 impl CSSParseable for WidthValue {
     fn from_cv(cvs: &mut InputStream<ComponentValue>) -> Option<Self> {
         if let Some(tok) = cvs.consume() {
             match tok {
                 ComponentValue::Token(CSSToken::Ident(ident)) => match ident.as_str() {
-                    "auto" => Some(WidthValue::Auto),
-                    "max-content" => Some(WidthValue::MaxContent),
-                    "min-content" => Some(WidthValue::MinContent),
-                    "fit-content" => Some(WidthValue::FitContent),
-                    "stretch" => Some(WidthValue::Stretch),
+                    "auto" => Some(WidthValue::new(WidthValueKind::Auto)),
+                    "max-content" => Some(WidthValue::new(WidthValueKind::MaxContent)),
+                    "min-content" => Some(WidthValue::new(WidthValueKind::MinContent)),
+                    "fit-content" => Some(WidthValue::new(WidthValueKind::FitContent)),
+                    "stretch" => Some(WidthValue::new(WidthValueKind::Stretch)),
                     _ => {
                         cvs.reconsume();
                         None
                     }
                 },
                 ComponentValue::Token(CSSToken::Dimension(dim)) => {
-                    Some(WidthValue::Length(dim.clone()))
+                    Some(WidthValue::new(WidthValueKind::Length(dim.clone())))
                 }
                 ComponentValue::Token(CSSToken::Percentage(perc)) => {
-                    Some(WidthValue::Percentage(perc.clone()))
+                    Some(WidthValue::new(WidthValueKind::Percentage(perc.clone())))
                 }
                 _ => {
                     cvs.reconsume();
@@ -66,17 +92,92 @@ impl CSSParseable for WidthValue {
     }
 }
 
-impl WidthValue {
-    pub fn resolve(&self, parent_width: f64) -> f64 {
-        match self {
-            WidthValue::Length(dim) => match dim.unit.as_str() {
+impl Resolvable<f64> for WidthValue {
+    fn resolved(&self) -> f64 {
+        self._resolved.unwrap_or(0.0)
+    }
+
+    fn resolve(&mut self, parents: &Vec<Rc<RefCell<Element>>>) -> f64 {
+        let res = match &self.kind {
+            WidthValueKind::Length(dim) => match dim.unit.as_str() {
                 "px" => dim.value as f64,
                 _ => todo!("Handle other length units"),
             },
-            WidthValue::Percentage(perc) => (*perc as f64 / 100.0) * parent_width,
-            WidthValue::Auto => parent_width,
+            WidthValueKind::Percentage(perc) => {
+                (*perc as f64 / 100.0) * {
+                    let parent = parents.last();
+                    match parent {
+                        Some(p) => p.borrow().style().width.resolved(),
+                        None => 0.0,
+                    }
+                }
+            }
+            WidthValueKind::Auto => parents
+                .last()
+                .and_then(|parent| parent.borrow().style().width.resolved().into())
+                .unwrap_or(0.0),
             _ => todo!("Handle other WidthValue variants"),
-        }
+        };
+
+        self._resolved = Some(res);
+
+        res
+    }
+
+    fn resolve_with_curr(
+        &mut self,
+        parents: &Vec<Rc<RefCell<Element>>>,
+        current: &ComputedStyle,
+    ) -> f64 {
+        let res = match &self.kind {
+            WidthValueKind::Length(dim) => match dim.unit.as_str() {
+                "px" => dim.value as f64,
+                "em" => dim.value * current.font.resolved_font_size().unwrap_or(16.0),
+                "rem" => {
+                    let root_font_size = parents
+                        .first()
+                        .and_then(|root| root.borrow().style().font.resolved_font_size())
+                        .unwrap_or(16.0);
+                    dim.value * root_font_size
+                }
+                _ => todo!("Handle other length units"),
+            },
+            WidthValueKind::Percentage(perc) => {
+                (*perc as f64 / 100.0) * {
+                    let parent = parents.last();
+                    match parent {
+                        Some(p) => p.borrow().style().width.resolved(),
+                        None => 0.0,
+                    }
+                }
+            }
+            WidthValueKind::Auto => parents
+                .last()
+                .and_then(|parent| parent.borrow().style().width.resolved().into())
+                .unwrap_or(0.0),
+            _ => todo!("Handle other WidthValue variants"),
+        };
+
+        self._resolved = Some(res);
+        res
+    }
+}
+
+impl WidthValue {
+    pub fn resolve_single_parent(&mut self, parent_width: f64) -> f64 {
+        let res = match &self.kind {
+            WidthValueKind::Length(dim) => match dim.unit.as_str() {
+                "px" => dim.value as f64,
+                _ => todo!("Handle other length units"),
+            },
+            WidthValueKind::Percentage(perc) => (*perc as f64 / 100.0) * parent_width,
+            WidthValueKind::Auto => parent_width,
+            _ => todo!("Handle other WidthValue variants"),
+        };
+
+        self._resolved = Some(res);
+
+        res
     }
 }
 
@@ -383,6 +484,36 @@ impl LengthPercentage {
             }
         }
     }
+
+    pub fn resolve_with_curr(
+        &self,
+        parents: &Vec<Rc<RefCell<Element>>>,
+        current: &ComputedStyle,
+    ) -> f64 {
+        match self {
+            LengthPercentage::Length(dim) => match dim.unit.as_str() {
+                "px" => dim.value as f64,
+                "em" => {
+                    let current_font_size = current.font.resolved_font_size().unwrap_or(16.0);
+                    dim.value as f64 * current_font_size
+                }
+                "rem" => {
+                    let root_font_size = parents
+                        .first()
+                        .and_then(|root| root.borrow().style().font.resolved_font_size())
+                        .unwrap_or(16.0);
+
+                    dim.value as f64 * root_font_size
+                }
+                _ => todo!("Handle other length units"),
+            },
+            LengthPercentage::Percentage(perc) => {
+                // For now, assume parent font size is 16px
+                let parent_font_size = 16.0;
+                (*perc as f64 / 100.0) * parent_font_size
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -398,6 +529,9 @@ pub enum PositionDirection {
 pub struct PositionValue {
     pub x: (PositionDirection, LengthPercentage),
     pub y: (PositionDirection, LengthPercentage),
+
+    _resolved_x: Option<f64>,
+    _resolved_y: Option<f64>,
 }
 
 impl Default for PositionValue {
@@ -419,6 +553,8 @@ impl Default for PositionValue {
                     unit: "px".to_string(),
                 }),
             ),
+            _resolved_x: None,
+            _resolved_y: None,
         }
     }
 }
@@ -456,6 +592,8 @@ impl CSSParseable for PositionValue {
                                 unit: "px".to_string(),
                             }),
                         ),
+
+                        ..Default::default()
                     }),
                     "right" => Some(Self {
                         x: (
@@ -504,6 +642,7 @@ impl CSSParseable for PositionValue {
                         PositionDirection::Center,
                         LengthPercentage::Percentage(perc.clone()),
                     ),
+                    ..Default::default()
                 }),
                 ComponentValue::Token(CSSToken::Dimension(dim)) => Some(Self {
                     x: (
@@ -514,6 +653,7 @@ impl CSSParseable for PositionValue {
                         PositionDirection::Center,
                         LengthPercentage::Length(dim.clone()),
                     ),
+                    ..Default::default()
                 }),
                 _ => {
                     cvs.reconsume();
@@ -523,6 +663,39 @@ impl CSSParseable for PositionValue {
         } else {
             None
         }
+    }
+}
+
+impl Resolvable<(f64, f64)> for PositionValue {
+    fn resolved(&self) -> (f64, f64) {
+        (
+            self._resolved_x.unwrap_or(0.0),
+            self._resolved_y.unwrap_or(0.0),
+        )
+    }
+
+    fn resolve(&mut self, parents: &Vec<Rc<RefCell<Element>>>) -> (f64, f64) {
+        let res_x = self.x.1.resolve(parents);
+        let res_y = self.y.1.resolve(parents);
+
+        self._resolved_x = Some(res_x);
+        self._resolved_y = Some(res_y);
+
+        (res_x, res_y)
+    }
+
+    fn resolve_with_curr(
+        &mut self,
+        parents: &Vec<Rc<RefCell<Element>>>,
+        current: &ComputedStyle,
+    ) -> (f64, f64) {
+        let res_x = self.x.1.resolve_with_curr(parents, current);
+        let res_y = self.y.1.resolve_with_curr(parents, current);
+
+        self._resolved_x = Some(res_x);
+        self._resolved_y = Some(res_y);
+
+        (res_x, res_y)
     }
 }
 
@@ -716,6 +889,13 @@ impl Font {
         }
     }
 
+    pub fn line_height(&self) -> LineHeight {
+        match self {
+            Font::Constructed(cf) => cf.line_height.clone(),
+            Font::SystemFont(_) => LineHeight::default(),
+        }
+    }
+
     pub fn set_size(&mut self, size: FontSize) {
         match self {
             Font::Constructed(cf) => cf.size = size,
@@ -765,21 +945,27 @@ impl Font {
         }
     }
 
+    pub fn resolve_line_height_curr(
+        &mut self,
+        parents: &Vec<Rc<RefCell<Element>>>,
+        current: &ComputedStyle,
+    ) -> Option<f64> {
+        match self {
+            Font::Constructed(cf) => Some(cf.line_height.resolve_with_curr(parents, current)),
+            Font::SystemFont(_) => None,
+        }
+    }
+
+    pub fn resolve_line_height(&mut self, parents: &Vec<Rc<RefCell<Element>>>) -> Option<f64> {
+        match self {
+            Font::Constructed(cf) => Some(cf.line_height.resolve(parents)),
+            Font::SystemFont(_) => None,
+        }
+    }
+
     pub fn resolved_line_height(&self) -> Option<f64> {
         match self {
-            Font::Constructed(cf) => match &cf.line_height {
-                LineHeight::Normal => Some(cf.resolved_font_size().map_or(16.0, |fs| fs * 1.2)),
-                LineHeight::Number(n) => cf.resolved_font_size().map(|fs| fs * n),
-                LineHeight::LengthPercentage(lp) => match lp {
-                    LengthPercentage::Length(dim) => match dim.unit.as_str() {
-                        "px" => Some(dim.value as f64),
-                        _ => None,
-                    },
-                    LengthPercentage::Percentage(perc) => cf
-                        .resolved_font_size()
-                        .map(|fs| (*perc as f64 / 100.0) * fs),
-                },
-            },
+            Font::Constructed(cf) => Some(cf.line_height.resolved()),
             Font::SystemFont(_) => None,
         }
     }
@@ -864,6 +1050,39 @@ impl CSSParseable for Font {
     }
 }
 
+impl Resolvable<(f64, u32)> for Font {
+    fn resolved(&self) -> (f64, u32) {
+        (
+            self.resolved_font_size().unwrap_or(16.0),
+            self.resolved_font_weight().unwrap_or(400),
+        )
+    }
+
+    fn resolve(&mut self, parents: &Vec<Rc<RefCell<Element>>>) -> (f64, u32) {
+        (
+            self.resolve_font_size(parents).unwrap_or(16.0),
+            self.resolve_font_weight(parents).unwrap_or(400),
+        )
+    }
+
+    fn resolve_with_curr(
+        &mut self,
+        parents: &Vec<Rc<RefCell<Element>>>,
+        current: &ComputedStyle,
+    ) -> (f64, u32) {
+        (
+            match self {
+                Font::Constructed(cf) => cf.size.resolve_with_curr(parents, current),
+                Font::SystemFont(_) => 16.0,
+            },
+            match self {
+                Font::Constructed(cf) => cf.weight.resolve_with_curr(parents, current),
+                Font::SystemFont(_) => 400,
+            },
+        )
+    }
+}
+
 impl CSSParseable for ConstructedFont {
     fn from_cv(cvs: &mut InputStream<ComponentValue>) -> Option<Self>
     where
@@ -924,6 +1143,33 @@ impl CSSParseable for ConstructedFont {
         }
 
         Some(font)
+    }
+}
+
+impl Resolvable<(f64, u32)> for ConstructedFont {
+    fn resolved(&self) -> (f64, u32) {
+        (
+            self.resolved_font_size().unwrap_or(16.0),
+            self.resolved_font_weight().unwrap_or(400),
+        )
+    }
+
+    fn resolve(&mut self, parents: &Vec<Rc<RefCell<Element>>>) -> (f64, u32) {
+        (
+            self.resolve_font_size(parents),
+            self.resolve_font_weight(parents),
+        )
+    }
+
+    fn resolve_with_curr(
+        &mut self,
+        parents: &Vec<Rc<RefCell<Element>>>,
+        current: &ComputedStyle,
+    ) -> (f64, u32) {
+        (
+            self.size.resolve_with_curr(parents, current),
+            self.weight.resolve_with_curr(parents, current),
+        )
     }
 }
 
@@ -1028,7 +1274,7 @@ impl CSSParseable for FontVariant {
 }
 
 #[derive(Default, Debug, Clone)]
-pub enum FontWeight {
+pub enum FontWeightKind {
     #[default]
     Normal,
     Bold,
@@ -1039,6 +1285,22 @@ pub enum FontWeight {
     Weight(u32),
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct FontWeight {
+    pub kind: FontWeightKind,
+
+    _resolved_weight: Option<u32>,
+}
+
+impl FontWeight {
+    pub fn new(kind: FontWeightKind) -> Self {
+        FontWeight {
+            kind,
+            _resolved_weight: None,
+        }
+    }
+}
+
 impl CSSParseable for FontWeight {
     fn from_cv(cvs: &mut InputStream<ComponentValue>) -> Option<Self>
     where
@@ -1047,14 +1309,14 @@ impl CSSParseable for FontWeight {
         if let Some(tok) = cvs.consume() {
             match tok {
                 ComponentValue::Token(CSSToken::Ident(ident)) => match ident.as_str() {
-                    "normal" => return Some(FontWeight::Normal),
-                    "bold" => return Some(FontWeight::Bold),
-                    "bolder" => return Some(FontWeight::Bolder),
-                    "lighter" => return Some(FontWeight::Lighter),
+                    "normal" => return Some(FontWeight::new(FontWeightKind::Normal)),
+                    "bold" => return Some(FontWeight::new(FontWeightKind::Bold)),
+                    "bolder" => return Some(FontWeight::new(FontWeightKind::Bolder)),
+                    "lighter" => return Some(FontWeight::new(FontWeightKind::Lighter)),
                     _ => {}
                 },
                 ComponentValue::Token(CSSToken::Number { value, .. }) => {
-                    return Some(FontWeight::Weight(value as u32));
+                    return Some(FontWeight::new(FontWeightKind::Weight(value as u32)));
                 }
                 _ => {}
             }
@@ -1065,12 +1327,16 @@ impl CSSParseable for FontWeight {
     }
 }
 
-impl FontWeight {
-    pub fn resolve(&self, parents: &Vec<Rc<RefCell<Element>>>) -> u32 {
-        match self {
-            FontWeight::Normal => 400,
-            FontWeight::Bold => 700,
-            FontWeight::Bolder => {
+impl Resolvable<u32> for FontWeight {
+    fn resolved(&self) -> u32 {
+        self._resolved_weight.unwrap_or(400)
+    }
+
+    fn resolve(&mut self, parents: &Vec<Rc<RefCell<Element>>>) -> u32 {
+        let res = match self.kind {
+            FontWeightKind::Normal => 400,
+            FontWeightKind::Bold => 700,
+            FontWeightKind::Bolder => {
                 let new_parents = if parents.len() > 1 {
                     &parents[..parents.len() - 1].to_vec()
                 } else {
@@ -1097,7 +1363,7 @@ impl FontWeight {
                     _ => 400,
                 }
             }
-            FontWeight::Lighter => {
+            FontWeightKind::Lighter => {
                 let new_parents = if parents.len() > 1 {
                     &parents[..parents.len() - 1].to_vec()
                 } else {
@@ -1124,8 +1390,19 @@ impl FontWeight {
                     _ => 400,
                 }
             }
-            FontWeight::Weight(w) => *w,
-        }
+            FontWeightKind::Weight(w) => w,
+        };
+
+        self._resolved_weight = Some(res);
+        res
+    }
+
+    fn resolve_with_curr(
+        &mut self,
+        parents: &Vec<Rc<RefCell<Element>>>,
+        _current: &ComputedStyle,
+    ) -> u32 {
+        self.resolve(parents)
     }
 }
 
@@ -1172,16 +1449,119 @@ impl CSSParseable for FontWidth {
 }
 
 #[derive(Debug, Clone)]
-pub enum FontSize {
+pub enum FontSizeKind {
     LengthPercentage(LengthPercentage),
     AbsoluteSize(AbsoluteSize),
     RelativeSize(RelativeSize),
 }
 
+#[derive(Debug, Clone)]
+pub struct FontSize {
+    pub kind: FontSizeKind,
+
+    _resolved_size: Option<f64>,
+}
+
+impl Default for FontSize {
+    fn default() -> Self {
+        FontSize {
+            kind: FontSizeKind::AbsoluteSize(AbsoluteSize::Medium),
+            _resolved_size: None,
+        }
+    }
+}
+
 impl FontSize {
-    pub fn resolve(&self, parents: &Vec<Rc<RefCell<Element>>>) -> f64 {
-        match self {
-            FontSize::LengthPercentage(lp) => match lp {
+    pub fn new(kind: FontSizeKind) -> Self {
+        FontSize {
+            kind,
+            _resolved_size: None,
+        }
+    }
+}
+
+impl CSSParseable for FontSize {
+    fn from_cv(cvs: &mut InputStream<ComponentValue>) -> Option<Self>
+    where
+        Self: Sized,
+    {
+        if let Some(tok) = cvs.consume() {
+            match tok {
+                ComponentValue::Token(CSSToken::Dimension(dim)) => {
+                    return Some(FontSize::new(FontSizeKind::LengthPercentage(
+                        LengthPercentage::Length(dim.clone()),
+                    )));
+                }
+                ComponentValue::Token(CSSToken::Percentage(perc)) => {
+                    return Some(FontSize::new(FontSizeKind::LengthPercentage(
+                        LengthPercentage::Percentage(perc.clone()),
+                    )));
+                }
+                ComponentValue::Token(CSSToken::Ident(ident)) => match ident.as_str() {
+                    "xx-small" => {
+                        return Some(FontSize::new(FontSizeKind::AbsoluteSize(
+                            AbsoluteSize::XXSmall,
+                        )));
+                    }
+                    "x-small" => {
+                        return Some(FontSize::new(FontSizeKind::AbsoluteSize(
+                            AbsoluteSize::XSmall,
+                        )));
+                    }
+                    "small" => {
+                        return Some(FontSize::new(FontSizeKind::AbsoluteSize(
+                            AbsoluteSize::Small,
+                        )));
+                    }
+                    "medium" => {
+                        return Some(FontSize::new(FontSizeKind::AbsoluteSize(
+                            AbsoluteSize::Medium,
+                        )));
+                    }
+                    "large" => {
+                        return Some(FontSize::new(FontSizeKind::AbsoluteSize(
+                            AbsoluteSize::Large,
+                        )));
+                    }
+                    "x-large" => {
+                        return Some(FontSize::new(FontSizeKind::AbsoluteSize(
+                            AbsoluteSize::XLarge,
+                        )));
+                    }
+                    "xx-large" => {
+                        return Some(FontSize::new(FontSizeKind::AbsoluteSize(
+                            AbsoluteSize::XXLarge,
+                        )));
+                    }
+                    "larger" => {
+                        return Some(FontSize::new(FontSizeKind::RelativeSize(
+                            RelativeSize::Larger,
+                        )));
+                    }
+                    "smaller" => {
+                        return Some(FontSize::new(FontSizeKind::RelativeSize(
+                            RelativeSize::Smaller,
+                        )));
+                    }
+                    _ => {}
+                },
+                _ => {}
+            }
+        }
+
+        cvs.reconsume();
+        None
+    }
+}
+
+impl Resolvable<f64> for FontSize {
+    fn resolved(&self) -> f64 {
+        self._resolved_size.unwrap_or(16.0)
+    }
+
+    fn resolve(&mut self, parents: &Vec<Rc<RefCell<Element>>>) -> f64 {
+        let res = match &self.kind {
+            FontSizeKind::LengthPercentage(lp) => match lp {
                 LengthPercentage::Length(dim) => match dim.unit.as_str() {
                     "px" => dim.value as f64,
                     "em" => {
@@ -1203,12 +1583,14 @@ impl FontSize {
                     _ => todo!("Handle other length units"),
                 },
                 LengthPercentage::Percentage(perc) => {
-                    // For now, assume parent font size is 16px
-                    let parent_font_size = 16.0;
+                    let parent_font_size = parents
+                        .last()
+                        .and_then(|parent| parent.borrow().style().font.resolved_font_size())
+                        .unwrap_or(16.0);
                     (*perc as f64 / 100.0) * parent_font_size
                 }
             },
-            FontSize::RelativeSize(RelativeSize::Larger) => {
+            FontSizeKind::RelativeSize(RelativeSize::Larger) => {
                 let parent_font_size = parents
                     .last()
                     .and_then(|parent| parent.borrow().style().font.resolved_font_size())
@@ -1216,7 +1598,7 @@ impl FontSize {
 
                 parent_font_size * 1.2
             }
-            FontSize::RelativeSize(RelativeSize::Smaller) => {
+            FontSizeKind::RelativeSize(RelativeSize::Smaller) => {
                 let parent_font_size = parents
                     .last()
                     .and_then(|parent| parent.borrow().style().font.resolved_font_size())
@@ -1225,75 +1607,18 @@ impl FontSize {
                 parent_font_size * 0.833
             }
             _ => todo!("Handle other FontSize variants"),
-        }
+        };
 
-        // match self {
-        //     FontSize::LengthPercentage(lp) => match lp {
-        //         LengthPercentage::Length(dim) => match dim.unit.as_str() {
-        //             "px" => dim.value as f64,
-        //             "em" => dim.value as f64 * parent_font_size,
-        //             _ => todo!("Handle other length units"),
-        //         },
-        //         LengthPercentage::Percentage(perc) => (*perc as f64 / 100.0) * parent_font_size,
-        //     },
-        //     FontSize::AbsoluteSize(abs_size) => match abs_size {
-        //         AbsoluteSize::XXSmall => parent_font_size * 0.578,
-        //         AbsoluteSize::XSmall => parent_font_size * 0.694,
-        //         AbsoluteSize::Small => parent_font_size * 0.833,
-        //         AbsoluteSize::Medium => parent_font_size,
-        //         AbsoluteSize::Large => parent_font_size * 1.2,
-        //         AbsoluteSize::XLarge => parent_font_size * 1.44,
-        //         AbsoluteSize::XXLarge => parent_font_size * 1.728,
-        //     },
-        //     FontSize::RelativeSize(rel_size) => match rel_size {
-        //         RelativeSize::Larger => parent_font_size * 1.2,
-        //         RelativeSize::Smaller => parent_font_size * 0.833,
-        //     },
-        // }
+        self._resolved_size = Some(res);
+        res
     }
-}
 
-impl Default for FontSize {
-    fn default() -> Self {
-        FontSize::AbsoluteSize(AbsoluteSize::Medium)
-    }
-}
-
-impl CSSParseable for FontSize {
-    fn from_cv(cvs: &mut InputStream<ComponentValue>) -> Option<Self>
-    where
-        Self: Sized,
-    {
-        if let Some(tok) = cvs.consume() {
-            match tok {
-                ComponentValue::Token(CSSToken::Dimension(dim)) => {
-                    return Some(FontSize::LengthPercentage(LengthPercentage::Length(
-                        dim.clone(),
-                    )));
-                }
-                ComponentValue::Token(CSSToken::Percentage(perc)) => {
-                    return Some(FontSize::LengthPercentage(LengthPercentage::Percentage(
-                        perc.clone(),
-                    )));
-                }
-                ComponentValue::Token(CSSToken::Ident(ident)) => match ident.as_str() {
-                    "xx-small" => return Some(FontSize::AbsoluteSize(AbsoluteSize::XXSmall)),
-                    "x-small" => return Some(FontSize::AbsoluteSize(AbsoluteSize::XSmall)),
-                    "small" => return Some(FontSize::AbsoluteSize(AbsoluteSize::Small)),
-                    "medium" => return Some(FontSize::AbsoluteSize(AbsoluteSize::Medium)),
-                    "large" => return Some(FontSize::AbsoluteSize(AbsoluteSize::Large)),
-                    "x-large" => return Some(FontSize::AbsoluteSize(AbsoluteSize::XLarge)),
-                    "xx-large" => return Some(FontSize::AbsoluteSize(AbsoluteSize::XXLarge)),
-                    "larger" => return Some(FontSize::RelativeSize(RelativeSize::Larger)),
-                    "smaller" => return Some(FontSize::RelativeSize(RelativeSize::Smaller)),
-                    _ => {}
-                },
-                _ => {}
-            }
-        }
-
-        cvs.reconsume();
-        None
+    fn resolve_with_curr(
+        &mut self,
+        parents: &Vec<Rc<RefCell<Element>>>,
+        _current: &ComputedStyle,
+    ) -> f64 {
+        self.resolve(parents)
     }
 }
 
@@ -1318,11 +1643,27 @@ pub enum RelativeSize {
 }
 
 #[derive(Default, Debug, Clone)]
-pub enum LineHeight {
+pub enum LineHeightKind {
     #[default]
     Normal,
     Number(f64),
     LengthPercentage(LengthPercentage),
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct LineHeight {
+    pub kind: LineHeightKind,
+
+    _resolved_line_height: Option<f64>,
+}
+
+impl LineHeight {
+    pub fn new(kind: LineHeightKind) -> Self {
+        LineHeight {
+            kind,
+            _resolved_line_height: None,
+        }
+    }
 }
 
 impl CSSParseable for LineHeight {
@@ -1333,19 +1674,19 @@ impl CSSParseable for LineHeight {
         if let Some(tok) = cvs.consume() {
             match tok {
                 ComponentValue::Token(CSSToken::Ident(ident)) if ident == "normal" => {
-                    return Some(LineHeight::Normal);
+                    return Some(LineHeight::new(LineHeightKind::Normal));
                 }
                 ComponentValue::Token(CSSToken::Number { value, .. }) => {
-                    return Some(LineHeight::Number(value as f64));
+                    return Some(LineHeight::new(LineHeightKind::Number(value as f64)));
                 }
                 ComponentValue::Token(CSSToken::Dimension(dim)) => {
-                    return Some(LineHeight::LengthPercentage(LengthPercentage::Length(
-                        dim.clone(),
+                    return Some(LineHeight::new(LineHeightKind::LengthPercentage(
+                        LengthPercentage::Length(dim.clone()),
                     )));
                 }
                 ComponentValue::Token(CSSToken::Percentage(perc)) => {
-                    return Some(LineHeight::LengthPercentage(LengthPercentage::Percentage(
-                        perc.clone(),
+                    return Some(LineHeight::new(LineHeightKind::LengthPercentage(
+                        LengthPercentage::Percentage(perc.clone()),
                     )));
                 }
                 _ => {}
@@ -1354,6 +1695,68 @@ impl CSSParseable for LineHeight {
 
         cvs.reconsume();
         None
+    }
+}
+
+impl Resolvable<f64> for LineHeight {
+    fn resolved(&self) -> f64 {
+        self._resolved_line_height.unwrap_or(16.0)
+    }
+
+    fn resolve(&mut self, parents: &Vec<Rc<RefCell<Element>>>) -> f64 {
+        let res = match &self.kind {
+            LineHeightKind::Normal => {
+                let font_size = parents
+                    .last()
+                    .and_then(|parent| parent.borrow().style().font.resolved_font_size())
+                    .unwrap_or(16.0);
+                font_size * 1.2
+            }
+            LineHeightKind::Number(n) => {
+                let font_size = parents
+                    .last()
+                    .and_then(|parent| parent.borrow().style().font.resolved_font_size())
+                    .unwrap_or(16.0);
+                font_size * n
+            }
+            LineHeightKind::LengthPercentage(lp) => match lp {
+                LengthPercentage::Length(dim) => match dim.unit.as_str() {
+                    "px" => dim.value as f64,
+                    _ => todo!("Handle other length units"),
+                },
+                LengthPercentage::Percentage(perc) => {
+                    let font_size = parents
+                        .last()
+                        .and_then(|parent| parent.borrow().style().font.resolved_font_size())
+                        .unwrap_or(16.0);
+                    (*perc as f64 / 100.0) * font_size
+                }
+            },
+        };
+
+        self._resolved_line_height = Some(res);
+        res
+    }
+
+    fn resolve_with_curr(
+        &mut self,
+        parents: &Vec<Rc<RefCell<Element>>>,
+        current: &ComputedStyle,
+    ) -> f64 {
+        let res = match &self.kind {
+            LineHeightKind::Normal => {
+                let font_size = current.font.resolved_font_size().unwrap_or(16.0);
+                font_size * 1.2
+            }
+            LineHeightKind::Number(n) => {
+                let font_size = current.font.resolved_font_size().unwrap_or(16.0);
+                font_size * n
+            }
+            LineHeightKind::LengthPercentage(lp) => lp.resolve_with_curr(parents, current),
+        };
+
+        self._resolved_line_height = Some(res);
+        res
     }
 }
 
@@ -1502,30 +1905,61 @@ impl Display {
 }
 
 #[derive(Debug, Clone)]
-pub enum MarginValue {
+pub enum MarginValueKind {
     LengthPercentage(LengthPercentage),
     Auto,
+}
+
+#[derive(Debug, Clone)]
+pub struct MarginValue {
+    pub kind: MarginValueKind,
+
+    _resolved: Option<f64>,
+}
+
+impl Default for MarginValue {
+    fn default() -> Self {
+        MarginValue {
+            kind: MarginValueKind::LengthPercentage(LengthPercentage::Length(Dimension {
+                value: 0.0,
+                number_type: NumberType::Integer,
+                unit: "px".to_string(),
+            })),
+            _resolved: None,
+        }
+    }
+}
+
+impl MarginValue {
+    pub fn new(kind: MarginValueKind) -> Self {
+        MarginValue {
+            kind,
+            _resolved: None,
+        }
+    }
 }
 
 impl CSSParseable for MarginValue {
     fn from_cv(stream: &mut InputStream<ComponentValue>) -> Option<Self> {
         if let Some(next) = stream.consume() {
             match next {
-                ComponentValue::Token(CSSToken::Number { value: 0.0, .. }) => Some(
-                    MarginValue::LengthPercentage(LengthPercentage::Length(Dimension {
-                        value: 0.0,
-                        number_type: NumberType::Integer,
-                        unit: "px".to_string(),
-                    })),
-                ),
-                ComponentValue::Token(CSSToken::Dimension(dim)) => {
-                    Some(MarginValue::LengthPercentage(LengthPercentage::Length(dim)))
+                ComponentValue::Token(CSSToken::Number { value: 0.0, .. }) => {
+                    Some(MarginValue::new(MarginValueKind::LengthPercentage(
+                        LengthPercentage::Length(Dimension {
+                            value: 0.0,
+                            number_type: NumberType::Integer,
+                            unit: "px".to_string(),
+                        }),
+                    )))
                 }
-                ComponentValue::Token(CSSToken::Percentage(perc)) => Some(
-                    MarginValue::LengthPercentage(LengthPercentage::Percentage(perc)),
-                ),
+                ComponentValue::Token(CSSToken::Dimension(dim)) => Some(MarginValue::new(
+                    MarginValueKind::LengthPercentage(LengthPercentage::Length(dim)),
+                )),
+                ComponentValue::Token(CSSToken::Percentage(perc)) => Some(MarginValue::new(
+                    MarginValueKind::LengthPercentage(LengthPercentage::Percentage(perc)),
+                )),
                 ComponentValue::Token(CSSToken::Ident(ident)) if ident == "auto" => {
-                    Some(MarginValue::Auto)
+                    Some(MarginValue::new(MarginValueKind::Auto))
                 }
                 _ => {
                     stream.reconsume();
@@ -1538,82 +1972,139 @@ impl CSSParseable for MarginValue {
     }
 }
 
+impl Resolvable<f64> for MarginValue {
+    fn resolved(&self) -> f64 {
+        self._resolved.unwrap_or(0.0)
+    }
+
+    fn resolve(&mut self, parents: &Vec<Rc<RefCell<Element>>>) -> f64 {
+        let res = match &self.kind {
+            MarginValueKind::LengthPercentage(lp) => match lp {
+                LengthPercentage::Length(dim) => match dim.unit.as_str() {
+                    "px" => dim.value as f64,
+                    "em" => {
+                        let parent_font_size = parents
+                            .last()
+                            .and_then(|parent| parent.borrow().style().font.resolved_font_size())
+                            .unwrap_or(16.0);
+
+                        dim.value as f64 * parent_font_size
+                    }
+                    "rem" => {
+                        let root_font_size = parents
+                            .first()
+                            .and_then(|root| root.borrow().style().font.resolved_font_size())
+                            .unwrap_or(16.0);
+
+                        dim.value as f64 * root_font_size
+                    }
+                    _ => todo!("Handle other length units"),
+                },
+                LengthPercentage::Percentage(_) => {
+                    panic!("Idk how to resolve percentage margins yet")
+                }
+            },
+            MarginValueKind::Auto => 0.0,
+        };
+
+        self._resolved = Some(res);
+        res
+    }
+
+    fn resolve_with_curr(
+        &mut self,
+        parents: &Vec<Rc<RefCell<Element>>>,
+        style: &ComputedStyle,
+    ) -> f64 {
+        match &self.kind {
+            MarginValueKind::LengthPercentage(lp) => match lp {
+                LengthPercentage::Length(dim) => match dim.unit.as_str() {
+                    "px" => dim.value as f64,
+                    "em" => {
+                        let parent_font_size = style.font.resolved_font_size().unwrap_or(16.0);
+
+                        dim.value as f64 * parent_font_size
+                    }
+                    "rem" => {
+                        let root_font_size = parents
+                            .first()
+                            .and_then(|root| root.borrow().style().font.resolved_font_size())
+                            .unwrap_or(16.0);
+
+                        dim.value as f64 * root_font_size
+                    }
+                    _ => todo!("Handle other length units"),
+                },
+                LengthPercentage::Percentage(_) => {
+                    panic!("Idk how to resolve percentage margins yet")
+                }
+            },
+            MarginValueKind::Auto => 0.0,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Margin {
     pub top: MarginValue,
     pub right: MarginValue,
     pub bottom: MarginValue,
     pub left: MarginValue,
+
+    _resolved: Option<Edges>,
 }
 
 impl Default for Margin {
     fn default() -> Self {
         Margin {
-            top: MarginValue::LengthPercentage(LengthPercentage::Length(Dimension {
-                value: 0.0,
-                number_type: NumberType::Integer,
-                unit: "px".to_string(),
-            })),
-            right: MarginValue::LengthPercentage(LengthPercentage::Length(Dimension {
-                value: 0.0,
-                number_type: NumberType::Integer,
-                unit: "px".to_string(),
-            })),
-            bottom: MarginValue::LengthPercentage(LengthPercentage::Length(Dimension {
-                value: 0.0,
-                number_type: NumberType::Integer,
-                unit: "px".to_string(),
-            })),
-            left: MarginValue::LengthPercentage(LengthPercentage::Length(Dimension {
-                value: 0.0,
-                number_type: NumberType::Integer,
-                unit: "px".to_string(),
-            })),
+            top: MarginValue::default(),
+            right: MarginValue::default(),
+            bottom: MarginValue::default(),
+            left: MarginValue::default(),
+            _resolved: None,
         }
     }
 }
 
 impl Margin {
-    pub fn resolved_top(&self, parents: &Vec<Weak<RefCell<Box>>>) -> f64 {
-        match &self.top {
-            MarginValue::LengthPercentage(LengthPercentage::Length(dim)) => dim.resolve(parents),
-            MarginValue::LengthPercentage(LengthPercentage::Percentage(_)) => 0.0,
-            MarginValue::Auto => 0.0,
-        }
+    pub fn resolve_top(&mut self, parents: &Vec<Rc<RefCell<Element>>>) -> f64 {
+        let resolved_top = self.top.resolve(parents);
+
+        self._resolved.get_or_insert_with(|| Edges::default()).0 = resolved_top;
+        resolved_top
     }
 
-    pub fn resolved_right(&self, parents: &Vec<Weak<RefCell<Box>>>) -> f64 {
-        match &self.right {
-            MarginValue::LengthPercentage(LengthPercentage::Length(dim)) => dim.resolve(parents),
-            MarginValue::LengthPercentage(LengthPercentage::Percentage(_)) => 0.0,
-            MarginValue::Auto => 0.0,
-        }
+    pub fn resolve_right(&mut self, parents: &Vec<Rc<RefCell<Element>>>) -> f64 {
+        let resolved_right = self.right.resolve(parents);
+
+        self._resolved.get_or_insert_with(|| Edges::default()).1 = resolved_right;
+        resolved_right
     }
 
-    pub fn resolved_bottom(&self, parents: &Vec<Weak<RefCell<Box>>>) -> f64 {
-        match &self.bottom {
-            MarginValue::LengthPercentage(LengthPercentage::Length(dim)) => dim.resolve(parents),
-            MarginValue::LengthPercentage(LengthPercentage::Percentage(_)) => 0.0,
-            MarginValue::Auto => 0.0,
-        }
+    pub fn resolve_bottom(&mut self, parents: &Vec<Rc<RefCell<Element>>>) -> f64 {
+        let resolved_bottom = self.bottom.resolve(parents);
+
+        self._resolved.get_or_insert_with(|| Edges::default()).2 = resolved_bottom;
+        resolved_bottom
     }
 
-    pub fn resolved_left(&self, parents: &Vec<Weak<RefCell<Box>>>) -> f64 {
-        match &self.left {
-            MarginValue::LengthPercentage(LengthPercentage::Length(dim)) => dim.resolve(parents),
-            MarginValue::LengthPercentage(LengthPercentage::Percentage(_)) => 0.0,
-            MarginValue::Auto => 0.0,
-        }
+    pub fn resolve_left(&mut self, parents: &Vec<Rc<RefCell<Element>>>) -> f64 {
+        let resolved_left = self.left.resolve(parents);
+
+        self._resolved.get_or_insert_with(|| Edges::default()).3 = resolved_left;
+        resolved_left
     }
 
-    pub fn to_edges(&self, parents: &Vec<Weak<RefCell<Box>>>) -> Edges {
-        Edges(
-            self.resolved_top(parents),
-            self.resolved_right(parents),
-            self.resolved_bottom(parents),
-            self.resolved_left(parents),
-        )
-    }
+    // pub fn egdes(&self) -> Edges {
+    //     self._resolved.clone().unwrap_or(Edges::default())
+    // }
+
+    // pub fn to_edges(&mut self, parents: &Vec<Weak<RefCell<Box>>>) {
+    //     self.resolve_top(parents);
+    //     self.resolve_right(parents);
+    //     self.resolve_bottom(parents);
+    //     self.resolve_left(parents);
+    // }
 }
 
 impl CSSParseable for Margin {
@@ -1641,27 +2132,59 @@ impl CSSParseable for Margin {
                 right: values[0].clone(),
                 bottom: values[0].clone(),
                 left: values[0].clone(),
+                _resolved: None,
             }),
             2 => Some(Margin {
                 top: values[0].clone(),
                 right: values[1].clone(),
                 bottom: values[0].clone(),
                 left: values[1].clone(),
+                _resolved: None,
             }),
             3 => Some(Margin {
                 top: values[0].clone(),
                 right: values[1].clone(),
                 bottom: values[2].clone(),
                 left: values[1].clone(),
+                _resolved: None,
             }),
             4 => Some(Margin {
                 top: values[0].clone(),
                 right: values[1].clone(),
                 bottom: values[2].clone(),
                 left: values[3].clone(),
+                _resolved: None,
             }),
             _ => None,
         }
+    }
+}
+
+impl Resolvable<Edges> for Margin {
+    fn resolved(&self) -> Edges {
+        self._resolved.clone().unwrap_or(Edges::default())
+    }
+
+    fn resolve(&mut self, parents: &Vec<Rc<RefCell<Element>>>) -> Edges {
+        self.resolve_top(parents);
+        self.resolve_right(parents);
+        self.resolve_bottom(parents);
+        self.resolve_left(parents);
+
+        self._resolved.unwrap_or_default()
+    }
+
+    fn resolve_with_curr(
+        &mut self,
+        parents: &Vec<Rc<RefCell<Element>>>,
+        style: &ComputedStyle,
+    ) -> Edges {
+        self.top.resolve_with_curr(parents, style);
+        self.right.resolve_with_curr(parents, style);
+        self.bottom.resolve_with_curr(parents, style);
+        self.left.resolve_with_curr(parents, style);
+
+        self._resolved.unwrap_or_default()
     }
 }
 
@@ -1710,9 +2233,9 @@ pub enum PositioningValueKind {
 
 #[derive(Debug, Clone, Default)]
 pub struct Top {
-    _resolved: Option<f64>,
-
     pub kind: PositioningValueKind,
+
+    _resolved: Option<f64>,
 }
 
 impl CSSParseable for Top {
@@ -1753,19 +2276,37 @@ impl CSSParseable for Top {
     }
 }
 
-impl Top {
-    pub fn resolve(&mut self, parents: &Vec<Rc<RefCell<Element>>>) -> Option<f64> {
+impl Resolvable<f64> for Top {
+    fn resolve(&mut self, parents: &Vec<Rc<RefCell<Element>>>) -> f64 {
         let res = match &self.kind {
             PositioningValueKind::Auto => None,
             PositioningValueKind::LengthPercentage(lp) => Some(lp.resolve(parents)),
-        };
+        }
+        .unwrap_or(0.0);
 
-        self._resolved = res;
+        self._resolved = Some(res);
         res
     }
 
-    pub fn resolved(&self) -> Option<f64> {
-        self._resolved
+    fn resolved(&self) -> f64 {
+        self._resolved.unwrap_or(0.0)
+    }
+
+    fn resolve_with_curr(
+        &mut self,
+        parents: &Vec<Rc<RefCell<Element>>>,
+        style: &ComputedStyle,
+    ) -> f64 {
+        let res = match &self.kind {
+            PositioningValueKind::Auto => None,
+            PositioningValueKind::LengthPercentage(lp) => {
+                Some(lp.resolve_with_curr(parents, style))
+            }
+        }
+        .unwrap_or(0.0);
+
+        self._resolved = Some(res);
+        res
     }
 }
 

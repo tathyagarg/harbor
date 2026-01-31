@@ -13,7 +13,8 @@ use crate::{
         properties::{
             Background, Bottom, CSSParseable, Display, Font, FontFamily, FontSize, FontStyle,
             FontWeight, Image, Left, LineHeight, Margin, MarginValue, Origin, Position,
-            PositionValue, PositioningValueKind, RepeatStyle, Right, Top, WidthValue,
+            PositionValue, PositioningValueKind, RepeatStyle, Resolvable, Right, Top, WidthValue,
+            WidthValueKind,
         },
     },
     html5::dom::{Document, Element, NodeKind},
@@ -22,7 +23,7 @@ use crate::{
 };
 
 /// Represents the edges of a box: top, right, bottom, left
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct Edges(pub f64, pub f64, pub f64, pub f64);
 
 impl Edges {
@@ -384,7 +385,7 @@ impl Box {
                     _content_height: 0.0,
                     _padding: Edges::empty(),
                     _border: Edges::empty(),
-                    _margin: element.style().margin.to_edges(parents),
+                    _margin: element.style().margin.resolved(),
                     _box_type: element.style().display.to_box_type(),
                     _position_x: None,
                     _position_y: None,
@@ -416,7 +417,7 @@ impl Box {
                             _content_height: 0.0,
                             _padding: Edges::empty(),
                             _border: Edges::empty(),
-                            _margin: element.style().margin.to_edges(parents),
+                            _margin: element.style().margin.resolved(),
                             _box_type: BoxType::Block,
                             _position_x: None,
                             _position_y: None,
@@ -723,14 +724,14 @@ impl Box {
 
         self._content_height = cursor_y;
 
-        if !matches!(self.style().unwrap().width, WidthValue::Auto) {
+        if !matches!(self.style().unwrap().width.kind, WidthValueKind::Auto) {
             if let Some(node_rc) = &self.associated_node {
                 if let NodeKind::Element(element_rc) = node_rc.borrow().deref() {
-                    let element = element_rc.borrow();
+                    let mut element = element_rc.borrow_mut();
                     self._content_width = element
-                        .style()
+                        .style_mut()
                         .width
-                        .resolve(container_width.unwrap_or(0.0));
+                        .resolve_single_parent(container_width.unwrap_or(0.0));
                 }
             }
         }
@@ -848,6 +849,13 @@ impl Box {
                 }
 
                 text_node_rc.borrow_mut().set_data(&new_data);
+
+                println!(
+                    "Content height: {}, line height: {}",
+                    self._content_height,
+                    style.font.resolved_line_height().unwrap_or(19.2)
+                );
+
                 self._content_height = self
                     ._content_height
                     .max(style.font.resolved_line_height().unwrap_or(19.2));
@@ -903,29 +911,27 @@ impl Box {
                     let y = if !matches!(style.top.kind, PositioningValueKind::Auto) {
                         style.top.resolved()
                     } else if !matches!(style.bottom.kind, PositioningValueKind::Auto) {
-                        style.bottom.resolved().map(|v| -v)
+                        -style.bottom.resolved()
                     } else {
-                        Some(0.0)
+                        0.0
                     };
 
                     let x = if !matches!(style.left.kind, PositioningValueKind::Auto) {
                         style.left.resolved()
                     } else if !matches!(style.right.kind, PositioningValueKind::Auto) {
-                        style.right.resolved().map(|v| -v)
+                        -style.right.resolved()
                     } else {
-                        Some(0.0)
+                        0.0
                     };
 
                     match style.position {
                         Position::Relative => {
-                            self._position_x =
-                                Some(self._position_x.unwrap_or(0.0) + x.unwrap_or(0.0));
-                            self._position_y =
-                                Some(self._position_y.unwrap_or(0.0) + y.unwrap_or(0.0));
+                            self._position_x = Some(self._position_x.unwrap_or(0.0) + x);
+                            self._position_y = Some(self._position_y.unwrap_or(0.0) + y);
                         }
                         Position::Absolute | Position::Fixed => {
-                            self._position_x = Some(x.unwrap_or(0.0));
-                            self._position_y = Some(y.unwrap_or(0.0));
+                            self._position_x = Some(x);
+                            self._position_y = Some(y);
                         }
                         _ => {}
                     }
@@ -1023,10 +1029,12 @@ fn handle_font(
     let mut stream = InputStream::new(&declaration.value);
 
     let font = Font::from_cv(&mut stream);
-    if let Some(font) = font {
+    if let Some(mut font) = font {
+        font.resolve_font_size(parents.unwrap_or(&vec![]));
+        font.resolve_font_weight(parents.unwrap_or(&vec![]));
+        font.resolve_line_height_curr(parents.unwrap_or(&vec![]), style);
+
         style.font = font;
-        style.font.resolve_font_size(parents.unwrap_or(&vec![]));
-        style.font.resolve_font_weight(parents.unwrap_or(&vec![]));
     }
 }
 
@@ -1049,6 +1057,10 @@ fn handle_font_property(
             if let Some(size) = size {
                 style.font.set_size(size);
                 style.font.resolve_font_size(parents.unwrap_or(&vec![]));
+
+                let mut line_height = style.font.line_height();
+                line_height.resolve_with_curr(parents.unwrap_or(&vec![]), style);
+                style.font.set_line_height(line_height);
             }
         }
         "font-weight" => {
@@ -1060,7 +1072,9 @@ fn handle_font_property(
         }
         "line-height" => {
             let line_height = LineHeight::from_cv(&mut stream);
-            if let Some(line_height) = line_height {
+            if let Some(mut line_height) = line_height {
+                line_height.resolve_with_curr(parents.unwrap_or(&vec![]), style);
+
                 style.font.set_line_height(line_height);
             }
         }
@@ -1074,40 +1088,53 @@ fn handle_font_property(
     }
 }
 
-fn handle_margin(declaration: &CSSDeclaration, style: &mut ComputedStyle) {
+fn handle_margin(
+    declaration: &CSSDeclaration,
+    style: &mut ComputedStyle,
+    parents: Option<&Vec<Rc<RefCell<Element>>>>,
+) {
     let mut stream = InputStream::new(&declaration.value);
 
     let margin = Margin::from_cv(&mut stream);
-    if let Some(margin) = margin {
+    if let Some(mut margin) = margin {
+        margin.resolve(parents.unwrap_or(&vec![]));
         style.margin = margin;
     }
 }
 
-fn handle_margin_property(declaration: &CSSDeclaration, style: &mut ComputedStyle) {
+fn handle_margin_property(
+    declaration: &CSSDeclaration,
+    style: &mut ComputedStyle,
+    parents: Option<&Vec<Rc<RefCell<Element>>>>,
+) {
     let mut stream = InputStream::new(&declaration.value);
 
     match declaration.property_name.as_str() {
         "margin-top" => {
             let top = MarginValue::from_cv(&mut stream);
-            if let Some(top) = top {
+            if let Some(mut top) = top {
+                top.resolve_with_curr(parents.unwrap_or(&vec![]), style);
                 style.margin.top = top;
             }
         }
         "margin-right" => {
             let right = MarginValue::from_cv(&mut stream);
-            if let Some(right) = right {
+            if let Some(mut right) = right {
+                right.resolve_with_curr(parents.unwrap_or(&vec![]), style);
                 style.margin.right = right;
             }
         }
         "margin-bottom" => {
             let bottom = MarginValue::from_cv(&mut stream);
-            if let Some(bottom) = bottom {
+            if let Some(mut bottom) = bottom {
+                bottom.resolve_with_curr(parents.unwrap_or(&vec![]), style);
                 style.margin.bottom = bottom;
             }
         }
         "margin-left" => {
             let left = MarginValue::from_cv(&mut stream);
-            if let Some(left) = left {
+            if let Some(mut left) = left {
+                left.resolve_with_curr(parents.unwrap_or(&vec![]), style);
                 style.margin.left = left;
             }
         }
@@ -1139,35 +1166,42 @@ pub fn handle_declaration(
             handle_font_property(declaration, style, parents);
         }
         "width" => {
-            style.width = WidthValue::from_cv(&mut stream).unwrap_or_default();
+            let mut width = WidthValue::from_cv(&mut stream).unwrap_or_default();
+            width.resolve_with_curr(parents.unwrap_or(&vec![]), style);
+
+            style.width = width;
         }
         "display" => {
             style.display = Display::from_cv(&mut stream).unwrap_or_default();
         }
         "margin" => {
-            handle_margin(declaration, style);
+            handle_margin(declaration, style, parents);
         }
         prop if prop.starts_with("margin-") => {
-            handle_margin_property(declaration, style);
+            handle_margin_property(declaration, style, parents);
         }
         "position" => {
             style.position = Position::from_cv(&mut stream).unwrap_or_default();
         }
         "top" => {
-            style.top = Top::from_cv(&mut stream).unwrap_or_default();
-            style.top.resolve(parents.unwrap_or(&vec![]));
+            let mut top = Top::from_cv(&mut stream).unwrap_or_default();
+            top.resolve_with_curr(parents.unwrap_or(&vec![]), style);
+            style.top = top;
         }
         "left" => {
-            style.left = Left::from_cv(&mut stream).unwrap_or_default();
-            style.left.resolve(parents.unwrap_or(&vec![]));
+            let mut left = Left::from_cv(&mut stream).unwrap_or_default();
+            left.resolve_with_curr(parents.unwrap_or(&vec![]), style);
+            style.left = left;
         }
         "right" => {
-            style.right = Right::from_cv(&mut stream).unwrap_or_default();
-            style.right.resolve(parents.unwrap_or(&vec![]));
+            let mut right = Right::from_cv(&mut stream).unwrap_or_default();
+            right.resolve_with_curr(parents.unwrap_or(&vec![]), style);
+            style.right = right;
         }
         "bottom" => {
-            style.bottom = Bottom::from_cv(&mut stream).unwrap_or_default();
-            style.bottom.resolve(parents.unwrap_or(&vec![]));
+            let mut bottom = Bottom::from_cv(&mut stream).unwrap_or_default();
+            bottom.resolve_with_curr(parents.unwrap_or(&vec![]), style);
+            style.bottom = bottom;
         }
         _ => {
             // todo!(
