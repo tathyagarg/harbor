@@ -19,7 +19,7 @@ use winit::event_loop::EventLoop;
 fn main() {
     env_logger::init();
 
-    // let url_target = String::from("https://flavorless.hackclub.com/");
+    // let url_target = String::from("https://rupnil.codes/");
     // println!("Parsing target: {}", url_target);
 
     // let mut client = http::Client::new(http::Protocol::HTTP1_1, true);

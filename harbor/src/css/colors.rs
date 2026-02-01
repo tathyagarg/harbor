@@ -487,14 +487,6 @@ impl Color {
             },
         }
     }
-
-    pub fn from_name(name: &str) -> Option<Self> {
-        if get_named_color(name).is_some() {
-            Some(Color::Named(name.to_string()))
-        } else {
-            None
-        }
-    }
 }
 
 impl CSSParseable for Color {
