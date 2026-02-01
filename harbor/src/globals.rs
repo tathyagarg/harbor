@@ -7,30 +7,24 @@ use std::sync::{Arc, LazyLock};
 pub const DEFAULT_FONT_FAMILY: &str = "sans-serif";
 
 pub static FONTS: LazyLock<HashMap<String, Arc<TTCData>>> = LazyLock::new(|| {
-    let arial = Arc::new(font::parse_ttc(include_bytes!("../../res/fonts/Arial.ttc")));
+    let arial = Arc::new(font::parse_ttc(include_bytes!("../res/fonts/Arial.ttc")));
 
-    let verdana = Arc::new(font::parse_ttc(include_bytes!(
-        "../../res/fonts/Verdana.ttc"
-    )));
+    let verdana = Arc::new(font::parse_ttc(include_bytes!("../res/fonts/Verdana.ttc")));
 
     let tahoma = Arc::new(TTCData::new(vec![font::parse_ttf(include_bytes!(
-        "../../res/fonts/Tahoma.ttf"
+        "../res/fonts/Tahoma.ttf"
     ))]));
 
     let trebuchet_ms = Arc::new(font::parse_ttc(include_bytes!(
-        "../../res/fonts/TrebuchetMS.ttc"
+        "../res/fonts/TrebuchetMS.ttc"
     )));
 
-    let georgia = Arc::new(font::parse_ttc(include_bytes!(
-        "../../res/fonts/Georgia.ttc"
-    )));
+    let georgia = Arc::new(font::parse_ttc(include_bytes!("../res/fonts/Georgia.ttc")));
 
-    let garamond = Arc::new(font::parse_ttc(include_bytes!(
-        "../../res/fonts/Garamond.ttc"
-    )));
+    let garamond = Arc::new(font::parse_ttc(include_bytes!("../res/fonts/Garamond.ttc")));
 
     let courier_prime = Arc::new(font::parse_ttc(include_bytes!(
-        "../../res/fonts/CourierPrime.ttc"
+        "../res/fonts/CourierPrime.ttc"
     )));
 
     let mut map: HashMap<String, Arc<TTCData>> = HashMap::new();
@@ -61,18 +55,18 @@ pub static FONTS: LazyLock<HashMap<String, Arc<TTCData>>> = LazyLock::new(|| {
 
     map
 
-    // let fira_code_ttf = font::parse_ttf(include_bytes!("../../assets/fonts/FiraCode.ttf"));
+    // let fira_code_ttf = font::parse_ttf(include_bytes!("../assets/fonts/FiraCode.ttf"));
     // let fira_code = Arc::new(TTCData::new(vec![fira_code_ttf]));
 
     // let times = Arc::new(font::parse_ttc(include_bytes!(
-    //     "../../assets/fonts/Times.ttc"
+    //     "../assets/fonts/Times.ttc"
     // )));
 
-    // let sfns_ttf = font::parse_ttf(include_bytes!("../../assets/fonts/SFNS.ttf"));
+    // let sfns_ttf = font::parse_ttf(include_bytes!("../assets/fonts/SFNS.ttf"));
     // let sfns = Arc::new(TTCData::new(vec![sfns_ttf]));
 
     // let andika = Arc::new(font::parse_ttc(include_bytes!(
-    //     "../../assets/fonts/Andika.ttc"
+    //     "../assets/fonts/Andika.ttc"
     // )));
 
     // let mut map = HashMap::new();
