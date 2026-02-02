@@ -328,7 +328,7 @@ impl Box {
         tree
     }
 
-    pub fn get_hovered_elems(
+    pub fn get_elements_under(
         root: &Rc<RefCell<Box>>,
         pos_x: f64,
         pos_y: f64,
@@ -339,8 +339,9 @@ impl Box {
 
         let box_borrowed = root.borrow();
 
-        let box_x = parent_x + box_borrowed._position_x.unwrap_or(0.0);
-        let box_y = parent_y + box_borrowed._position_y.unwrap_or(0.0);
+        let box_x =
+            parent_x + box_borrowed._position_x.unwrap_or(0.0) + box_borrowed._margin.left();
+        let box_y = parent_y + box_borrowed._position_y.unwrap_or(0.0) + box_borrowed._margin.top();
 
         let box_width = box_borrowed._content_width;
         let box_height = box_borrowed._content_height;
@@ -358,7 +359,7 @@ impl Box {
 
             for child in box_borrowed.children.iter() {
                 let mut child_hovered =
-                    Box::get_hovered_elems(&Rc::clone(child), pos_x, pos_y, box_x, box_y);
+                    Box::get_elements_under(&Rc::clone(child), pos_x, pos_y, box_x, box_y);
                 hovered_elems.append(&mut child_hovered);
             }
         }
@@ -374,11 +375,6 @@ impl Box {
         match tree.borrow().deref() {
             NodeKind::Element(element_rc) if element_rc.borrow().local_name.as_str() != "head" => {
                 let element = element_rc.borrow();
-
-                // let display = match element.local_name.as_str() {
-                //     "span" | "em" | "strong" => BoxType::Inline,
-                //     _ => BoxType::Block,
-                // };
 
                 let parent_box = Rc::new(RefCell::new(Box {
                     _content_width: 0.0,
@@ -397,6 +393,8 @@ impl Box {
                 parents.push(Rc::downgrade(&parent_box));
 
                 let this_box = if element.style().display == Display::ListItem {
+                    println!("Making li box with: {:#?}", element.style());
+
                     parent_box.borrow_mut().children = vec![
                         Rc::new(RefCell::new(Box {
                             _content_width: 0.0,
@@ -513,6 +511,9 @@ impl Box {
 
                 let mut content_box = content_box_rc.borrow_mut();
 
+                marker_box._position_x = Some(content_box._margin.left());
+                marker_box._position_y = Some(self.get_line_height() / 2.0 + marker_height / 2.0);
+
                 let (content_width, content_height, _) = content_box.layout(
                     container_width,
                     container_height,
@@ -532,15 +533,17 @@ impl Box {
                 (
                     self._content_width + self._margin.horizontal(),
                     self._content_height + self._margin.vertical(),
-                    true,
+                    false,
                 )
             }
             BoxType::Marker => {
                 self._content_width = self.get_font_size();
                 self._content_height = self.get_font_size();
 
-                self._position_x = Some(self._content_width / 2.0);
-                self._position_y = Some(self.get_line_height() * 0.5);
+                println!(
+                    "Created markers: {}x{}",
+                    self._content_width, self._content_height
+                );
 
                 (self._content_width, self._content_height, false)
             }
@@ -575,11 +578,8 @@ impl Box {
             }
         }
 
-        let initial_x = self._margin.left() + self._border.3 + self._padding.3;
-        let initial_y = self._margin.top() + self._border.0 + self._padding.0;
-
-        let mut cursor_x = initial_x;
-        let mut cursor_y = initial_y;
+        let mut cursor_x = 0.0;
+        let mut cursor_y = 0.0;
 
         let mut inline_run: Vec<(Rc<RefCell<Box>>, bool, bool)> = Vec::new();
 
@@ -600,8 +600,8 @@ impl Box {
                 for (child_rc, first, last) in run.drain(..) {
                     let mut child = child_rc.borrow_mut();
 
-                    child._position_x = Some(*cursor_x - initial_x + line_width);
-                    child._position_y = Some(*cursor_y - initial_y);
+                    child._position_x = Some(*cursor_x + line_width);
+                    child._position_y = Some(*cursor_y);
 
                     let (w, h, go_to_next_line) = child.layout(
                         container_width,
@@ -617,7 +617,7 @@ impl Box {
 
                     if go_to_next_line {
                         *cursor_y += line_height;
-                        *cursor_x = initial_x;
+                        *cursor_x = 0.0;
                         *content_width = content_width.max(line_width);
 
                         line_width = 0.0;
@@ -625,7 +625,7 @@ impl Box {
                 }
 
                 *cursor_y += line_height;
-                *cursor_x = initial_x;
+                *cursor_x = 0.0;
                 *content_width = content_width.max(line_width);
             };
 
@@ -650,18 +650,31 @@ impl Box {
 
                     let mut child = child_box_rc.borrow_mut();
 
+                    // Margin collapsing - genuinely thought i lost this code
                     if let Some(prev_child_rc) = &prev_child {
                         let prev = prev_child_rc.borrow();
-
                         if matches!(prev._box_type, BoxType::Block)
                             && prev._padding.is_none()
                             && child._padding.is_none()
                             && prev._border.is_none()
                             && child._border.is_none()
                         {
-                            if child._margin.top() > prev._margin.bottom() {
-                                cursor_y -= prev._margin.bottom();
-                            }
+                            println!(
+                                "Eligible for collapsing: mt: {} mb: {}",
+                                child._margin.top(),
+                                prev._margin.bottom()
+                            );
+
+                            cursor_y -= child._margin.top().min(prev._margin.bottom());
+
+                            // if child._margin.top() > prev._margin.bottom() {
+                            //     println!(
+                            //         "Collapsing: {} > {}",
+                            //         child._margin.top(),
+                            //         prev._margin.bottom()
+                            //     );
+                            //     cursor_y -= prev._margin.bottom();
+                            // }
                         }
                     }
 
@@ -679,7 +692,7 @@ impl Box {
 
                     cursor_y += h;
                     if go_to_next_line {
-                        cursor_x = initial_x;
+                        cursor_x = 0.0;
                         cursor_y += child.get_line_height();
                     }
 
@@ -701,9 +714,10 @@ impl Box {
                         renderers,
                     );
 
-                    cursor_y += h + child._margin.bottom();
+                    cursor_y += h;
+
                     if go_to_next_line {
-                        cursor_x = initial_x;
+                        cursor_x = 0.0;
                         cursor_y += child.get_line_height();
                     }
 
@@ -724,7 +738,7 @@ impl Box {
 
         self._content_height = cursor_y;
 
-        if !matches!(self.style().unwrap().width.kind, WidthValueKind::Auto) {
+        if matches!(self.style().unwrap().width.kind, WidthValueKind::Auto) {
             if let Some(node_rc) = &self.associated_node {
                 if let NodeKind::Element(element_rc) = node_rc.borrow().deref() {
                     let mut element = element_rc.borrow_mut();
@@ -849,12 +863,6 @@ impl Box {
                 }
 
                 text_node_rc.borrow_mut().set_data(&new_data);
-
-                println!(
-                    "Content height: {}, line height: {}",
-                    self._content_height,
-                    style.font.resolved_line_height().unwrap_or(19.2)
-                );
 
                 self._content_height = self
                     ._content_height
@@ -1097,7 +1105,9 @@ fn handle_margin(
 
     let margin = Margin::from_cv(&mut stream);
     if let Some(mut margin) = margin {
-        margin.resolve(parents.unwrap_or(&vec![]));
+        // println!("Parsed margin: {:?}", margin);
+        // println!("Style: {:#?}", style);
+        margin.resolve_with_curr(parents.unwrap_or(&vec![]), style);
         style.margin = margin;
     }
 }
@@ -1112,30 +1122,42 @@ fn handle_margin_property(
     match declaration.property_name.as_str() {
         "margin-top" => {
             let top = MarginValue::from_cv(&mut stream);
-            if let Some(mut top) = top {
-                top.resolve_with_curr(parents.unwrap_or(&vec![]), style);
-                style.margin.top = top;
+            if let Some(top) = top {
+                let mut margin = style.margin.clone();
+                margin.top = top;
+                margin.resolve_top_with_curr(parents.unwrap_or(&vec![]), style);
+
+                style.margin = margin;
             }
         }
         "margin-right" => {
             let right = MarginValue::from_cv(&mut stream);
-            if let Some(mut right) = right {
-                right.resolve_with_curr(parents.unwrap_or(&vec![]), style);
-                style.margin.right = right;
+            if let Some(right) = right {
+                let mut margin = style.margin.clone();
+                margin.right = right;
+                margin.resolve_right_with_curr(parents.unwrap_or(&vec![]), style);
+
+                style.margin = margin;
             }
         }
         "margin-bottom" => {
             let bottom = MarginValue::from_cv(&mut stream);
-            if let Some(mut bottom) = bottom {
-                bottom.resolve_with_curr(parents.unwrap_or(&vec![]), style);
-                style.margin.bottom = bottom;
+            if let Some(bottom) = bottom {
+                let mut margin = style.margin.clone();
+                margin.bottom = bottom;
+                margin.resolve_bottom_with_curr(parents.unwrap_or(&vec![]), style);
+
+                style.margin = margin;
             }
         }
         "margin-left" => {
             let left = MarginValue::from_cv(&mut stream);
-            if let Some(mut left) = left {
-                left.resolve_with_curr(parents.unwrap_or(&vec![]), style);
-                style.margin.left = left;
+            if let Some(left) = left {
+                let mut margin = style.margin.clone();
+                margin.left = left;
+                margin.resolve_left_with_curr(parents.unwrap_or(&vec![]), style);
+
+                style.margin = margin;
             }
         }
         _ => {}

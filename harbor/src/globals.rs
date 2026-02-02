@@ -6,6 +6,9 @@ use std::sync::{Arc, LazyLock};
 
 pub const DEFAULT_FONT_FAMILY: &str = "sans-serif";
 
+pub const INITIAL_WINDOW_WIDTH: u32 = 800;
+pub const INITIAL_WINDOW_HEIGHT: u32 = 600;
+
 pub static FONTS: LazyLock<HashMap<String, Arc<TTCData>>> = LazyLock::new(|| {
     let arial = Arc::new(font::parse_ttc(include_bytes!("../res/fonts/Arial.ttc")));
 

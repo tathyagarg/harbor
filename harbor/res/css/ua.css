@@ -84,7 +84,7 @@ h6 { font-size: 0.67em; margin: 2.33em 0; }
 dir, dd, dl, dt, menu, ol, ul { display: block; }
 /* TODO: text-align
  * li { display: list-item; text-align: match-parent; } */
-li { display: list-item; }
+li { display: list-item; margin-left: 1em; }
 
 /* NOTE: This is actually supposed to be margin-block */
 dir, dl, menu, ol, ul { margin: 1em 0; }
@@ -100,11 +100,6 @@ marquee {
 
 main {
   display: block
-}
-
-li {
-  display: list-item;
-  margin-left: 0.75em;
 }
 
 a {

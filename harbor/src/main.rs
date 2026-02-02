@@ -2,6 +2,7 @@ use std::rc::Rc;
 
 use crate::{
     css::{layout::Layout, tokenize::tokenize},
+    globals::{INITIAL_WINDOW_HEIGHT, INITIAL_WINDOW_WIDTH},
     infra::{InputStream, Serializable},
 };
 
@@ -42,7 +43,7 @@ fn main() {
     // println!("Received response: \n\n{}", response.body.clone().unwrap());
 
     // let html_content = response.body.unwrap();
-    let html_content = include_str!("../../assets/html/position-demo.html");
+    let html_content = include_str!("../../assets/html/custom003.html");
 
     let mut stream = InputStream::new(&html_content.chars().collect::<Vec<char>>()[..]);
     let mut parser = html5::parse::Parser::new(&mut stream);
@@ -64,7 +65,10 @@ fn main() {
         .borrow_mut()
         .insert_stylesheet(0, css_content);
 
-    let mut layout = Layout::new(Rc::clone(&parser.document.document()), (800.0, 600.0));
+    let mut layout = Layout::new(
+        Rc::clone(&parser.document.document()),
+        (INITIAL_WINDOW_WIDTH as f64, INITIAL_WINDOW_HEIGHT as f64),
+    );
     layout.make_tree();
     layout.layout();
 

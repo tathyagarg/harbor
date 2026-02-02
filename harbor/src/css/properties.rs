@@ -2016,7 +2016,7 @@ impl Resolvable<f64> for MarginValue {
         parents: &Vec<Rc<RefCell<Element>>>,
         style: &ComputedStyle,
     ) -> f64 {
-        match &self.kind {
+        let res = match &self.kind {
             MarginValueKind::LengthPercentage(lp) => match lp {
                 LengthPercentage::Length(dim) => match dim.unit.as_str() {
                     "px" => dim.value as f64,
@@ -2040,7 +2040,10 @@ impl Resolvable<f64> for MarginValue {
                 }
             },
             MarginValueKind::Auto => 0.0,
-        }
+        };
+
+        self._resolved = Some(res);
+        res
     }
 }
 
@@ -2090,6 +2093,50 @@ impl Margin {
 
     pub fn resolve_left(&mut self, parents: &Vec<Rc<RefCell<Element>>>) -> f64 {
         let resolved_left = self.left.resolve(parents);
+
+        self._resolved.get_or_insert_with(|| Edges::default()).3 = resolved_left;
+        resolved_left
+    }
+
+    pub fn resolve_top_with_curr(
+        &mut self,
+        parents: &Vec<Rc<RefCell<Element>>>,
+        style: &ComputedStyle,
+    ) -> f64 {
+        let resolved_top = self.top.resolve_with_curr(parents, style);
+
+        self._resolved.get_or_insert_with(|| Edges::default()).0 = resolved_top;
+        resolved_top
+    }
+
+    pub fn resolve_right_with_curr(
+        &mut self,
+        parents: &Vec<Rc<RefCell<Element>>>,
+        style: &ComputedStyle,
+    ) -> f64 {
+        let resolved_right = self.right.resolve_with_curr(parents, style);
+
+        self._resolved.get_or_insert_with(|| Edges::default()).1 = resolved_right;
+        resolved_right
+    }
+
+    pub fn resolve_bottom_with_curr(
+        &mut self,
+        parents: &Vec<Rc<RefCell<Element>>>,
+        style: &ComputedStyle,
+    ) -> f64 {
+        let resolved_bottom = self.bottom.resolve_with_curr(parents, style);
+
+        self._resolved.get_or_insert_with(|| Edges::default()).2 = resolved_bottom;
+        resolved_bottom
+    }
+
+    pub fn resolve_left_with_curr(
+        &mut self,
+        parents: &Vec<Rc<RefCell<Element>>>,
+        style: &ComputedStyle,
+    ) -> f64 {
+        let resolved_left = self.left.resolve_with_curr(parents, style);
 
         self._resolved.get_or_insert_with(|| Edges::default()).3 = resolved_left;
         resolved_left
@@ -2179,10 +2226,10 @@ impl Resolvable<Edges> for Margin {
         parents: &Vec<Rc<RefCell<Element>>>,
         style: &ComputedStyle,
     ) -> Edges {
-        self.top.resolve_with_curr(parents, style);
-        self.right.resolve_with_curr(parents, style);
-        self.bottom.resolve_with_curr(parents, style);
-        self.left.resolve_with_curr(parents, style);
+        self.resolve_top_with_curr(parents, style);
+        self.resolve_right_with_curr(parents, style);
+        self.resolve_bottom_with_curr(parents, style);
+        self.resolve_left_with_curr(parents, style);
 
         self._resolved.unwrap_or_default()
     }

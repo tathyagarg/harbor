@@ -11,6 +11,7 @@ use wgpu::{self};
 use crate::css::r#box::Box;
 use crate::css::colors::UsedColor;
 use crate::css::layout::Layout;
+use crate::globals::{INITIAL_WINDOW_HEIGHT, INITIAL_WINDOW_WIDTH};
 use crate::html5::dom::Document;
 use crate::render::state::WindowState;
 
@@ -88,8 +89,11 @@ impl ApplicationHandler<WindowState> for App {
         #[allow(unused_mut)]
         let mut window_attributes = Window::default_attributes()
             .with_title("Harbor Browser")
-            // TODO: Change this to not have any decorations
-            .with_decorations(true);
+            .with_decorations(true)
+            .with_inner_size(winit::dpi::LogicalSize::new(
+                INITIAL_WINDOW_WIDTH,
+                INITIAL_WINDOW_HEIGHT,
+            ));
 
         if self.window_options.use_transparent {
             window_attributes = window_attributes.with_transparent(true);
@@ -123,7 +127,7 @@ impl ApplicationHandler<WindowState> for App {
             }
             WindowEvent::CursorMoved { position, .. } => {
                 if let Some(root) = state.layout.root_box.as_ref() {
-                    let elems = Box::get_hovered_elems(root, position.x, position.y, 0.0, 0.0);
+                    let elems = Box::get_elements_under(root, position.x, position.y, 0.0, 0.0);
 
                     for (i, child) in elems.iter().enumerate() {
                         let mut child_borrow = child.borrow_mut();
