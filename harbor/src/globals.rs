@@ -38,7 +38,7 @@ pub static FONTS: LazyLock<HashMap<String, Arc<TTCData>>> = LazyLock::new(|| {
     // Sans-serif fonts
     map.insert("sans-serif".to_string(), arial.clone());
     map.insert("ui-sans-serif".to_string(), arial.clone());
-    map.insert("Arial".to_string(), arial);
+    map.insert("Arial".to_string(), arial.clone());
 
     map.insert("Verdana".to_string(), verdana);
 
@@ -58,6 +58,8 @@ pub static FONTS: LazyLock<HashMap<String, Arc<TTCData>>> = LazyLock::new(|| {
     map.insert("ui-monospace".to_string(), courier_prime.clone());
     map.insert("Courier New".to_string(), courier_prime.clone());
     map.insert("Courier Prime".to_string(), courier_prime);
+
+    map.insert("system-ui".to_string(), arial);
 
     map
 

@@ -143,17 +143,20 @@ impl ApplicationHandler<WindowState> for App {
                 if let Some(root) = layout.root_box.as_ref() {
                     let elems = Box::get_elements_under(root, position.x, position.y, 0.0, 0.0);
 
+                    let inner_size = state.window.inner_size();
+                    let viewport_size = (inner_size.width as f64, inner_size.height as f64);
+
                     for (i, child) in elems.iter().enumerate() {
                         let mut child_borrow = child.borrow_mut();
                         if !child_borrow._element_state.is_hovered {
-                            child_borrow.trigger_hover(&elems[..i]);
+                            child_borrow.trigger_hover(&elems[..i], viewport_size);
                         }
                     }
 
                     for (i, prev) in state.prev_hovered_elements.iter().enumerate() {
                         if !elems.contains(prev) {
                             prev.borrow_mut()
-                                .leave_hover(&state.prev_hovered_elements[..i]);
+                                .leave_hover(&state.prev_hovered_elements[..i], viewport_size);
                         }
                     }
 

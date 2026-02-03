@@ -295,7 +295,7 @@ impl Box {
         doc: &Rc<RefCell<Document>>,
         window_size: (f64, f64),
     ) -> Option<Rc<RefCell<Box>>> {
-        compute_doc_styles(doc);
+        compute_doc_styles(doc, window_size);
 
         // For now, create a simple box for the document root
         let mut root_box = Box {
@@ -961,7 +961,7 @@ impl Box {
     }
 }
 
-fn compute_doc_styles(doc: &Rc<RefCell<Document>>) {
+fn compute_doc_styles(doc: &Rc<RefCell<Document>>, viewport_size: (f64, f64)) {
     let doc_borrow = doc.borrow();
     let doc_node = doc_borrow._node.borrow();
     let children = doc_node.child_nodes();
@@ -970,7 +970,7 @@ fn compute_doc_styles(doc: &Rc<RefCell<Document>>) {
         let node = node_rc.borrow();
         if let NodeKind::Element(element_rc) = node.deref() {
             let mut element = element_rc.borrow_mut();
-            element.compute_element_styles(None);
+            element.compute_element_styles(None, viewport_size);
         }
     }
 }

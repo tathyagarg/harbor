@@ -25,6 +25,7 @@ pub trait Resolvable<T> {
         &mut self,
         parents: &Vec<Rc<RefCell<Element>>>,
         current: &ComputedStyle,
+        viewport_size: (f64, f64),
     ) -> T;
 
     fn resolved(&self) -> T;
@@ -32,8 +33,7 @@ pub trait Resolvable<T> {
 
 #[derive(Default, Debug, Clone)]
 pub enum WidthValueKind {
-    Length(Dimension),
-    Percentage(Percentage),
+    LengthPercentage(LengthPercentage),
 
     #[default]
     Auto,
@@ -75,12 +75,12 @@ impl CSSParseable for WidthValue {
                         None
                     }
                 },
-                ComponentValue::Token(CSSToken::Dimension(dim)) => {
-                    Some(WidthValue::new(WidthValueKind::Length(dim.clone())))
-                }
-                ComponentValue::Token(CSSToken::Percentage(perc)) => {
-                    Some(WidthValue::new(WidthValueKind::Percentage(perc.clone())))
-                }
+                ComponentValue::Token(CSSToken::Dimension(dim)) => Some(WidthValue::new(
+                    WidthValueKind::LengthPercentage(LengthPercentage::Length(dim.clone())),
+                )),
+                ComponentValue::Token(CSSToken::Percentage(perc)) => Some(WidthValue::new(
+                    WidthValueKind::LengthPercentage(LengthPercentage::Percentage(perc.clone())),
+                )),
                 _ => {
                     cvs.reconsume();
                     None
@@ -99,19 +99,7 @@ impl Resolvable<f64> for WidthValue {
 
     fn resolve(&mut self, parents: &Vec<Rc<RefCell<Element>>>) -> f64 {
         let res = match &self.kind {
-            WidthValueKind::Length(dim) => match dim.unit.as_str() {
-                "px" => dim.value as f64,
-                _ => todo!("Handle other length units"),
-            },
-            WidthValueKind::Percentage(perc) => {
-                (*perc as f64 / 100.0) * {
-                    let parent = parents.last();
-                    match parent {
-                        Some(p) => p.borrow().style().width.resolved(),
-                        None => 0.0,
-                    }
-                }
-            }
+            WidthValueKind::LengthPercentage(lp) => lp.resolve(parents),
             WidthValueKind::Auto => parents
                 .last()
                 .and_then(|parent| parent.borrow().style().width.resolved().into())
@@ -128,28 +116,11 @@ impl Resolvable<f64> for WidthValue {
         &mut self,
         parents: &Vec<Rc<RefCell<Element>>>,
         current: &ComputedStyle,
+        viewport_size: (f64, f64),
     ) -> f64 {
         let res = match &self.kind {
-            WidthValueKind::Length(dim) => match dim.unit.as_str() {
-                "px" => dim.value as f64,
-                "em" => dim.value * current.font.resolved_font_size().unwrap_or(16.0),
-                "rem" => {
-                    let root_font_size = parents
-                        .first()
-                        .and_then(|root| root.borrow().style().font.resolved_font_size())
-                        .unwrap_or(16.0);
-                    dim.value * root_font_size
-                }
-                _ => todo!("Handle other length units"),
-            },
-            WidthValueKind::Percentage(perc) => {
-                (*perc as f64 / 100.0) * {
-                    let parent = parents.last();
-                    match parent {
-                        Some(p) => p.borrow().style().width.resolved(),
-                        None => 0.0,
-                    }
-                }
+            WidthValueKind::LengthPercentage(lp) => {
+                lp.resolve_with_curr(parents, current, viewport_size)
             }
             WidthValueKind::Auto => parents
                 .last()
@@ -166,11 +137,13 @@ impl Resolvable<f64> for WidthValue {
 impl WidthValue {
     pub fn resolve_single_parent(&mut self, parent_width: f64) -> f64 {
         let res = match &self.kind {
-            WidthValueKind::Length(dim) => match dim.unit.as_str() {
-                "px" => dim.value as f64,
-                _ => todo!("Handle other length units"),
+            WidthValueKind::LengthPercentage(lp) => match &lp {
+                LengthPercentage::Length(dim) => match dim.unit.as_str() {
+                    "px" => dim.value as f64,
+                    _ => todo!("Handle other length units"),
+                },
+                LengthPercentage::Percentage(perc) => (*perc as f64 / 100.0) * parent_width,
             },
-            WidthValueKind::Percentage(perc) => (*perc as f64 / 100.0) * parent_width,
             WidthValueKind::Auto => parent_width,
             _ => todo!("Handle other WidthValue variants"),
         };
@@ -489,6 +462,7 @@ impl LengthPercentage {
         &self,
         parents: &Vec<Rc<RefCell<Element>>>,
         current: &ComputedStyle,
+        viewport_size: (f64, f64),
     ) -> f64 {
         match self {
             LengthPercentage::Length(dim) => match dim.unit.as_str() {
@@ -505,6 +479,8 @@ impl LengthPercentage {
 
                     dim.value as f64 * root_font_size
                 }
+                "vw" => (dim.value as f64 / 100.0) * viewport_size.0,
+                "vh" => (dim.value as f64 / 100.0) * viewport_size.1,
                 _ => todo!("Handle other length units"),
             },
             LengthPercentage::Percentage(perc) => {
@@ -688,9 +664,10 @@ impl Resolvable<(f64, f64)> for PositionValue {
         &mut self,
         parents: &Vec<Rc<RefCell<Element>>>,
         current: &ComputedStyle,
+        viewport_size: (f64, f64),
     ) -> (f64, f64) {
-        let res_x = self.x.1.resolve_with_curr(parents, current);
-        let res_y = self.y.1.resolve_with_curr(parents, current);
+        let res_x = self.x.1.resolve_with_curr(parents, current, viewport_size);
+        let res_y = self.y.1.resolve_with_curr(parents, current, viewport_size);
 
         self._resolved_x = Some(res_x);
         self._resolved_y = Some(res_y);
@@ -949,9 +926,14 @@ impl Font {
         &mut self,
         parents: &Vec<Rc<RefCell<Element>>>,
         current: &ComputedStyle,
+        viewport_size: (f64, f64),
     ) -> Option<f64> {
         match self {
-            Font::Constructed(cf) => Some(cf.line_height.resolve_with_curr(parents, current)),
+            Font::Constructed(cf) => Some(cf.line_height.resolve_with_curr(
+                parents,
+                current,
+                viewport_size,
+            )),
             Font::SystemFont(_) => None,
         }
     }
@@ -1069,14 +1051,17 @@ impl Resolvable<(f64, u32)> for Font {
         &mut self,
         parents: &Vec<Rc<RefCell<Element>>>,
         current: &ComputedStyle,
+        viewport_size: (f64, f64),
     ) -> (f64, u32) {
         (
             match self {
-                Font::Constructed(cf) => cf.size.resolve_with_curr(parents, current),
+                Font::Constructed(cf) => cf.size.resolve_with_curr(parents, current, viewport_size),
                 Font::SystemFont(_) => 16.0,
             },
             match self {
-                Font::Constructed(cf) => cf.weight.resolve_with_curr(parents, current),
+                Font::Constructed(cf) => {
+                    cf.weight.resolve_with_curr(parents, current, viewport_size)
+                }
                 Font::SystemFont(_) => 400,
             },
         )
@@ -1165,10 +1150,12 @@ impl Resolvable<(f64, u32)> for ConstructedFont {
         &mut self,
         parents: &Vec<Rc<RefCell<Element>>>,
         current: &ComputedStyle,
+        viewport_size: (f64, f64),
     ) -> (f64, u32) {
         (
-            self.size.resolve_with_curr(parents, current),
-            self.weight.resolve_with_curr(parents, current),
+            self.size.resolve_with_curr(parents, current, viewport_size),
+            self.weight
+                .resolve_with_curr(parents, current, viewport_size),
         )
     }
 }
@@ -1401,6 +1388,7 @@ impl Resolvable<u32> for FontWeight {
         &mut self,
         parents: &Vec<Rc<RefCell<Element>>>,
         _current: &ComputedStyle,
+        _viewport_size: (f64, f64),
     ) -> u32 {
         self.resolve(parents)
     }
@@ -1617,6 +1605,7 @@ impl Resolvable<f64> for FontSize {
         &mut self,
         parents: &Vec<Rc<RefCell<Element>>>,
         _current: &ComputedStyle,
+        _viewport_size: (f64, f64),
     ) -> f64 {
         self.resolve(parents)
     }
@@ -1742,6 +1731,7 @@ impl Resolvable<f64> for LineHeight {
         &mut self,
         parents: &Vec<Rc<RefCell<Element>>>,
         current: &ComputedStyle,
+        viewport_size: (f64, f64),
     ) -> f64 {
         let res = match &self.kind {
             LineHeightKind::Normal => {
@@ -1752,7 +1742,9 @@ impl Resolvable<f64> for LineHeight {
                 let font_size = current.font.resolved_font_size().unwrap_or(16.0);
                 font_size * n
             }
-            LineHeightKind::LengthPercentage(lp) => lp.resolve_with_curr(parents, current),
+            LineHeightKind::LengthPercentage(lp) => {
+                lp.resolve_with_curr(parents, current, viewport_size)
+            }
         };
 
         self._resolved_line_height = Some(res);
@@ -2015,31 +2007,37 @@ impl Resolvable<f64> for MarginValue {
         &mut self,
         parents: &Vec<Rc<RefCell<Element>>>,
         style: &ComputedStyle,
+        viewport_size: (f64, f64),
     ) -> f64 {
         let res = match &self.kind {
-            MarginValueKind::LengthPercentage(lp) => match lp {
-                LengthPercentage::Length(dim) => match dim.unit.as_str() {
-                    "px" => dim.value as f64,
-                    "em" => {
-                        let parent_font_size = style.font.resolved_font_size().unwrap_or(16.0);
-
-                        dim.value as f64 * parent_font_size
-                    }
-                    "rem" => {
-                        let root_font_size = parents
-                            .first()
-                            .and_then(|root| root.borrow().style().font.resolved_font_size())
-                            .unwrap_or(16.0);
-
-                        dim.value as f64 * root_font_size
-                    }
-                    _ => todo!("Handle other length units"),
-                },
-                LengthPercentage::Percentage(_) => {
-                    panic!("Idk how to resolve percentage margins yet")
-                }
-            },
+            MarginValueKind::LengthPercentage(lp) => {
+                lp.resolve_with_curr(parents, style, viewport_size)
+            }
             MarginValueKind::Auto => 0.0,
+            //  match lp {
+            //
+            //      LengthPercentage::Length(dim) => match dim.unit.as_str() {
+            //          "px" => dim.value as f64,
+            //          "em" => {
+            //              let parent_font_size = style.font.resolved_font_size().unwrap_or(16.0);
+
+            //              dim.value as f64 * parent_font_size
+            //          }
+            //          "rem" => {
+            //              let root_font_size = parents
+            //                  .first()
+            //                  .and_then(|root| root.borrow().style().font.resolved_font_size())
+            //                  .unwrap_or(16.0);
+
+            //              dim.value as f64 * root_font_size
+            //          }
+            //          _ => todo!("Handle other length units"),
+            //      },
+            //      LengthPercentage::Percentage(_) => {
+            //          panic!("Idk how to resolve percentage margins yet")
+            //      }
+            //  },
+            //  MarginValueKind::Auto => 0.0,
         };
 
         self._resolved = Some(res);
@@ -2102,8 +2100,9 @@ impl Margin {
         &mut self,
         parents: &Vec<Rc<RefCell<Element>>>,
         style: &ComputedStyle,
+        viewport_size: (f64, f64),
     ) -> f64 {
-        let resolved_top = self.top.resolve_with_curr(parents, style);
+        let resolved_top = self.top.resolve_with_curr(parents, style, viewport_size);
 
         self._resolved.get_or_insert_with(|| Edges::default()).0 = resolved_top;
         resolved_top
@@ -2113,8 +2112,9 @@ impl Margin {
         &mut self,
         parents: &Vec<Rc<RefCell<Element>>>,
         style: &ComputedStyle,
+        viewport_size: (f64, f64),
     ) -> f64 {
-        let resolved_right = self.right.resolve_with_curr(parents, style);
+        let resolved_right = self.right.resolve_with_curr(parents, style, viewport_size);
 
         self._resolved.get_or_insert_with(|| Edges::default()).1 = resolved_right;
         resolved_right
@@ -2124,8 +2124,9 @@ impl Margin {
         &mut self,
         parents: &Vec<Rc<RefCell<Element>>>,
         style: &ComputedStyle,
+        viewport_size: (f64, f64),
     ) -> f64 {
-        let resolved_bottom = self.bottom.resolve_with_curr(parents, style);
+        let resolved_bottom = self.bottom.resolve_with_curr(parents, style, viewport_size);
 
         self._resolved.get_or_insert_with(|| Edges::default()).2 = resolved_bottom;
         resolved_bottom
@@ -2135,8 +2136,9 @@ impl Margin {
         &mut self,
         parents: &Vec<Rc<RefCell<Element>>>,
         style: &ComputedStyle,
+        viewport_size: (f64, f64),
     ) -> f64 {
-        let resolved_left = self.left.resolve_with_curr(parents, style);
+        let resolved_left = self.left.resolve_with_curr(parents, style, viewport_size);
 
         self._resolved.get_or_insert_with(|| Edges::default()).3 = resolved_left;
         resolved_left
@@ -2225,11 +2227,12 @@ impl Resolvable<Edges> for Margin {
         &mut self,
         parents: &Vec<Rc<RefCell<Element>>>,
         style: &ComputedStyle,
+        viewport_size: (f64, f64),
     ) -> Edges {
-        self.resolve_top_with_curr(parents, style);
-        self.resolve_right_with_curr(parents, style);
-        self.resolve_bottom_with_curr(parents, style);
-        self.resolve_left_with_curr(parents, style);
+        self.resolve_top_with_curr(parents, style, viewport_size);
+        self.resolve_right_with_curr(parents, style, viewport_size);
+        self.resolve_bottom_with_curr(parents, style, viewport_size);
+        self.resolve_left_with_curr(parents, style, viewport_size);
 
         self._resolved.unwrap_or_default()
     }
@@ -2343,11 +2346,12 @@ impl Resolvable<f64> for Top {
         &mut self,
         parents: &Vec<Rc<RefCell<Element>>>,
         style: &ComputedStyle,
+        viewport_size: (f64, f64),
     ) -> f64 {
         let res = match &self.kind {
             PositioningValueKind::Auto => None,
             PositioningValueKind::LengthPercentage(lp) => {
-                Some(lp.resolve_with_curr(parents, style))
+                Some(lp.resolve_with_curr(parents, style, viewport_size))
             }
         }
         .unwrap_or(0.0);

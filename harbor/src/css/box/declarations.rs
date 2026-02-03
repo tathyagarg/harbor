@@ -57,6 +57,7 @@ fn handle_font(
     declaration: &CSSDeclaration,
     style: &mut ComputedStyle,
     parents: Option<&Vec<Rc<RefCell<Element>>>>,
+    viewport_size: (f64, f64),
 ) {
     let mut stream = InputStream::new(&declaration.value);
 
@@ -64,7 +65,7 @@ fn handle_font(
     if let Some(mut font) = font {
         font.resolve_font_size(parents.unwrap_or(&vec![]));
         font.resolve_font_weight(parents.unwrap_or(&vec![]));
-        font.resolve_line_height_curr(parents.unwrap_or(&vec![]), style);
+        font.resolve_line_height_curr(parents.unwrap_or(&vec![]), style, viewport_size);
 
         style.font = font;
     }
@@ -74,6 +75,7 @@ fn handle_font_property(
     declaration: &CSSDeclaration,
     style: &mut ComputedStyle,
     parents: Option<&Vec<Rc<RefCell<Element>>>>,
+    viewport_size: (f64, f64),
 ) {
     let mut stream = InputStream::new(&declaration.value);
 
@@ -91,7 +93,7 @@ fn handle_font_property(
                 style.font.resolve_font_size(parents.unwrap_or(&vec![]));
 
                 let mut line_height = style.font.line_height();
-                line_height.resolve_with_curr(parents.unwrap_or(&vec![]), style);
+                line_height.resolve_with_curr(parents.unwrap_or(&vec![]), style, viewport_size);
                 style.font.set_line_height(line_height);
             }
         }
@@ -105,7 +107,7 @@ fn handle_font_property(
         "line-height" => {
             let line_height = LineHeight::from_cv(&mut stream);
             if let Some(mut line_height) = line_height {
-                line_height.resolve_with_curr(parents.unwrap_or(&vec![]), style);
+                line_height.resolve_with_curr(parents.unwrap_or(&vec![]), style, viewport_size);
 
                 style.font.set_line_height(line_height);
             }
@@ -124,6 +126,7 @@ fn handle_margin(
     declaration: &CSSDeclaration,
     style: &mut ComputedStyle,
     parents: Option<&Vec<Rc<RefCell<Element>>>>,
+    viewport_size: (f64, f64),
 ) {
     let mut stream = InputStream::new(&declaration.value);
 
@@ -131,7 +134,7 @@ fn handle_margin(
     if let Some(mut margin) = margin {
         // println!("Parsed margin: {:?}", margin);
         // println!("Style: {:#?}", style);
-        margin.resolve_with_curr(parents.unwrap_or(&vec![]), style);
+        margin.resolve_with_curr(parents.unwrap_or(&vec![]), style, viewport_size);
         style.margin = margin;
     }
 }
@@ -140,6 +143,7 @@ fn handle_margin_property(
     declaration: &CSSDeclaration,
     style: &mut ComputedStyle,
     parents: Option<&Vec<Rc<RefCell<Element>>>>,
+    viewport_size: (f64, f64),
 ) {
     let mut stream = InputStream::new(&declaration.value);
 
@@ -149,7 +153,7 @@ fn handle_margin_property(
             if let Some(top) = top {
                 let mut margin = style.margin.clone();
                 margin.top = top;
-                margin.resolve_top_with_curr(parents.unwrap_or(&vec![]), style);
+                margin.resolve_top_with_curr(parents.unwrap_or(&vec![]), style, viewport_size);
 
                 style.margin = margin;
             }
@@ -159,7 +163,7 @@ fn handle_margin_property(
             if let Some(right) = right {
                 let mut margin = style.margin.clone();
                 margin.right = right;
-                margin.resolve_right_with_curr(parents.unwrap_or(&vec![]), style);
+                margin.resolve_right_with_curr(parents.unwrap_or(&vec![]), style, viewport_size);
 
                 style.margin = margin;
             }
@@ -169,7 +173,7 @@ fn handle_margin_property(
             if let Some(bottom) = bottom {
                 let mut margin = style.margin.clone();
                 margin.bottom = bottom;
-                margin.resolve_bottom_with_curr(parents.unwrap_or(&vec![]), style);
+                margin.resolve_bottom_with_curr(parents.unwrap_or(&vec![]), style, viewport_size);
 
                 style.margin = margin;
             }
@@ -179,7 +183,7 @@ fn handle_margin_property(
             if let Some(left) = left {
                 let mut margin = style.margin.clone();
                 margin.left = left;
-                margin.resolve_left_with_curr(parents.unwrap_or(&vec![]), style);
+                margin.resolve_left_with_curr(parents.unwrap_or(&vec![]), style, viewport_size);
 
                 style.margin = margin;
             }
@@ -192,6 +196,7 @@ pub fn handle_declaration(
     declaration: &CSSDeclaration,
     style: &mut ComputedStyle,
     parents: Option<&Vec<Rc<RefCell<Element>>>>,
+    viewport_size: (f64, f64),
 ) {
     let mut stream = InputStream::new(&declaration.value);
 
@@ -206,14 +211,14 @@ pub fn handle_declaration(
             handle_background_property(declaration, style);
         }
         "font" => {
-            handle_font(declaration, style, parents);
+            handle_font(declaration, style, parents, viewport_size);
         }
         prop if prop.starts_with("font-") || prop == "line-height" => {
-            handle_font_property(declaration, style, parents);
+            handle_font_property(declaration, style, parents, viewport_size);
         }
         "width" => {
             let mut width = WidthValue::from_cv(&mut stream).unwrap_or_default();
-            width.resolve_with_curr(parents.unwrap_or(&vec![]), style);
+            width.resolve_with_curr(parents.unwrap_or(&vec![]), style, viewport_size);
 
             style.width = width;
         }
@@ -221,32 +226,32 @@ pub fn handle_declaration(
             style.display = Display::from_cv(&mut stream).unwrap_or_default();
         }
         "margin" => {
-            handle_margin(declaration, style, parents);
+            handle_margin(declaration, style, parents, viewport_size);
         }
         prop if prop.starts_with("margin-") => {
-            handle_margin_property(declaration, style, parents);
+            handle_margin_property(declaration, style, parents, viewport_size);
         }
         "position" => {
             style.position = Position::from_cv(&mut stream).unwrap_or_default();
         }
         "top" => {
             let mut top = Top::from_cv(&mut stream).unwrap_or_default();
-            top.resolve_with_curr(parents.unwrap_or(&vec![]), style);
+            top.resolve_with_curr(parents.unwrap_or(&vec![]), style, viewport_size);
             style.top = top;
         }
         "left" => {
             let mut left = Left::from_cv(&mut stream).unwrap_or_default();
-            left.resolve_with_curr(parents.unwrap_or(&vec![]), style);
+            left.resolve_with_curr(parents.unwrap_or(&vec![]), style, viewport_size);
             style.left = left;
         }
         "right" => {
             let mut right = Right::from_cv(&mut stream).unwrap_or_default();
-            right.resolve_with_curr(parents.unwrap_or(&vec![]), style);
+            right.resolve_with_curr(parents.unwrap_or(&vec![]), style, viewport_size);
             style.right = right;
         }
         "bottom" => {
             let mut bottom = Bottom::from_cv(&mut stream).unwrap_or_default();
-            bottom.resolve_with_curr(parents.unwrap_or(&vec![]), style);
+            bottom.resolve_with_curr(parents.unwrap_or(&vec![]), style, viewport_size);
             style.bottom = bottom;
         }
         _ => {

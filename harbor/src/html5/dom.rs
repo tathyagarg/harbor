@@ -940,16 +940,16 @@ impl Element {
         element
     }
 
-    pub fn trigger_hover(&mut self, parents: &[Rc<RefCell<Element>>]) {
+    pub fn trigger_hover(&mut self, parents: &[Rc<RefCell<Element>>], viewport_size: (f64, f64)) {
         self._element_state.is_hovered = true;
 
-        self.compute_element_styles(Some(&parents.to_vec()));
+        self.compute_element_styles(Some(&parents.to_vec()), viewport_size);
     }
 
-    pub fn leave_hover(&mut self, parents: &[Rc<RefCell<Element>>]) {
+    pub fn leave_hover(&mut self, parents: &[Rc<RefCell<Element>>], viewport_size: (f64, f64)) {
         self._element_state.is_hovered = false;
 
-        self.compute_element_styles(Some(&parents.to_vec()));
+        self.compute_element_styles(Some(&parents.to_vec()), viewport_size);
     }
 
     pub fn trigger_click(&mut self, _parents: &[Rc<RefCell<Element>>]) {}
@@ -979,7 +979,11 @@ impl Element {
         }
     }
 
-    pub fn compute_element_styles(&mut self, parents: Option<&Vec<Rc<RefCell<Element>>>>) {
+    pub fn compute_element_styles(
+        &mut self,
+        parents: Option<&Vec<Rc<RefCell<Element>>>>,
+        viewport_size: (f64, f64),
+    ) {
         // inherit
         *self.style_mut() = parents
             .and_then(|p| p.last())
@@ -1011,7 +1015,12 @@ impl Element {
                         for selector in style_rule.selectors() {
                             if selector.matches(self, parents) {
                                 for declaration in style_rule.declarations() {
-                                    handle_declaration(declaration, self.style_mut(), parents);
+                                    handle_declaration(
+                                        declaration,
+                                        self.style_mut(),
+                                        parents,
+                                        viewport_size,
+                                    );
                                 }
                             }
                         }
@@ -1034,7 +1043,7 @@ impl Element {
             let child = child_rc.borrow();
             if let NodeKind::Element(child_element_rc) = child.deref() {
                 let mut child_element = child_element_rc.borrow_mut();
-                child_element.compute_element_styles(Some(&new_parents));
+                child_element.compute_element_styles(Some(&new_parents), viewport_size);
             }
         }
     }
