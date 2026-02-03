@@ -257,8 +257,6 @@ impl Request {
 
                     let mut response_decoder = ResponseDecoder::new();
 
-                    let mut content_length: Option<usize> = None;
-
                     loop {
                         let mut resp: [u8; 512] = [0; 512];
                         let bytes_read = stream.cs_read(&mut resp);
@@ -266,13 +264,21 @@ impl Request {
                             break;
                         }
 
-                        response_decoder.decode(&resp[..bytes_read]);
+                        let respected_bytes =
+                            bytes_read.min(response_decoder.response.body.as_ref().map_or(
+                                bytes_read,
+                                |b| {
+                                    response_decoder.response._content_length.unwrap_or(0) - b.len()
+                                },
+                            ));
+
+                        response_decoder.decode(&resp[..respected_bytes]);
 
                         if response_decoder.is_complete {
                             break;
                         }
 
-                        if let Some(len) = content_length {
+                        if let Some(len) = response_decoder.response._content_length {
                             if response_decoder
                                 .response
                                 .body
@@ -280,17 +286,6 @@ impl Request {
                                 .is_some_and(|body| body.len() >= len)
                             {
                                 break;
-                            }
-                        } else if let Some(len) = response_decoder
-                            .response
-                            .get_header_value("Content-Length".to_string())
-                        {
-                            content_length = Some(len.parse::<usize>().unwrap());
-
-                            if let Some(body) = response_decoder.response.body.as_ref() {
-                                if body.len() >= content_length.unwrap() {
-                                    break;
-                                }
                             }
                         }
                     }
@@ -538,6 +533,8 @@ impl ResponseDecoder {
                     {
                         let content_length = len.parse::<usize>().unwrap();
 
+                        self.response._content_length = Some(content_length);
+
                         if content_length == 0 {
                             self.is_complete = true;
                             return;
@@ -563,9 +560,34 @@ impl ResponseDecoder {
                     return;
                 }
 
+                let mut skip = 0;
+
+                if matches!(
+                    string_data.bytes().nth(0),
+                    Some(b'0'..=b'9' | b'a'..=b'f' | b'A'..=b'F')
+                ) {
+                    let mut size = 0;
+                    for c in string_data.chars() {
+                        skip += 1;
+                        if c == '\r' || c == '\n' {
+                            break;
+                        }
+                        size = size * 16 + c.to_digit(16).unwrap() as usize;
+                    }
+
+                    self.response._content_length = Some(size);
+
+                    if size == 0 {
+                        self.is_complete = true;
+                        return;
+                    }
+                }
+
+                let sure_data = &string_data[skip..];
+
                 match &self.response.body {
-                    Some(body) => self.response.body = Some(body.to_owned() + string_data.as_str()),
-                    None => self.response.body = Some(string_data),
+                    Some(body) => self.response.body = Some(body.to_owned() + sure_data),
+                    None => self.response.body = Some(sure_data.to_string()),
                 }
             }
         }
@@ -586,6 +608,8 @@ pub struct Response {
 
     /// Most responses have bodies, but certain responses (201 Created, 204 No Content) don't
     pub body: Option<String>,
+
+    _content_length: Option<usize>,
 }
 
 impl Response {
@@ -837,10 +861,10 @@ impl ConnectionStream for TcpStream {
     }
 }
 
-impl<'a> ConnectionStream for TlsStream {
+impl ConnectionStream for TlsStream {
     fn cs_read(&mut self, buffer: &mut [u8]) -> usize {
         let mut stream = rustls::Stream::new(&mut self.conn, &mut self.sock);
-        stream.read(buffer).unwrap()
+        stream.read(buffer).unwrap_or(0)
     }
 
     fn cs_write(&mut self, data: &[u8]) -> Result<usize, std::io::Error> {

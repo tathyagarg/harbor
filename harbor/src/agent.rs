@@ -61,11 +61,15 @@ impl Agent {
         }
     }
 
+    pub fn trigger(&self) {
+        println!("Agent triggered");
+    }
+
     pub fn run(&mut self) {
         let event_loop = EventLoop::with_user_event().build().unwrap();
         event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
 
-        self.open("https://old.arson.dev/");
+        self.open("https://example.com/");
 
         let _ = event_loop.run_app(self.app.as_mut().unwrap());
     }
