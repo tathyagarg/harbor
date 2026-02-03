@@ -3,7 +3,7 @@ use std::ops::Deref;
 use std::rc::Weak;
 use std::{cell::RefCell, rc::Rc};
 
-use crate::css::r#box::handle_declaration;
+use crate::css::r#box::declarations::handle_declaration;
 use crate::css::cssom::{
     CSSRuleNode, CSSRuleType, CSSStyleRuleData, CSSStyleSheet, CSSStyleSheetExt, ComputedStyle,
     DocumentOrShadowRootStyle, StyleSheetList,
