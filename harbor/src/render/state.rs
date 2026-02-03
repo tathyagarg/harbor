@@ -50,6 +50,8 @@ pub struct WindowState {
 
     pub globals_buffer: wgpu::Buffer,
     pub globals_bind_group: wgpu::BindGroup,
+
+    pub cursor_position: (f64, f64),
 }
 
 impl WindowState {
@@ -1015,6 +1017,7 @@ impl WindowState {
             prev_hovered_elements: vec![],
             globals_buffer,
             globals_bind_group,
+            cursor_position: (0.0, 0.0),
         }
     }
 

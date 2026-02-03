@@ -954,6 +954,19 @@ impl URL {
         }
     }
 
+    pub fn resolve(&self, new: String) -> Result<URL, ParseURLError> {
+        if URL::pure_parse(new.clone()).is_ok() {
+            return URL::pure_parse(new);
+        }
+
+        URL::basic_url_parser(new, Some(self.clone()), None, None, None).and_then(|maybe_url| {
+            match maybe_url {
+                Some(url) => Ok(url),
+                None => Err(ParseURLError::Failure),
+            }
+        })
+    }
+
     pub fn pure_parse(input: String) -> Result<URL, ParseURLError> {
         URL::parse(input, None, None)
     }
@@ -999,6 +1012,8 @@ impl URL {
         };
 
         input = input.replace("\t", "").replace("\n", "");
+
+        println!("inp: {}", input);
 
         let mut state = state_override.clone().unwrap_or(ParseURLState::SchemeStart);
         let mut buffer = String::new();

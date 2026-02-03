@@ -9,6 +9,7 @@ use crate::css::cssom::{
     DocumentOrShadowRootStyle, StyleSheetList,
 };
 use crate::css::selectors::MatchesElement;
+use crate::http::url::URL;
 use crate::infra::Serializable;
 use crate::{
     html5::{parse::Token, tag_groups::*},
@@ -949,6 +950,30 @@ impl Element {
         self._element_state.is_hovered = false;
 
         self.compute_element_styles(Some(&parents.to_vec()));
+    }
+
+    pub fn trigger_click(&mut self, parents: &[Rc<RefCell<Element>>]) {}
+
+    pub fn trigger_release(&mut self, parents: &[Rc<RefCell<Element>>]) {
+        if self.local_name == "a" {
+            if let Some(href) = self.get_attribute("href") {
+                let node_doc = &self
+                    ._node
+                    .borrow()
+                    .node_document
+                    .as_ref()
+                    .unwrap()
+                    .upgrade()
+                    .unwrap();
+                let document = node_doc.borrow();
+                let new_url = document
+                    .document_base_url()
+                    .resolve(href.to_string())
+                    .unwrap_or_else(|_| URL::pure_parse("about:blank".to_string()).unwrap());
+
+                println!("Navigating to URL: {}", new_url.serialize());
+            }
+        }
     }
 
     pub fn compute_element_styles(&mut self, parents: Option<&Vec<Rc<RefCell<Element>>>>) {

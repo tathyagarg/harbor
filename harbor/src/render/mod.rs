@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use winit::application::ApplicationHandler;
-use winit::event::{ElementState, KeyEvent, WindowEvent};
+use winit::event::{ElementState, KeyEvent, MouseButton, WindowEvent};
 use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{Window, WindowId};
@@ -151,6 +151,35 @@ impl ApplicationHandler<WindowState> for App {
                     }
 
                     state.prev_hovered_elements = elems;
+                }
+
+                state.cursor_position = (position.x, position.y);
+            }
+            WindowEvent::MouseInput {
+                device_id,
+                state: elem_state,
+                button: MouseButton::Left,
+            } => {
+                if let Some(root) = state.layout.root_box.as_ref() {
+                    let elems = Box::get_elements_under(
+                        root,
+                        state.cursor_position.0,
+                        state.cursor_position.1,
+                        0.0,
+                        0.0,
+                    );
+
+                    for (i, child) in elems.iter().enumerate() {
+                        let mut child_borrow = child.borrow_mut();
+                        match elem_state {
+                            ElementState::Pressed => {
+                                child_borrow.trigger_click(&elems[..i]);
+                            }
+                            ElementState::Released => {
+                                child_borrow.trigger_release(&elems[..i]);
+                            }
+                        }
+                    }
                 }
             }
             WindowEvent::RedrawRequested => {
