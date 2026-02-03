@@ -1,5 +1,4 @@
 use std::cell::RefCell;
-use std::ops::Deref;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -164,9 +163,9 @@ impl ApplicationHandler<WindowState> for App {
                 state.cursor_position = (position.x, position.y);
             }
             WindowEvent::MouseInput {
-                device_id,
                 state: elem_state,
                 button: MouseButton::Left,
+                ..
             } => {
                 if state.layout.is_none() {
                     return;

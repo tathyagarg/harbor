@@ -10,7 +10,7 @@ use crate::{
         properties::FontStyle,
     },
     globals::DEFAULT_FONT_FAMILY,
-    html5::dom::{Document, Element, NodeKind},
+    html5::dom::{Element, NodeKind},
     render::{
         Globals, RendererIdentifier, WindowOptions, fill_descriptor,
         shapes::{circle_at, rectangle_at},

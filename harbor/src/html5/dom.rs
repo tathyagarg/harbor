@@ -952,9 +952,9 @@ impl Element {
         self.compute_element_styles(Some(&parents.to_vec()));
     }
 
-    pub fn trigger_click(&mut self, parents: &[Rc<RefCell<Element>>]) {}
+    pub fn trigger_click(&mut self, _parents: &[Rc<RefCell<Element>>]) {}
 
-    pub fn trigger_release(&mut self, parents: &[Rc<RefCell<Element>>]) {
+    pub fn trigger_release(&mut self, _parents: &[Rc<RefCell<Element>>]) {
         if self.local_name == "a" {
             if let Some(href) = self.get_attribute("href") {
                 let node_doc = &self
