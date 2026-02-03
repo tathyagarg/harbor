@@ -393,8 +393,6 @@ impl Box {
                 parents.push(Rc::downgrade(&parent_box));
 
                 let this_box = if element.style().display == Display::ListItem {
-                    println!("Making li box with: {:#?}", element.style());
-
                     parent_box.borrow_mut().children = vec![
                         Rc::new(RefCell::new(Box {
                             _content_width: 0.0,
@@ -512,10 +510,17 @@ impl Box {
                 let mut content_box = content_box_rc.borrow_mut();
 
                 marker_box._position_x = Some(content_box._margin.left());
-                marker_box._position_y = Some(self.get_line_height() / 2.0 + marker_height / 2.0);
+
+                /* Content box */
+
+                content_box._position_x = Some(content_box._margin.left());
+                content_box._position_y = Some(content_box._margin.top());
+
+                let content_box_margin = content_box._margin.left();
 
                 let (content_width, content_height, _) = content_box.layout(
-                    container_width,
+                    container_width
+                        .map(|w| w - marker_box._position_x.unwrap_or(0.0) - content_box_margin),
                     container_height,
                     first_child,
                     last_child,
@@ -523,8 +528,7 @@ impl Box {
                     renderers,
                 );
 
-                content_box._position_x = Some(content_box._margin.left());
-                content_box._position_y = Some(content_box._margin.top());
+                marker_box._position_y = Some(content_height / 2.0);
 
                 self._content_width =
                     marker_width + content_width + content_box._margin.horizontal();
@@ -537,13 +541,8 @@ impl Box {
                 )
             }
             BoxType::Marker => {
-                self._content_width = self.get_font_size();
-                self._content_height = self.get_font_size();
-
-                println!(
-                    "Created markers: {}x{}",
-                    self._content_width, self._content_height
-                );
+                self._content_width = 8.0;
+                self._content_height = 8.0;
 
                 (self._content_width, self._content_height, false)
             }
@@ -603,14 +602,8 @@ impl Box {
                     child._position_x = Some(*cursor_x + line_width);
                     child._position_y = Some(*cursor_y);
 
-                    let (w, h, go_to_next_line) = child.layout(
-                        container_width,
-                        container_height,
-                        first,
-                        last,
-                        parents,
-                        &renderers,
-                    );
+                    let (w, h, go_to_next_line) =
+                        child.layout(None, container_height, first, last, parents, &renderers);
 
                     line_width += w;
                     line_height = line_height.max(h);
@@ -628,6 +621,31 @@ impl Box {
                 *cursor_x = 0.0;
                 *content_width = content_width.max(line_width);
             };
+
+        if matches!(self.style().unwrap().width.kind, WidthValueKind::Auto) {
+            if let Some(node_rc) = &self.associated_node {
+                if let NodeKind::Element(element_rc) = node_rc.borrow().deref() {
+                    let mut element = element_rc.borrow_mut();
+
+                    if element.local_name == "body" {
+                        println!("Container width: {:?}", container_width);
+                    }
+
+                    self._content_width = element
+                        .style_mut()
+                        .width
+                        .resolve_single_parent(container_width.unwrap_or(0.0))
+                        - self._margin.horizontal();
+
+                    if element.local_name == "body" {
+                        println!(
+                            "Content width after resolving auto: {}",
+                            self._content_width
+                        );
+                    }
+                }
+            }
+        }
 
         let mut prev_child: Option<Rc<RefCell<Box>>> = None;
         for (i, child_box_rc) in self.children.iter().enumerate() {
@@ -659,30 +677,15 @@ impl Box {
                             && prev._border.is_none()
                             && child._border.is_none()
                         {
-                            println!(
-                                "Eligible for collapsing: mt: {} mb: {}",
-                                child._margin.top(),
-                                prev._margin.bottom()
-                            );
-
                             cursor_y -= child._margin.top().min(prev._margin.bottom());
-
-                            // if child._margin.top() > prev._margin.bottom() {
-                            //     println!(
-                            //         "Collapsing: {} > {}",
-                            //         child._margin.top(),
-                            //         prev._margin.bottom()
-                            //     );
-                            //     cursor_y -= prev._margin.bottom();
-                            // }
                         }
                     }
 
                     child._position_x = Some(cursor_x);
                     child._position_y = Some(cursor_y);
 
-                    let (w, h, go_to_next_line) = child.layout(
-                        container_width,
+                    let (_, h, go_to_next_line) = child.layout(
+                        Some(self._content_width),
                         container_height,
                         i == 0,
                         i == self.children.len() - 1,
@@ -696,7 +699,6 @@ impl Box {
                         cursor_y += child.get_line_height();
                     }
 
-                    self._content_width = self._content_width.max(w);
                     prev_child = Some(child_box_rc.clone());
                 }
                 _ => {
@@ -705,8 +707,8 @@ impl Box {
                     child._position_x = Some(cursor_x);
                     child._position_y = Some(cursor_y);
 
-                    let (w, h, go_to_next_line) = child.layout(
-                        container_width,
+                    let (_, h, go_to_next_line) = child.layout(
+                        Some(self._content_width),
                         container_height,
                         i == 0,
                         i == self.children.len() - 1,
@@ -720,8 +722,6 @@ impl Box {
                         cursor_x = 0.0;
                         cursor_y += child.get_line_height();
                     }
-
-                    self._content_width = self._content_width.max(w + child._margin.horizontal());
                 }
             }
         }
@@ -737,18 +737,6 @@ impl Box {
         );
 
         self._content_height = cursor_y;
-
-        if matches!(self.style().unwrap().width.kind, WidthValueKind::Auto) {
-            if let Some(node_rc) = &self.associated_node {
-                if let NodeKind::Element(element_rc) = node_rc.borrow().deref() {
-                    let mut element = element_rc.borrow_mut();
-                    self._content_width = element
-                        .style_mut()
-                        .width
-                        .resolve_single_parent(container_width.unwrap_or(0.0));
-                }
-            }
-        }
 
         if let Some(node_rc) = &self.associated_node {
             if let NodeKind::Element(_) = node_rc.borrow().deref() {

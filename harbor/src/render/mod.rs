@@ -11,7 +11,9 @@ use wgpu::{self};
 use crate::css::r#box::Box;
 use crate::css::colors::UsedColor;
 use crate::css::layout::Layout;
-use crate::globals::{INITIAL_WINDOW_HEIGHT, INITIAL_WINDOW_WIDTH};
+use crate::globals::{
+    INITIAL_WINDOW_HEIGHT, INITIAL_WINDOW_WIDTH, MINIMUM_WINDOW_HEIGHT, MINIMUM_WINDOW_WIDTH,
+};
 use crate::html5::dom::Document;
 use crate::render::state::WindowState;
 
@@ -89,10 +91,15 @@ impl ApplicationHandler<WindowState> for App {
         #[allow(unused_mut)]
         let mut window_attributes = Window::default_attributes()
             .with_title("Harbor Browser")
-            .with_decorations(true)
+            .with_decorations(false)
             .with_inner_size(winit::dpi::LogicalSize::new(
                 INITIAL_WINDOW_WIDTH,
                 INITIAL_WINDOW_HEIGHT,
+            ))
+            .with_transparent(true)
+            .with_min_inner_size(winit::dpi::LogicalSize::new(
+                MINIMUM_WINDOW_WIDTH,
+                MINIMUM_WINDOW_HEIGHT,
             ));
 
         if self.window_options.use_transparent {
