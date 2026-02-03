@@ -181,6 +181,13 @@ impl<'a> Parser<'a> {
         }
     }
 
+    pub fn parse_stream(stream: &mut InputStream<char>) -> Rc<RefCell<Document>> {
+        let mut parser = Parser::new(stream);
+        parser.parse();
+
+        parser.document.document
+    }
+
     pub fn _is_element_on_open_elements(&self, name: &str) -> bool {
         self.open_elements_stack
             .elements

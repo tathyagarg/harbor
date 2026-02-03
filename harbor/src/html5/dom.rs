@@ -966,9 +966,12 @@ impl Element {
                     .upgrade()
                     .unwrap();
                 let document = node_doc.borrow();
+
+                let true_href = href.to_owned() + if href.ends_with("/") { "" } else { "/" };
+
                 let new_url = document
                     .document_base_url()
-                    .resolve(href.to_string())
+                    .resolve(true_href)
                     .unwrap_or_else(|_| URL::pure_parse("about:blank".to_string()).unwrap());
 
                 println!("Navigating to URL: {}", new_url.serialize());

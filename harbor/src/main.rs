@@ -6,6 +6,7 @@ use crate::{
     infra::{InputStream, Serializable},
 };
 
+pub mod agent;
 pub mod css;
 pub mod font;
 pub mod globals;
@@ -19,6 +20,9 @@ use winit::event_loop::EventLoop;
 
 fn main() {
     env_logger::init();
+
+    let mut ua = agent::Agent::new();
+    ua.run();
 
     // let url_target = String::from("https://rupnil.codes/");
     // println!("Parsing target: {}", url_target);
@@ -43,52 +47,52 @@ fn main() {
     // println!("Received response: \n\n{}", response.body.clone().unwrap());
 
     // let html_content = response.body.unwrap();
-    let html_content = include_str!("../../assets/html/custom003.html");
+    // let html_content = include_str!("../../assets/html/custom003.html");
 
-    let mut stream = InputStream::new(&html_content.chars().collect::<Vec<char>>()[..]);
-    let mut parser = html5::parse::Parser::new(&mut stream);
+    // let mut stream = InputStream::new(&html_content.chars().collect::<Vec<char>>()[..]);
+    // let mut parser = html5::parse::Parser::new(&mut stream);
 
-    parser.parse();
+    // parser.parse();
 
-    let stylesheet = include_str!("../res/css/ua.css").to_string();
-    let css_content = parse_stylesheet(
-        &mut InputStream::new(&tokenize(&mut InputStream::new(
-            &stylesheet.chars().collect::<Vec<char>>()[..],
-        ))),
-        Rc::downgrade(parser.document.document()),
-        None,
-    );
+    // let stylesheet = include_str!("../res/css/ua.css").to_string();
+    // let css_content = parse_stylesheet(
+    //     &mut InputStream::new(&tokenize(&mut InputStream::new(
+    //         &stylesheet.chars().collect::<Vec<char>>()[..],
+    //     ))),
+    //     Rc::downgrade(parser.document.document()),
+    //     None,
+    // );
 
-    parser
-        .document
-        .document()
-        .borrow_mut()
-        .insert_stylesheet(0, css_content);
+    // parser
+    //     .document
+    //     .document()
+    //     .borrow_mut()
+    //     .insert_stylesheet(0, css_content);
 
-    let mut layout = Layout::new(
-        Rc::clone(&parser.document.document()),
-        (INITIAL_WINDOW_WIDTH as f64, INITIAL_WINDOW_HEIGHT as f64),
-    );
-    layout.make_tree();
-    layout.layout();
+    // let mut layout = Layout::new(
+    //     Rc::clone(&parser.document.document()),
+    //     (INITIAL_WINDOW_WIDTH as f64, INITIAL_WINDOW_HEIGHT as f64),
+    // );
+    // layout.make_tree();
+    // layout.layout();
 
-    let event_loop = EventLoop::with_user_event().build().unwrap();
-    event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
+    // let event_loop = EventLoop::with_user_event().build().unwrap();
+    // event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
 
-    let mut app = render::App {
-        window_options: render::WindowOptions {
-            use_transparent: true,
-            background_color: wgpu::Color {
-                r: 1.0,
-                g: 1.0,
-                b: 1.0,
-                a: 0.0,
-            },
-        },
-        state: None,
-        document: parser.document.document.borrow().clone(),
-        layout,
-    };
+    // let mut app = render::App {
+    //     window_options: render::WindowOptions {
+    //         use_transparent: true,
+    //         background_color: wgpu::Color {
+    //             r: 1.0,
+    //             g: 1.0,
+    //             b: 1.0,
+    //             a: 0.0,
+    //         },
+    //     },
+    //     state: None,
+    //     document: parser.document.document.borrow().clone(),
+    //     layout,
+    // };
 
-    _ = event_loop.run_app(&mut app);
+    // _ = event_loop.run_app(&mut app);
 }

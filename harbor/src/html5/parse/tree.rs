@@ -1223,7 +1223,7 @@ impl InsertMode {
                         let mut tok_stream = InputStream::new(&tokens[..]);
                         let parsed = parse_stylesheet(
                             &mut tok_stream,
-                            Rc::downgrade(&parser.document.document),
+                            Some(Rc::downgrade(&parser.document.document)),
                             None,
                         );
 

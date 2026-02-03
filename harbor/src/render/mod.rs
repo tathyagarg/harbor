@@ -1,3 +1,6 @@
+use std::cell::RefCell;
+use std::ops::Deref;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use winit::application::ApplicationHandler;
@@ -81,9 +84,9 @@ pub struct App {
     pub window_options: WindowOptions,
     pub state: Option<WindowState>,
 
-    pub layout: Layout,
+    pub layout: Option<Layout>,
 
-    pub document: Document,
+    pub document: Option<Rc<RefCell<Document>>>,
 }
 
 impl ApplicationHandler<WindowState> for App {
@@ -112,7 +115,6 @@ impl ApplicationHandler<WindowState> for App {
             window,
             self.window_options.clone(),
             self.layout.clone(),
-            self.document.clone(),
         )));
     }
 
@@ -133,7 +135,13 @@ impl ApplicationHandler<WindowState> for App {
                 state.resize(size.width, size.height);
             }
             WindowEvent::CursorMoved { position, .. } => {
-                if let Some(root) = state.layout.root_box.as_ref() {
+                if state.layout.is_none() {
+                    return;
+                }
+
+                let layout = state.layout.as_ref().unwrap();
+
+                if let Some(root) = layout.root_box.as_ref() {
                     let elems = Box::get_elements_under(root, position.x, position.y, 0.0, 0.0);
 
                     for (i, child) in elems.iter().enumerate() {
@@ -160,7 +168,13 @@ impl ApplicationHandler<WindowState> for App {
                 state: elem_state,
                 button: MouseButton::Left,
             } => {
-                if let Some(root) = state.layout.root_box.as_ref() {
+                if state.layout.is_none() {
+                    return;
+                }
+
+                let layout = state.layout.as_ref().unwrap();
+
+                if let Some(root) = layout.root_box.as_ref() {
                     let elems = Box::get_elements_under(
                         root,
                         state.cursor_position.0,

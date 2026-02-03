@@ -351,7 +351,7 @@ pub fn parse_css_declaration_block(input: String) -> Vec<CSSDeclaration> {
 
 pub fn parse_stylesheet(
     stream: &mut InputStream<CSSToken>,
-    document: Weak<RefCell<Document>>,
+    document: Option<Weak<RefCell<Document>>>,
     location: Option<String>,
 ) -> CSSStyleSheet {
     let mut stylesheet = CSSStyleSheet::new(None, document);

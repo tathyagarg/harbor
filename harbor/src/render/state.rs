@@ -28,7 +28,7 @@ pub struct WindowState {
     pub queue: wgpu::Queue,
     pub config: wgpu::SurfaceConfiguration,
 
-    pub layout: Layout,
+    pub layout: Option<Layout>,
 
     pub msaa_view: wgpu::TextureView,
     pub stencil_view: wgpu::TextureView,
@@ -43,8 +43,6 @@ pub struct WindowState {
 
     pub window: Arc<Window>,
     pub window_options: WindowOptions,
-
-    pub document: Document,
 
     pub prev_hovered_elements: Vec<Rc<RefCell<Element>>>,
 
@@ -139,8 +137,13 @@ impl WindowState {
 
                             let italic = matches!(style.font.style(), FontStyle::Italic);
 
-                            let mut renderer = self
-                                .layout
+                            if self.layout.is_none() {
+                                return;
+                            }
+
+                            let layout = self.layout.as_mut().unwrap();
+
+                            let mut renderer = layout
                                 ._renderers
                                 .get_mut(&RendererIdentifier {
                                     font_family: family
@@ -153,7 +156,7 @@ impl WindowState {
                                 })
                                 .map_or(None, |r| r.clone())
                                 .unwrap_or_else(|| {
-                                    self.layout
+                                    layout
                                         .get_renderer(
                                             family
                                                 .entries
@@ -372,6 +375,12 @@ impl WindowState {
             });
 
         {
+            if self.layout.is_none() {
+                return;
+            }
+
+            let layout = self.layout.as_ref().unwrap();
+
             let mut _render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -400,7 +409,7 @@ impl WindowState {
 
             _render_pass.set_bind_group(0, &self.globals_bind_group, &[]);
 
-            let root_box = self.layout.root_box.as_ref().unwrap().borrow().clone();
+            let root_box = layout.root_box.as_ref().unwrap().borrow().clone();
 
             self.render_box(root_box, &mut vec![], &mut _render_pass);
         }
@@ -412,8 +421,7 @@ impl WindowState {
     pub async fn new(
         window: Arc<Window>,
         window_options: WindowOptions,
-        layout: Layout,
-        document: Document,
+        layout: Option<Layout>,
     ) -> Self {
         let size = window.inner_size();
 
@@ -1013,7 +1021,6 @@ impl WindowState {
             circle_render_pipeline,
             is_surface_configured: false,
             window_options,
-            document,
             prev_hovered_elements: vec![],
             globals_buffer,
             globals_bind_group,
@@ -1036,7 +1043,9 @@ impl WindowState {
 
             self.is_surface_configured = false;
 
-            self.layout.resized((width as f64, height as f64));
+            if let Some(layout) = &mut self.layout {
+                layout.resized((width as f64, height as f64));
+            }
 
             self.queue.write_buffer(
                 &self.globals_buffer,

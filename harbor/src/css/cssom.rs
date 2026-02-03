@@ -489,7 +489,7 @@ pub struct CSSStyleSheet {
 
     /// Specified when created. The Document a constructed stylesheet is associated with.
     /// Null by default. Only non-null for stylesheets that have constructed flag set.
-    _associated_document: Weak<RefCell<Document>>,
+    _associated_document: Option<Weak<RefCell<Document>>>,
 
     /// The base URL to use when resolving relative URLs in the stylesheet. Null by default.
     /// Only non-null for stylesheets that have constructed flag set.
@@ -568,7 +568,7 @@ pub struct CSSStyleSheetInit {
 }
 
 pub trait CSSStyleSheetExt {
-    fn new(options: Option<CSSStyleSheetInit>, document: Weak<RefCell<Document>>) -> Self;
+    fn new(options: Option<CSSStyleSheetInit>, document: Option<Weak<RefCell<Document>>>) -> Self;
 
     fn owner_rule(&self) -> &Option<Box<dyn CSSRuleExt>>;
 
@@ -582,13 +582,15 @@ pub trait CSSStyleSheetExt {
 }
 
 impl CSSStyleSheetExt for CSSStyleSheet {
-    fn new(options: Option<CSSStyleSheetInit>, document: Weak<RefCell<Document>>) -> Self {
+    fn new(options: Option<CSSStyleSheetInit>, document: Option<Weak<RefCell<Document>>>) -> Self {
         let init = options.unwrap_or_default();
         CSSStyleSheet {
             _type: "text/css".to_string(),
-            _location: document
-                .upgrade()
-                .and_then(|doc| Some(doc.borrow().document_base_url().serialize())),
+            _location: document.as_ref().map_or(None, |doc_weak| {
+                doc_weak
+                    .upgrade()
+                    .and_then(|doc| Some(doc.borrow().document_base_url().serialize()))
+            }),
             _parent_style_sheet: None,
             _owner_node: None,
             _owner_rule: None,
