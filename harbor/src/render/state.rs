@@ -9,7 +9,6 @@ use crate::{
         layout::Layout,
         properties::FontStyle,
     },
-    font::otf_dtypes::GLYPH_ID,
     globals::DEFAULT_FONT_FAMILY,
     html5::dom::{Element, NodeKind},
     render::{

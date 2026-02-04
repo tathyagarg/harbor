@@ -959,12 +959,14 @@ impl URL {
             return URL::pure_parse(new);
         }
 
-        URL::basic_url_parser(new, Some(self.clone()), None, None, None).and_then(|maybe_url| {
-            match maybe_url {
+        let sanitized_new = if new.ends_with('/') { new } else { new + "/" };
+
+        URL::basic_url_parser(sanitized_new, Some(self.clone()), None, None, None).and_then(
+            |maybe_url| match maybe_url {
                 Some(url) => Ok(url),
                 None => Err(ParseURLError::Failure),
-            }
-        })
+            },
+        )
     }
 
     pub fn pure_parse(input: String) -> Result<URL, ParseURLError> {
@@ -976,7 +978,13 @@ impl URL {
         base: Option<URL>,
         encoding: Option<&'static encoding_rs::Encoding>,
     ) -> Result<URL, ParseURLError> {
-        let maybe_url = URL::basic_url_parser(input, base, encoding, None, None);
+        let sanitized_input = if input.ends_with('/') {
+            input
+        } else {
+            input + "/"
+        };
+
+        let maybe_url = URL::basic_url_parser(sanitized_input, base, encoding, None, None);
         return match maybe_url {
             Err(e) => Err(e),
             Ok(o_url) => {

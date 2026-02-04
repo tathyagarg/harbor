@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, hash_map::Entry},
-    fmt::Debug,
-};
+use std::fmt::Debug;
 
 use wgpu::{
     Device,
@@ -11,7 +8,6 @@ use wgpu::{
 use crate::{
     css::colors::UsedColor,
     font::{
-        otf_dtypes::GLYPH_ID,
         tables::glyf::{GlyphTransform, Point},
         ttf::TableDirectory,
     },
@@ -70,7 +66,7 @@ impl TextRenderer {
                 })
                 .collect::<Vec<GlyphVertex>>();
 
-            let mut glyph_mesh = GlyphMesh {
+            let glyph_mesh = GlyphMesh {
                 outline_vertex_buffer: device.create_buffer_init(&BufferInitDescriptor {
                     label: Some("Glyph Outline Vertex Buffer"),
                     contents: bytemuck::cast_slice(&glyph_verts),
