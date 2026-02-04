@@ -538,7 +538,7 @@ impl Box {
                     renderers,
                 );
 
-                marker_box._position_y = Some(content_height / 2.0);
+                marker_box._position_y = Some(self.get_line_height() / 2.0 + marker_height / 2.0);
 
                 self._content_width =
                     marker_width + content_width + content_box._margin.horizontal();
