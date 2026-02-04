@@ -58,12 +58,6 @@ impl Layout {
                 &self._renderers,
             );
         }
-
-        // for (_, renderer) in self._renderers.iter_mut() {
-        //     if let Some(r) = renderer {
-        //         r.resized((self._window_size.0 as f32, self._window_size.1 as f32));
-        //     }
-        // }
     }
 
     pub fn get_renderer(&self, name: String) -> Option<&TextRenderer> {
@@ -108,18 +102,11 @@ impl Layout {
                     _associated_italic: identifier.italic,
                     _associated_weight: identifier.font_weight,
                     font: font.clone(),
-                    // glyph_cache: HashMap::new(),
+                    glyph_cache: HashMap::new(),
                 };
 
                 self._renderers.insert(identifier, Some(renderer));
             }
         }
-
-        // for (font_name, font) in FONTS.iter() {
-        //     let renderer = TextRenderer {
-        //         font: Some(font.clone()),
-        //     };
-        //     self._renderers.insert(font_name.clone(), Some(renderer));
-        // }
     }
 }

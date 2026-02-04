@@ -1,4 +1,7 @@
-use std::fmt::Debug;
+use std::{
+    collections::{HashMap, hash_map::Entry},
+    fmt::Debug,
+};
 
 use wgpu::{
     Device,
@@ -8,6 +11,7 @@ use wgpu::{
 use crate::{
     css::colors::UsedColor,
     font::{
+        otf_dtypes::GLYPH_ID,
         tables::glyf::{GlyphTransform, Point},
         ttf::TableDirectory,
     },
@@ -20,7 +24,7 @@ pub struct TextRenderer {
 
     pub font: TableDirectory,
     // Key: (glyph_id, font size)
-    // pub glyph_cache: HashMap<(GLYPH_ID, u32), GlyphMesh>,
+    pub glyph_cache: HashMap<(GLYPH_ID, u32), GlyphMesh>,
 }
 
 impl TextRenderer {
@@ -33,74 +37,63 @@ impl TextRenderer {
         let glyph_id = self.font.cmap_lookup(ch as u32);
 
         if let Some(gid) = glyph_id {
-            // match self.glyph_cache.entry((gid, font_size)) {
-            // Entry::Occupied(entry) => {
-            //     return Some(entry.into_mut());
-            // }
-            // Entry::Vacant(entry) => {
-            let mut points: Vec<Point> = Vec::new();
-            self.font.make_glyph_points(gid, 5.0, &mut points);
+            match self.glyph_cache.entry((gid, font_size)) {
+                Entry::Occupied(entry) => {
+                    return Some(entry.get().clone());
+                }
+                Entry::Vacant(entry) => {
+                    let mut points: Vec<Point> = Vec::new();
+                    self.font.make_glyph_points(gid, 5.0, &mut points);
 
-            if points.len() == 0 {
-                return None;
-            }
+                    if points.len() == 0 {
+                        return None;
+                    }
 
-            let scale = font_size as f32 / self.font.units_per_em() as f32;
+                    let scale = font_size as f32 / self.font.units_per_em() as f32;
 
-            let glyph_verts = points
-                .iter()
-                .map(|p| GlyphVertex {
-                    position: [p.x * scale, p.y * scale],
-                })
-                .collect::<Vec<GlyphVertex>>();
+                    let glyph_verts = points
+                        .iter()
+                        .map(|p| GlyphVertex {
+                            position: [p.x * scale, p.y * scale],
+                        })
+                        .collect::<Vec<GlyphVertex>>();
 
-            let mut contours = Vec::new();
+                    let mut contours = Vec::new();
 
-            self.font
-                .make_glyph_points_contours(gid, 5.0, &mut contours);
-
-            let filled_verts = build_filled_glyph_mesh(contours)
-                .iter()
-                .map(|v| GlyphVertex {
-                    position: [v.position[0] * scale, v.position[1] * scale],
-                })
-                .collect::<Vec<GlyphVertex>>();
-
-            let glyph_mesh = GlyphMesh {
-                outline_vertex_buffer: device.create_buffer_init(&BufferInitDescriptor {
-                    label: Some("Glyph Outline Vertex Buffer"),
-                    contents: bytemuck::cast_slice(&glyph_verts),
-                    usage: wgpu::BufferUsages::VERTEX,
-                }),
-                outline_vertex_count: glyph_verts.len() as u32,
-                fill_vertex_buffer: device.create_buffer_init(&BufferInitDescriptor {
-                    label: Some("Glyph Fill Vertex Buffer"),
-                    contents: bytemuck::cast_slice(&filled_verts),
-                    usage: wgpu::BufferUsages::VERTEX,
-                }),
-                fill_vertex_count: filled_verts.len() as u32,
-                advance_width: self.font.advance_width(gid).unwrap_or_else(|| {
                     self.font
-                        .advance_width(self.font.last_glyph_index().unwrap())
-                        .unwrap_or(0)
-                }) as f32
-                    * scale,
-                instance_buffer: device.create_buffer(&wgpu::BufferDescriptor {
-                    label: Some("Glyph Instance Buffer"),
-                    size: 10_000 * std::mem::size_of::<GlyphInstance>() as u64,
-                    usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-                    mapped_at_creation: false,
-                }),
-                instance_count: 0,
-            };
+                        .make_glyph_points_contours(gid, 5.0, &mut contours);
 
-            eprintln!(
-                "Cache miss for char '{}' (gid: {}, size: {}), caching glyph mesh",
-                ch, gid, font_size
-            );
-            Some(glyph_mesh)
-        //                 }
-        //            }
+                    let filled_verts = build_filled_glyph_mesh(contours)
+                        .iter()
+                        .map(|v| GlyphVertex {
+                            position: [v.position[0] * scale, v.position[1] * scale],
+                        })
+                        .collect::<Vec<GlyphVertex>>();
+
+                    let glyph_mesh = GlyphMesh {
+                        outline_vertex_buffer: device.create_buffer_init(&BufferInitDescriptor {
+                            label: Some("Glyph Outline Vertex Buffer"),
+                            contents: bytemuck::cast_slice(&glyph_verts),
+                            usage: wgpu::BufferUsages::VERTEX,
+                        }),
+                        outline_vertex_count: glyph_verts.len() as u32,
+                        fill_vertex_buffer: device.create_buffer_init(&BufferInitDescriptor {
+                            label: Some("Glyph Fill Vertex Buffer"),
+                            contents: bytemuck::cast_slice(&filled_verts),
+                            usage: wgpu::BufferUsages::VERTEX,
+                        }),
+                        fill_vertex_count: filled_verts.len() as u32,
+                        advance_width: self.font.advance_width(gid).unwrap_or_else(|| {
+                            self.font
+                                .advance_width(self.font.last_glyph_index().unwrap())
+                                .unwrap_or(0)
+                        }) as f32
+                            * scale,
+                    };
+
+                    Some(entry.insert(glyph_mesh).clone())
+                }
+            }
         } else {
             None
         }
@@ -216,9 +209,6 @@ pub struct GlyphMesh {
     pub fill_vertex_count: u32,
 
     pub advance_width: f32,
-
-    pub instance_buffer: wgpu::Buffer,
-    pub instance_count: u32,
 }
 
 #[repr(C)]

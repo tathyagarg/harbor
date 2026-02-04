@@ -143,7 +143,6 @@ impl WindowState {
 
                             let layout = self.layout.as_mut().unwrap();
 
-                            // get renderer WITHOUT cloning
                             let renderer = if let Some(r) = layout
                                 ._renderers
                                 .get_mut(&RendererIdentifier {
@@ -169,31 +168,6 @@ impl WindowState {
                                     )
                                     .expect("No renderer found for font family")
                             };
-
-                            // let mut renderer = layout
-                            //     ._renderers
-                            //     .get_mut(&RendererIdentifier {
-                            //         font_family: family
-                            //             .entries
-                            //             .first()
-                            //             .map(|f| f.value())
-                            //             .unwrap_or(DEFAULT_FONT_FAMILY.to_string()),
-                            //         font_weight,
-                            //         italic,
-                            //     })
-                            //     .map_or(None, |r| r.clone())
-                            //     .unwrap_or_else(|| {
-                            //         layout
-                            //             .get_renderer(
-                            //                 family
-                            //                     .entries
-                            //                     .first()
-                            //                     .map(|f| f.value())
-                            //                     .unwrap_or(DEFAULT_FONT_FAMILY.to_string()),
-                            //             )
-                            //             .cloned()
-                            //             .unwrap()
-                            //     });
 
                             let mut glyph_instances: HashMap<(char, u32), Vec<GlyphInstance>> =
                                 HashMap::new();
@@ -246,42 +220,33 @@ impl WindowState {
                             }
 
                             for (key, instances) in glyph_instances {
-                                let mut glyph = renderer
-                                    .get_from_char(key.0, key.1, &self.device)
-                                    .unwrap()
-                                    .clone();
+                                let glyph =
+                                    renderer.get_from_char(key.0, key.1, &self.device).unwrap();
 
-                                self.queue.write_buffer(
-                                    &glyph.instance_buffer,
-                                    0,
-                                    bytemuck::cast_slice(&instances),
-                                );
-
-                                glyph.instance_count = instances.len() as u32;
-                                println!(
-                                    "Rendering glyph '{}' with {} instances",
-                                    key.0, glyph.instance_count
+                                let instance_buffer = self.device.create_buffer_init(
+                                    &wgpu::util::BufferInitDescriptor {
+                                        label: Some("Glyph Instance Buffer"),
+                                        contents: bytemuck::cast_slice(&instances),
+                                        usage: wgpu::BufferUsages::VERTEX
+                                            | wgpu::BufferUsages::COPY_DST,
+                                    },
                                 );
 
                                 render_pass.set_pipeline(&self.glyph_stencil_render_pipeline);
                                 render_pass
                                     .set_vertex_buffer(0, glyph.fill_vertex_buffer.slice(..));
-                                render_pass.set_vertex_buffer(1, glyph.instance_buffer.slice(..));
-                                render_pass.draw(
-                                    0..glyph.fill_vertex_count,
-                                    0..glyph.instance_count as u32,
-                                );
+                                render_pass.set_vertex_buffer(1, instance_buffer.slice(..));
+                                render_pass
+                                    .draw(0..glyph.fill_vertex_count, 0..instances.len() as u32);
 
                                 render_pass.set_pipeline(&self.glyph_fill_render_pipeline);
                                 render_pass.set_stencil_reference(0);
 
                                 render_pass
                                     .set_vertex_buffer(0, glyph.fill_vertex_buffer.slice(..));
-                                render_pass.set_vertex_buffer(1, glyph.instance_buffer.slice(..));
-                                render_pass.draw(
-                                    0..glyph.fill_vertex_count,
-                                    0..glyph.instance_count as u32,
-                                );
+                                render_pass.set_vertex_buffer(1, instance_buffer.slice(..));
+                                render_pass
+                                    .draw(0..glyph.fill_vertex_count, 0..instances.len() as u32);
                             }
                         }
                         _ => {}
