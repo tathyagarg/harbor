@@ -991,14 +991,20 @@ impl Element {
                 parent.borrow().style().inherit()
             });
 
-        let node_doc = &self
+        let node_doc_maybe = &self
             ._node
             .borrow()
             .node_document
             .as_ref()
             .unwrap()
-            .upgrade()
-            .unwrap();
+            .upgrade();
+
+        if node_doc_maybe.is_none() {
+            return;
+        }
+
+        let node_doc = node_doc_maybe.as_ref().unwrap();
+
         let document = node_doc.borrow();
         let style_sheets = document.style_sheets();
 

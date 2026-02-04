@@ -247,7 +247,12 @@ impl MatchesElement for ComplexSelector {
                     }
                 }
                 Combinator::Descendant => {
-                    todo!("Implement Descendant combinator matching");
+                    println!("Selector: {:?} {:?}", self.compound, self.combinators);
+
+                    // TODO: fix this shit
+                    return false;
+
+                    // todo!("Implement Descendant combinator matching");
                 }
                 Combinator::NextSibling => {
                     todo!("Implement NextSibling combinator matching");

@@ -4,13 +4,14 @@ use std::sync::Arc;
 
 use winit::application::ApplicationHandler;
 use winit::event::{ElementState, KeyEvent, MouseButton, WindowEvent};
-use winit::event_loop::ActiveEventLoop;
+use winit::event_loop::{ActiveEventLoop, EventLoop};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{Window, WindowId};
 
 use wgpu::{self};
 
-use crate::css::r#box::Box;
+use crate::agent::Agent;
+use crate::css::r#box::Box as CssBox;
 use crate::css::colors::UsedColor;
 use crate::css::layout::Layout;
 use crate::globals::{
@@ -79,16 +80,24 @@ pub struct WindowOptions {
     pub background_color: wgpu::Color,
 }
 
+pub struct CallbackData {
+    pub link_callback: Box<dyn Fn(&str)>,
+}
+
 pub struct App {
     pub window_options: WindowOptions,
     pub state: Option<WindowState>,
 
+    pub agent: Option<Rc<RefCell<Agent>>>,
+
     pub layout: Option<Layout>,
 
     pub document: Option<Rc<RefCell<Document>>>,
+
+    pub callbacks: Option<CallbackData>,
 }
 
-impl ApplicationHandler<WindowState> for App {
+impl ApplicationHandler<AppEvent> for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         #[allow(unused_mut)]
         let mut window_attributes = Window::default_attributes()
@@ -141,7 +150,7 @@ impl ApplicationHandler<WindowState> for App {
                 let layout = state.layout.as_ref().unwrap();
 
                 if let Some(root) = layout.root_box.as_ref() {
-                    let elems = Box::get_elements_under(root, position.x, position.y, 0.0, 0.0);
+                    let elems = CssBox::get_elements_under(root, position.x, position.y, 0.0, 0.0);
 
                     let inner_size = state.window.inner_size();
                     let viewport_size = (inner_size.width as f64, inner_size.height as f64);
@@ -177,7 +186,7 @@ impl ApplicationHandler<WindowState> for App {
                 let layout = state.layout.as_ref().unwrap();
 
                 if let Some(root) = layout.root_box.as_ref() {
-                    let elems = Box::get_elements_under(
+                    let elems = CssBox::get_elements_under(
                         root,
                         state.cursor_position.0,
                         state.cursor_position.1,
@@ -193,6 +202,13 @@ impl ApplicationHandler<WindowState> for App {
                             }
                             ElementState::Released => {
                                 child_borrow.trigger_release(&elems[..i]);
+                                if child_borrow.local_name == "a" {
+                                    if let Some(href) = child_borrow.get_attribute("href") {
+                                        if let Some(callbacks) = &self.callbacks {
+                                            (callbacks.link_callback)(href);
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -216,5 +232,75 @@ impl ApplicationHandler<WindowState> for App {
             },
             _ => {}
         }
+    }
+
+    fn user_event(&mut self, event_loop: &ActiveEventLoop, event: AppEvent) {
+        match event {
+            AppEvent::OpenUrl(url) => {
+                if let Some(agent) = &self.agent {
+                    let agent_clone = Rc::clone(agent);
+                    let doc = agent_clone.borrow_mut().open(&url);
+
+                    if let Some(document) = doc {
+                        self.document = Some(Rc::clone(&document));
+
+                        let window_size = if let Some(state) = &self.state {
+                            let size = state.window.inner_size();
+                            (size.width as f64, size.height as f64)
+                        } else {
+                            (INITIAL_WINDOW_WIDTH as f64, INITIAL_WINDOW_HEIGHT as f64)
+                        };
+
+                        let layout = Layout::make_layout(Rc::clone(&document), window_size);
+
+                        self.layout = Some(layout);
+                        println!("Layout: {:#?}", self.layout.as_ref().unwrap().root_box);
+
+                        if let Some(state) = &mut self.state {
+                            state.layout = self.layout.clone();
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+pub enum AppEvent {
+    OpenUrl(String),
+}
+
+impl App {
+    pub fn run(&mut self) {
+        let event_loop = EventLoop::<AppEvent>::with_user_event().build().unwrap();
+        let proxy = event_loop.create_proxy();
+
+        event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
+
+        if let Some(agent) = &self.agent {
+            let agent_clone = Rc::clone(agent);
+            let doc = agent_clone
+                .borrow_mut()
+                .open("https://flavorless.hackclub.com/");
+
+            if let Some(document) = doc {
+                self.document = Some(Rc::clone(&document));
+
+                let layout = Layout::make_layout(
+                    Rc::clone(&document),
+                    (INITIAL_WINDOW_WIDTH as f64, INITIAL_WINDOW_HEIGHT as f64),
+                );
+
+                self.layout = Some(layout);
+            }
+        }
+
+        self.callbacks = Some(CallbackData {
+            link_callback: Box::new(move |url: &str| {
+                let _ = proxy.send_event(AppEvent::OpenUrl(url.to_string()));
+            }),
+        });
+
+        let _ = event_loop.run_app(self);
     }
 }

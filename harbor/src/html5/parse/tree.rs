@@ -665,7 +665,9 @@ impl InsertMode {
             }
             Token::EOF => {
                 if !parser.open_elements_stack.elements.is_empty() {
-                    InsertMode::handle_in_template(parser, token);
+                    return true;
+
+                    // InsertMode::handle_in_template(parser, token);
                 } else {
                     if parser
                         .open_elements_stack
@@ -755,7 +757,51 @@ impl InsertMode {
                 parser.flag_frameset_ok = false;
             }
             Token::StartTag(ref tag) if tag.name.as_str() == "form" => {
-                todo!("Handle form start tag in in body insertion mode");
+                // if parser.document.form_element.is_some() {
+                //     parser.error(ParseError::Custom(
+                //         "Unexpected form start tag token in in body insertion mode",
+                //     ));
+
+                //     return true;
+                // }
+
+                if parser.open_elements_stack.has_element_in_button_scope("p") {
+                    parser.open_elements_stack.close_p_tag();
+                }
+
+                let form_element = parser.open_elements_stack.insert_html_element(&token);
+
+                parser.state = ParserState::Data;
+
+                // parser.document.form_element = Some(form_element);
+
+                parser.flag_frameset_ok = false;
+            }
+            Token::EndTag(ref tag) if tag.name.as_str() == "form" => {
+                // if parser.document.form_element.is_none()
+                //     || !parser.open_elements_stack.has_element_in_scope("form")
+                // {
+                //     parser.error(ParseError::Custom(
+                //         "Unexpected form end tag token in in body insertion mode",
+                //     ));
+
+                //     return true;
+                // }
+
+                parser.open_elements_stack.generate_implied_end_tags(None);
+
+                if parser
+                    .open_elements_stack
+                    .adjusted_current_node()
+                    .is_some_and(|el| el.borrow().qualified_name() != "form")
+                {
+                    parser.error(ParseError::Custom(
+                        "Unexpected current node after generating implied end tags for form",
+                    ));
+                }
+
+                parser.open_elements_stack.pop_until("form");
+                // parser.document.form_element = None;
             }
             Token::StartTag(ref tag) if tag.name.as_str() == "li" => {
                 parser.flag_frameset_ok = false;

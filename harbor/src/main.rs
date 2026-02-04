@@ -1,9 +1,11 @@
 use std::rc::Rc;
 
 use crate::{
+    agent::Agent,
     css::{layout::Layout, tokenize::tokenize},
     globals::{INITIAL_WINDOW_HEIGHT, INITIAL_WINDOW_WIDTH},
     infra::{InputStream, Serializable},
+    render::App,
 };
 
 pub mod agent;
@@ -15,14 +17,30 @@ pub mod http;
 pub mod infra;
 pub mod render;
 
-use crate::css::parser::parse_stylesheet;
 use winit::event_loop::EventLoop;
 
 fn main() {
     env_logger::init();
 
-    let mut ua = agent::Agent::new();
-    ua.run();
+    let ua = Agent::new();
+    let mut app = App {
+        window_options: render::WindowOptions {
+            use_transparent: true,
+            background_color: wgpu::Color {
+                r: 1.0,
+                g: 1.0,
+                b: 1.0,
+                a: 0.0,
+            },
+        },
+        state: None,
+        document: None,
+        layout: None,
+        agent: Some(Rc::clone(&ua)),
+        callbacks: None,
+    };
+
+    app.run();
 
     // let url_target = String::from("https://rupnil.codes/");
     // println!("Parsing target: {}", url_target);

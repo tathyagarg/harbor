@@ -34,6 +34,13 @@ impl Layout {
         this
     }
 
+    pub fn make_layout(document: Rc<RefCell<Document>>, window_size: (f64, f64)) -> Self {
+        let mut layout = Layout::new(document, window_size);
+        layout.make_tree();
+        layout.layout();
+        layout
+    }
+
     pub fn make_tree(&mut self) {
         let root_box = r#box::Box::build_doc_box_tree(&self.document, self._window_size);
         self.root_box = root_box;

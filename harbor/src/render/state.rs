@@ -227,16 +227,6 @@ impl WindowState {
 
                                 glyph.instance_count = instances.len() as u32;
 
-                                // render_pass.set_pipeline(&self.line_render_pipeline);
-                                // render_pass
-                                //     .set_vertex_buffer(0, glyph.outline_vertex_buffer.slice(..));
-                                // render_pass.set_vertex_buffer(1, glyph.instance_buffer.slice(..));
-
-                                // render_pass.draw(
-                                //     0..glyph.outline_vertex_count,
-                                //     0..glyph.instance_count as u32,
-                                // );
-
                                 render_pass.set_pipeline(&self.glyph_stencil_render_pipeline);
                                 render_pass
                                     .set_vertex_buffer(0, glyph.fill_vertex_buffer.slice(..));
@@ -249,33 +239,6 @@ impl WindowState {
                                 render_pass.set_pipeline(&self.glyph_fill_render_pipeline);
                                 render_pass.set_stencil_reference(0);
 
-                                // let quad_vertex_buffer = self.device.create_buffer_init(
-                                //     &wgpu::util::BufferInitDescriptor {
-                                //         label: Some("Glyph Quad Vertex Buffer"),
-                                //         contents: bytemuck::cast_slice(&[
-                                //             GlyphVertex {
-                                //                 position: [0.0, 0.0],
-                                //             },
-                                //             GlyphVertex {
-                                //                 position: [200.0, 0.0],
-                                //             },
-                                //             GlyphVertex {
-                                //                 position: [0.0, 200.0],
-                                //             },
-                                //             GlyphVertex {
-                                //                 position: [200.0, 0.0],
-                                //             },
-                                //             GlyphVertex {
-                                //                 position: [200.0, 200.0],
-                                //             },
-                                //             GlyphVertex {
-                                //                 position: [0.0, 200.0],
-                                //             },
-                                //         ]),
-                                //         usage: wgpu::BufferUsages::VERTEX,
-                                //     },
-                                // );
-
                                 render_pass
                                     .set_vertex_buffer(0, glyph.fill_vertex_buffer.slice(..));
                                 render_pass.set_vertex_buffer(1, glyph.instance_buffer.slice(..));
@@ -283,15 +246,6 @@ impl WindowState {
                                     0..glyph.fill_vertex_count,
                                     0..glyph.instance_count as u32,
                                 );
-
-                                // render_pass
-                                //     .set_vertex_buffer(0, glyph.fill_vertex_buffer.slice(..));
-                                // render_pass.set_vertex_buffer(1, glyph.instance_buffer.slice(..));
-
-                                // render_pass.draw(
-                                //     0..glyph.fill_vertex_count,
-                                //     0..glyph.instance_count as u32,
-                                // );
                             }
                         }
                         _ => {}
@@ -416,6 +370,7 @@ impl WindowState {
 
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
+        println!("Frame rendered");
     }
 
     pub async fn new(

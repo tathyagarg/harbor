@@ -567,19 +567,30 @@ impl ResponseDecoder {
                     Some(b'0'..=b'9' | b'a'..=b'f' | b'A'..=b'F')
                 ) {
                     let mut size = 0;
+                    let mut success = true;
+
                     for c in string_data.chars() {
                         skip += 1;
                         if c == '\r' || c == '\n' {
                             break;
                         }
+
+                        if c.to_digit(16).is_none() {
+                            skip = 0;
+                            success = false;
+                            break;
+                        }
+
                         size = size * 16 + c.to_digit(16).unwrap() as usize;
                     }
 
-                    self.response._content_length = Some(size);
+                    if success {
+                        self.response._content_length = Some(size);
 
-                    if size == 0 {
-                        self.is_complete = true;
-                        return;
+                        if size == 0 {
+                            self.is_complete = true;
+                            return;
+                        }
                     }
                 }
 

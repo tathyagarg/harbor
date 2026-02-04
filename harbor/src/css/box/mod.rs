@@ -189,9 +189,22 @@ impl Debug for Box {
             );
 
         if let Some(node_rc) = &self.associated_node {
-            if let NodeKind::Element(element_rc) = node_rc.borrow().deref() {
+            let node_borrow = node_rc.borrow();
+
+            if let NodeKind::Element(element_rc) = node_borrow.deref() {
                 let element = element_rc.borrow();
-                res = res.field("associated_style", &element.style());
+                res = res
+                    .field(
+                        "node_doc",
+                        match &node_borrow.node().borrow().node_document {
+                            Some(doc_weak) => match doc_weak.upgrade() {
+                                Some(doc_rc) => &"Document",
+                                None => &"Dropped Document",
+                            },
+                            None => &"No Document",
+                        },
+                    )
+                    .field("associated_style", &element.style());
             }
         }
 
