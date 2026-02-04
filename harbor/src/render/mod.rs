@@ -90,8 +90,6 @@ pub struct App {
 
     pub agent: Option<Rc<RefCell<Agent>>>,
 
-    pub layout: Option<Layout>,
-
     pub document: Option<Rc<RefCell<Document>>>,
 
     pub callbacks: Option<CallbackData>,
@@ -122,8 +120,27 @@ impl ApplicationHandler<AppEvent> for App {
         self.state = Some(pollster::block_on(WindowState::new(
             window,
             self.window_options.clone(),
-            self.layout.clone(),
         )));
+
+        if let Some(agent) = &self.agent {
+            let agent_clone = Rc::clone(agent);
+            let doc = agent_clone
+                .borrow_mut()
+                .open("https://flavorless.hackclub.com/");
+
+            if let Some(document) = doc {
+                self.document = Some(Rc::clone(&document));
+
+                let layout = Layout::make_layout(
+                    Rc::clone(&document),
+                    (INITIAL_WINDOW_WIDTH as f64, INITIAL_WINDOW_HEIGHT as f64),
+                );
+
+                if let Some(state) = &mut self.state {
+                    state.layout = Some(layout.clone());
+                }
+            }
+        }
     }
 
     fn window_event(
@@ -253,11 +270,11 @@ impl ApplicationHandler<AppEvent> for App {
 
                         let layout = Layout::make_layout(Rc::clone(&document), window_size);
 
-                        self.layout = Some(layout);
-                        println!("Layout: {:#?}", self.layout.as_ref().unwrap().root_box);
+                        // self.layout = Some(layout);
+                        // println!("Layout: {:#?}", self.layout.as_ref().unwrap().root_box);
 
                         if let Some(state) = &mut self.state {
-                            state.layout = self.layout.clone();
+                            state.layout = Some(layout);
                         }
                     }
                 }
@@ -276,24 +293,6 @@ impl App {
         let proxy = event_loop.create_proxy();
 
         event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
-
-        if let Some(agent) = &self.agent {
-            let agent_clone = Rc::clone(agent);
-            let doc = agent_clone
-                .borrow_mut()
-                .open("https://flavorless.hackclub.com/");
-
-            if let Some(document) = doc {
-                self.document = Some(Rc::clone(&document));
-
-                let layout = Layout::make_layout(
-                    Rc::clone(&document),
-                    (INITIAL_WINDOW_WIDTH as f64, INITIAL_WINDOW_HEIGHT as f64),
-                );
-
-                self.layout = Some(layout);
-            }
-        }
 
         self.callbacks = Some(CallbackData {
             link_callback: Box::new(move |url: &str| {

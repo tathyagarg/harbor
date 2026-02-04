@@ -9,6 +9,7 @@ use crate::{
         layout::Layout,
         properties::FontStyle,
     },
+    font::otf_dtypes::GLYPH_ID,
     globals::DEFAULT_FONT_FAMILY,
     html5::dom::{Element, NodeKind},
     render::{
@@ -143,7 +144,8 @@ impl WindowState {
 
                             let layout = self.layout.as_mut().unwrap();
 
-                            let mut renderer = layout
+                            // get renderer WITHOUT cloning
+                            let renderer = if let Some(r) = layout
                                 ._renderers
                                 .get_mut(&RendererIdentifier {
                                     font_family: family
@@ -154,21 +156,47 @@ impl WindowState {
                                     font_weight,
                                     italic,
                                 })
-                                .map_or(None, |r| r.clone())
-                                .unwrap_or_else(|| {
-                                    layout
-                                        .get_renderer(
-                                            family
-                                                .entries
-                                                .first()
-                                                .map(|f| f.value())
-                                                .unwrap_or(DEFAULT_FONT_FAMILY.to_string()),
-                                        )
-                                        .cloned()
-                                        .unwrap()
-                                });
+                                .map_or(None, |r| r.as_mut())
+                            {
+                                r
+                            } else {
+                                layout
+                                    .get_renderer_mut(
+                                        family
+                                            .entries
+                                            .first()
+                                            .map(|f| f.value())
+                                            .unwrap_or(DEFAULT_FONT_FAMILY.to_string()),
+                                    )
+                                    .expect("No renderer found for font family")
+                            };
 
-                            let mut glyph_instances: HashMap<char, Vec<GlyphInstance>> =
+                            // let mut renderer = layout
+                            //     ._renderers
+                            //     .get_mut(&RendererIdentifier {
+                            //         font_family: family
+                            //             .entries
+                            //             .first()
+                            //             .map(|f| f.value())
+                            //             .unwrap_or(DEFAULT_FONT_FAMILY.to_string()),
+                            //         font_weight,
+                            //         italic,
+                            //     })
+                            //     .map_or(None, |r| r.clone())
+                            //     .unwrap_or_else(|| {
+                            //         layout
+                            //             .get_renderer(
+                            //                 family
+                            //                     .entries
+                            //                     .first()
+                            //                     .map(|f| f.value())
+                            //                     .unwrap_or(DEFAULT_FONT_FAMILY.to_string()),
+                            //             )
+                            //             .cloned()
+                            //             .unwrap()
+                            //     });
+
+                            let mut glyph_instances: HashMap<(char, u32), Vec<GlyphInstance>> =
                                 HashMap::new();
 
                             let mut pen_x = adj_position.0 as f32;
@@ -182,12 +210,16 @@ impl WindowState {
                             for ch in text_content.chars() {
                                 let glyph_mesh =
                                     renderer.get_from_char(ch, font_size as u32, &self.device);
+                                // .cloned();
 
                                 if let Some(glyph) = glyph_mesh {
-                                    glyph_instances.entry(ch).or_default().push(GlyphInstance {
-                                        offset: [pen_x, pen_y],
-                                        color: style.color.used(),
-                                    });
+                                    glyph_instances
+                                        .entry((ch, font_size as u32))
+                                        .or_default()
+                                        .push(GlyphInstance {
+                                            offset: [pen_x, pen_y],
+                                            color: style.color.used(),
+                                        });
 
                                     pen_x += glyph.advance_width;
                                 } else {
@@ -214,10 +246,11 @@ impl WindowState {
                                 }
                             }
 
-                            for (ch, instances) in glyph_instances {
+                            for (key, instances) in glyph_instances {
                                 let mut glyph = renderer
-                                    .get_from_char(ch, font_size as u32, &self.device)
-                                    .unwrap();
+                                    .get_from_char(key.0, key.1, &self.device)
+                                    .unwrap()
+                                    .clone();
 
                                 self.queue.write_buffer(
                                     &glyph.instance_buffer,
@@ -226,6 +259,10 @@ impl WindowState {
                                 );
 
                                 glyph.instance_count = instances.len() as u32;
+                                println!(
+                                    "Rendering glyph '{}' with {} instances",
+                                    key.0, glyph.instance_count
+                                );
 
                                 render_pass.set_pipeline(&self.glyph_stencil_render_pipeline);
                                 render_pass
@@ -373,11 +410,7 @@ impl WindowState {
         println!("Frame rendered");
     }
 
-    pub async fn new(
-        window: Arc<Window>,
-        window_options: WindowOptions,
-        layout: Option<Layout>,
-    ) -> Self {
+    pub async fn new(window: Arc<Window>, window_options: WindowOptions) -> Self {
         let size = window.inner_size();
 
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
@@ -968,7 +1001,7 @@ impl WindowState {
             config,
             msaa_view,
             stencil_view,
-            layout,
+            layout: None,
             line_render_pipeline,
             glyph_stencil_render_pipeline,
             glyph_fill_render_pipeline,

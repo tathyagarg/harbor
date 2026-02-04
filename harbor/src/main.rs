@@ -27,7 +27,6 @@ fn main() {
         },
         state: None,
         document: None,
-        layout: None,
         agent: Some(Rc::clone(&ua)),
         callbacks: None,
     };

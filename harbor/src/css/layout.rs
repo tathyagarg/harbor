@@ -78,6 +78,18 @@ impl Layout {
         None
     }
 
+    pub fn get_renderer_mut(&mut self, name: String) -> Option<&mut TextRenderer> {
+        for (identifier, renderer_option) in self._renderers.iter_mut() {
+            if identifier.font_family == name {
+                if let Some(renderer) = renderer_option {
+                    return Some(renderer);
+                }
+            }
+        }
+
+        None
+    }
+
     pub fn resized(&mut self, new_size: (f64, f64)) {
         self._window_size = new_size;
         self.layout();
@@ -96,7 +108,7 @@ impl Layout {
                     _associated_italic: identifier.italic,
                     _associated_weight: identifier.font_weight,
                     font: font.clone(),
-                    glyph_cache: HashMap::new(),
+                    // glyph_cache: HashMap::new(),
                 };
 
                 self._renderers.insert(identifier, Some(renderer));

@@ -790,23 +790,34 @@ impl Box {
                 let family = style.font.family();
                 let weight = style.font.resolved_font_weight().unwrap_or(400) as u16;
 
-                let font = renderers
+                // get font WITHOUT cloning
+                let font = &renderers
                     .get(&RendererIdentifier {
                         font_family: family.entries[0].value(),
                         font_weight: weight,
                         italic: matches!(style.font.style(), FontStyle::Italic),
                     })
                     .and_then(|r| r.as_ref())
-                    .map_or(None, |r| Some(r.clone()))
-                    .unwrap_or_else(|| {
-                        renderers
-                            .iter()
-                            .find(|(id, _)| id.font_family == family.entries[0].value())
-                            .and_then(|(_, r)| r.as_ref())
-                            .map_or(None, |r| Some(r.clone()))
-                            .unwrap()
-                    })
+                    .unwrap()
                     .font;
+
+                // let font = renderers
+                //     .get(&RendererIdentifier {
+                //         font_family: family.entries[0].value(),
+                //         font_weight: weight,
+                //         italic: matches!(style.font.style(), FontStyle::Italic),
+                //     })
+                //     .and_then(|r| r.as_ref())
+                //     .map_or(None, |r| Some(r.clone()))
+                //     .unwrap_or_else(|| {
+                //         renderers
+                //             .iter()
+                //             .find(|(id, _)| id.font_family == family.entries[0].value())
+                //             .and_then(|(_, r)| r.as_ref())
+                //             .map_or(None, |r| Some(r.clone()))
+                //             .unwrap()
+                //     })
+                //     .font;
 
                 let scale =
                     style.font.resolved_font_size().unwrap_or(16.0) / font.units_per_em() as f64;
