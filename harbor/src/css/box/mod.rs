@@ -198,7 +198,7 @@ impl Debug for Box {
                         "node_doc",
                         match &node_borrow.node().borrow().node_document {
                             Some(doc_weak) => match doc_weak.upgrade() {
-                                Some(doc_rc) => &"Document",
+                                Some(_) => &"Document",
                                 None => &"Dropped Document",
                             },
                             None => &"No Document",

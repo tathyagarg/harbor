@@ -3,15 +3,11 @@ use std::collections::HashMap;
 use std::fs;
 use std::rc::Rc;
 
-use winit::event_loop::EventLoop;
-
 use crate::{
-    css::{cssom::CSSStyleSheet, layout::Layout, parser::parse_stylesheet, tokenize::tokenize},
-    globals::{INITIAL_WINDOW_HEIGHT, INITIAL_WINDOW_WIDTH},
+    css::{cssom::CSSStyleSheet, parser::parse_stylesheet, tokenize::tokenize},
     html5::{dom::Document, parse::Parser},
     http::{Client, Protocol, Request, url::URL},
     infra::{InputStream, Serializable},
-    render::{App, CallbackData, WindowOptions},
 };
 
 pub struct Agent {

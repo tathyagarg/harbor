@@ -1,12 +1,6 @@
 use std::rc::Rc;
 
-use crate::{
-    agent::Agent,
-    css::{layout::Layout, tokenize::tokenize},
-    globals::{INITIAL_WINDOW_HEIGHT, INITIAL_WINDOW_WIDTH},
-    infra::{InputStream, Serializable},
-    render::App,
-};
+use crate::{agent::Agent, render::App};
 
 pub mod agent;
 pub mod css;
@@ -16,8 +10,6 @@ pub mod html5;
 pub mod http;
 pub mod infra;
 pub mod render;
-
-use winit::event_loop::EventLoop;
 
 fn main() {
     env_logger::init();
