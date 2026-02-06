@@ -217,14 +217,19 @@ impl ApplicationHandler<AppEvent> for App {
                         -state.scroll_y,
                     );
 
+                    println!("[");
                     for (i, child) in elems.iter().enumerate() {
                         let mut child_borrow = child.borrow_mut();
+
                         match elem_state {
                             ElementState::Pressed => {
                                 child_borrow.trigger_click(&elems[..i]);
                             }
                             ElementState::Released => {
                                 child_borrow.trigger_release(&elems[..i]);
+
+                                println!("Child: {}", child_borrow.local_name);
+
                                 if child_borrow.local_name == "a" {
                                     if let Some(href) = child_borrow.get_attribute("href") {
                                         if let Some(callbacks) = &self.callbacks {
@@ -235,6 +240,7 @@ impl ApplicationHandler<AppEvent> for App {
                             }
                         }
                     }
+                    println!("]");
                 }
             }
             WindowEvent::RedrawRequested => {

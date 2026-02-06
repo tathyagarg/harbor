@@ -49,10 +49,10 @@ impl Layout {
     pub fn layout(&mut self) {
         if let Some(root_box) = &self.root_box {
             let res = root_box.borrow_mut().layout(
-                None,
-                None,
-                // Some(self._window_size.0),
-                // Some(self._window_size.1),
+                // None,
+                // None,
+                Some(self._window_size.0),
+                Some(self._window_size.1),
                 // fuhhh
                 false,
                 false,
