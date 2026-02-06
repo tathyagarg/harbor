@@ -30,6 +30,9 @@ pub struct WindowState {
 
     pub layout: Option<Layout>,
 
+    // pub viewport_width: f64,
+    pub viewport_height: f64,
+
     pub msaa_view: wgpu::TextureView,
     pub stencil_view: wgpu::TextureView,
 
@@ -68,7 +71,7 @@ impl WindowState {
         parents: &mut Vec<(Box, (f64, f64))>,
         render_pass: &mut wgpu::RenderPass,
     ) {
-        let _maybe_res = (layout_box.clone(), (0.0, -self.scroll_y));
+        let _maybe_res = (layout_box.clone(), (-self.scroll_x, -self.scroll_y));
 
         let respected_parent = if let Some(rel_to) = layout_box.position_relative_to {
             if rel_to > parents.len() {
@@ -954,6 +957,8 @@ impl WindowState {
             msaa_view,
             stencil_view,
             layout: None,
+            // viewport_width: 0.0,
+            viewport_height: 0.0,
             line_render_pipeline,
             glyph_stencil_render_pipeline,
             glyph_fill_render_pipeline,
@@ -987,6 +992,11 @@ impl WindowState {
 
             if let Some(layout) = &mut self.layout {
                 layout.resized((width as f64, height as f64));
+
+                let root_box = layout.root_box.as_ref().unwrap().borrow();
+
+                // self.viewport_width = root_box._content_width;
+                self.viewport_height = root_box._content_height;
             }
 
             self.queue.write_buffer(

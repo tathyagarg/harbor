@@ -641,11 +641,10 @@ impl Box {
                         println!("Container width: {:?}", container_width);
                     }
 
-                    self._content_width = element
-                        .style_mut()
-                        .width
-                        .resolve_single_parent(container_width.unwrap_or(0.0))
-                        - self._margin.horizontal();
+                    if let Some(cw) = container_width {
+                        self._content_width = element.style_mut().width.resolve_single_parent(cw)
+                            - self._margin.horizontal();
+                    }
 
                     if element.local_name == "body" {
                         println!(
@@ -705,6 +704,7 @@ impl Box {
 
                     cursor_y += h;
                     if go_to_next_line {
+                        self._content_width = self._content_width.max(cursor_x);
                         cursor_x = 0.0;
                         cursor_y += child.get_line_height();
                     }
@@ -747,6 +747,7 @@ impl Box {
         );
 
         self._content_height = cursor_y;
+        self._content_width = self._content_width.max(cursor_x);
 
         if let Some(node_rc) = &self.associated_node {
             if let NodeKind::Element(_) = node_rc.borrow().deref() {

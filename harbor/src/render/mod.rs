@@ -167,7 +167,13 @@ impl ApplicationHandler<AppEvent> for App {
                 let layout = state.layout.as_ref().unwrap();
 
                 if let Some(root) = layout.root_box.as_ref() {
-                    let elems = CssBox::get_elements_under(root, position.x, position.y, 0.0, 0.0);
+                    let elems = CssBox::get_elements_under(
+                        root,
+                        position.x,
+                        position.y,
+                        -state.scroll_x,
+                        -state.scroll_y,
+                    );
 
                     let inner_size = state.window.inner_size();
                     let viewport_size = (inner_size.width as f64, inner_size.height as f64);
@@ -207,8 +213,8 @@ impl ApplicationHandler<AppEvent> for App {
                         root,
                         state.cursor_position.0,
                         state.cursor_position.1,
-                        0.0,
-                        0.0,
+                        -state.scroll_x,
+                        -state.scroll_y,
                     );
 
                     for (i, child) in elems.iter().enumerate() {
@@ -241,8 +247,18 @@ impl ApplicationHandler<AppEvent> for App {
                     MouseScrollDelta::PixelDelta(pos) => (pos.x, pos.y),
                 };
 
-                state.scroll_x += delta_x;
-                state.scroll_y = (state.scroll_y - delta_y).max(0.0);
+                // println!(
+                //     "Scroll X: {}, vw: {}, ww: {}",
+                //     state.scroll_x,
+                //     // state.viewport_width,
+                //     state.window.inner_size().width
+                // );
+
+                state.scroll_x = (state.scroll_x - delta_x).max(0.0);
+                // .min(state.viewport_width - state.window.inner_size().width as f64);
+                state.scroll_y = (state.scroll_y - delta_y)
+                    .max(0.0)
+                    .min(state.viewport_height - state.window.inner_size().height as f64);
             }
             WindowEvent::KeyboardInput {
                 event:
@@ -283,6 +299,13 @@ impl ApplicationHandler<AppEvent> for App {
                         // println!("Layout: {:#?}", self.layout.as_ref().unwrap().root_box);
 
                         if let Some(state) = &mut self.state {
+                            state.scroll_x = 0.0;
+                            state.scroll_y = 0.0;
+
+                            let root_box = layout.root_box.as_ref().unwrap();
+
+                            state.viewport_height = root_box.borrow()._content_height;
+
                             state.layout = Some(layout);
                         }
                     }
