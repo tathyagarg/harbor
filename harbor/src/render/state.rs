@@ -50,6 +50,9 @@ pub struct WindowState {
     pub globals_bind_group: wgpu::BindGroup,
 
     pub cursor_position: (f64, f64),
+
+    pub scroll_x: f64,
+    pub scroll_y: f64,
 }
 
 impl WindowState {
@@ -65,7 +68,7 @@ impl WindowState {
         parents: &mut Vec<(Box, (f64, f64))>,
         render_pass: &mut wgpu::RenderPass,
     ) {
-        let _maybe_res = (layout_box.clone(), (0.0, 0.0));
+        let _maybe_res = (layout_box.clone(), (0.0, -self.scroll_y));
 
         let respected_parent = if let Some(rel_to) = layout_box.position_relative_to {
             if rel_to > parents.len() {
@@ -81,6 +84,12 @@ impl WindowState {
             layout_box.position().0 + respected_parent.1.0 + layout_box.margin().left(),
             layout_box.position().1 + respected_parent.1.1 + layout_box.margin().top(),
         );
+
+        if (adj_position.1 + layout_box._content_height < 0.0)
+            || (adj_position.1 > self.window.inner_size().height as f64)
+        {
+            return;
+        }
 
         let bg_color = layout_box
             .style()
@@ -371,7 +380,6 @@ impl WindowState {
 
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
-        println!("Frame rendered");
     }
 
     pub async fn new(window: Arc<Window>, window_options: WindowOptions) -> Self {
@@ -560,11 +568,6 @@ impl WindowState {
                 bias: wgpu::DepthBiasState::default(),
             }),
             multisample: wgpu::MultisampleState::default(),
-            // multisample: wgpu::MultisampleState {
-            //     count: 1,
-            //     mask: !0,
-            //     alpha_to_coverage_enabled: false,
-            // },
             multiview: None,
             cache: None,
         });
@@ -770,11 +773,6 @@ impl WindowState {
                     bias: wgpu::DepthBiasState::default(),
                 }),
                 multisample: wgpu::MultisampleState::default(),
-                // multisample: wgpu::MultisampleState {
-                //     count: 1,
-                //     mask: !0,
-                //     alpha_to_coverage_enabled: false,
-                // },
                 multiview: None,
                 cache: None,
             });
@@ -841,11 +839,6 @@ impl WindowState {
                 bias: wgpu::DepthBiasState::default(),
             }),
             multisample: wgpu::MultisampleState::default(),
-            // multisample: wgpu::MultisampleState {
-            //     count: 1,
-            //     mask: !0,
-            //     alpha_to_coverage_enabled: false,
-            // },
             multiview: None,
             cache: None,
         });
@@ -913,11 +906,6 @@ impl WindowState {
                     bias: wgpu::DepthBiasState::default(),
                 }),
                 multisample: wgpu::MultisampleState::default(),
-                // multisample: wgpu::MultisampleState {
-                //     count: 1,
-                //     mask: !0,
-                //     alpha_to_coverage_enabled: false,
-                // },
                 multiview: None,
                 cache: None,
             });
@@ -977,6 +965,8 @@ impl WindowState {
             globals_buffer,
             globals_bind_group,
             cursor_position: (0.0, 0.0),
+            scroll_x: 0.0,
+            scroll_y: 0.0,
         }
     }
 

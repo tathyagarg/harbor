@@ -3,7 +3,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use winit::application::ApplicationHandler;
-use winit::event::{ElementState, KeyEvent, MouseButton, WindowEvent};
+use winit::event::{ElementState, KeyEvent, MouseButton, MouseScrollDelta, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, EventLoop};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{Window, WindowId};
@@ -234,6 +234,15 @@ impl ApplicationHandler<AppEvent> for App {
             WindowEvent::RedrawRequested => {
                 state.update();
                 state.render();
+            }
+            WindowEvent::MouseWheel { delta, .. } => {
+                let (delta_x, delta_y) = match delta {
+                    MouseScrollDelta::LineDelta(x, y) => (x as f64 * 20.0, y as f64 * 20.0),
+                    MouseScrollDelta::PixelDelta(pos) => (pos.x, pos.y),
+                };
+
+                state.scroll_x += delta_x;
+                state.scroll_y = (state.scroll_y - delta_y).max(0.0);
             }
             WindowEvent::KeyboardInput {
                 event:

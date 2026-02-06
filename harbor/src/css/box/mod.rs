@@ -129,7 +129,7 @@ pub struct Box {
     pub _content_width: f64,
 
     /// Height of the content area
-    _content_height: f64,
+    pub _content_height: f64,
 
     /// Padding edges: top, right, bottom, left
     _padding: Edges,
