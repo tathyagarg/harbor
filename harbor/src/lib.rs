@@ -5,4 +5,5 @@ pub mod globals;
 pub mod html5;
 pub mod http;
 pub mod infra;
+pub mod js;
 pub mod render;

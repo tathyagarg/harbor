@@ -9,29 +9,32 @@ pub mod globals;
 pub mod html5;
 pub mod http;
 pub mod infra;
+pub mod js;
 pub mod render;
 
 fn main() {
     env_logger::init();
 
-    let ua = Agent::new();
-    let mut app = App {
-        window_options: render::WindowOptions {
-            use_transparent: true,
-            background_color: wgpu::Color {
-                r: 1.0,
-                g: 1.0,
-                b: 1.0,
-                a: 0.0,
-            },
-        },
-        state: None,
-        document: None,
-        agent: Some(Rc::clone(&ua)),
-        callbacks: None,
-    };
+    js::JsRuntime::new();
 
-    app.run();
+    // let ua = Agent::new();
+    // let mut app = App {
+    //     window_options: render::WindowOptions {
+    //         use_transparent: true,
+    //         background_color: wgpu::Color {
+    //             r: 1.0,
+    //             g: 1.0,
+    //             b: 1.0,
+    //             a: 0.0,
+    //         },
+    //     },
+    //     state: None,
+    //     document: None,
+    //     agent: Some(Rc::clone(&ua)),
+    //     callbacks: None,
+    // };
+
+    // app.run();
 
     // let url_target = String::from("https://rupnil.codes/");
     // println!("Parsing target: {}", url_target);

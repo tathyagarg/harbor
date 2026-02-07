@@ -6,14 +6,14 @@ use crate::render::RendererIdentifier;
 
 use crate::globals::FONTS;
 
-use crate::css::r#box;
+use crate::css::r#box::Box as CssBox;
 use crate::html5::dom::Document;
 use crate::render::text::TextRenderer;
 
 #[derive(Clone)]
 pub struct Layout {
     pub document: Rc<RefCell<Document>>,
-    pub root_box: Option<Rc<RefCell<r#box::Box>>>,
+    pub root_box: Option<Rc<RefCell<CssBox>>>,
 
     pub _renderers: HashMap<RendererIdentifier, Option<TextRenderer>>,
 
@@ -42,7 +42,7 @@ impl Layout {
     }
 
     pub fn make_tree(&mut self) {
-        let root_box = r#box::Box::build_doc_box_tree(&self.document, self._window_size);
+        let root_box = CssBox::build_doc_box_tree(&self.document, self._window_size);
         self.root_box = root_box;
     }
 

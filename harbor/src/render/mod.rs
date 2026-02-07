@@ -120,13 +120,15 @@ impl ApplicationHandler<AppEvent> for App {
         self.state = Some(pollster::block_on(WindowState::new(
             window,
             self.window_options.clone(),
+            Some("https://flavorless.hackclub.com/".to_string()),
         )));
 
         if let Some(agent) = &self.agent {
             let agent_clone = Rc::clone(agent);
-            let doc = agent_clone
-                .borrow_mut()
-                .open("https://flavorless.hackclub.com/");
+
+            let state = self.state.as_mut().unwrap();
+
+            let doc = agent_clone.borrow_mut().open(state.url.as_ref().unwrap());
 
             if let Some(document) = doc {
                 self.document = Some(Rc::clone(&document));
@@ -136,9 +138,7 @@ impl ApplicationHandler<AppEvent> for App {
                     (INITIAL_WINDOW_WIDTH as f64, INITIAL_WINDOW_HEIGHT as f64),
                 );
 
-                if let Some(state) = &mut self.state {
-                    state.layout = Some(layout.clone());
-                }
+                state.layout = Some(layout.clone());
             }
         }
     }
@@ -217,7 +217,6 @@ impl ApplicationHandler<AppEvent> for App {
                         -state.scroll_y,
                     );
 
-                    println!("[");
                     for (i, child) in elems.iter().enumerate() {
                         let mut child_borrow = child.borrow_mut();
 
@@ -227,8 +226,6 @@ impl ApplicationHandler<AppEvent> for App {
                             }
                             ElementState::Released => {
                                 child_borrow.trigger_release(&elems[..i]);
-
-                                println!("Child: {}", child_borrow.local_name);
 
                                 if child_borrow.local_name == "a" {
                                     if let Some(href) = child_borrow.get_attribute("href") {
@@ -240,7 +237,6 @@ impl ApplicationHandler<AppEvent> for App {
                             }
                         }
                     }
-                    println!("]");
                 }
             }
             WindowEvent::RedrawRequested => {
@@ -305,6 +301,8 @@ impl ApplicationHandler<AppEvent> for App {
                         // println!("Layout: {:#?}", self.layout.as_ref().unwrap().root_box);
 
                         if let Some(state) = &mut self.state {
+                            state.url = Some(url);
+
                             state.scroll_x = 0.0;
                             state.scroll_y = 0.0;
 

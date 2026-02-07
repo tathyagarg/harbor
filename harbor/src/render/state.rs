@@ -30,6 +30,8 @@ pub struct WindowState {
 
     pub layout: Option<Layout>,
 
+    pub url: Option<String>,
+
     // pub viewport_width: f64,
     pub viewport_height: f64,
 
@@ -385,7 +387,11 @@ impl WindowState {
         output.present();
     }
 
-    pub async fn new(window: Arc<Window>, window_options: WindowOptions) -> Self {
+    pub async fn new(
+        window: Arc<Window>,
+        window_options: WindowOptions,
+        url: Option<String>,
+    ) -> Self {
         let size = window.inner_size();
 
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
@@ -671,11 +677,6 @@ impl WindowState {
                     bias: wgpu::DepthBiasState::default(),
                 }),
                 multisample: wgpu::MultisampleState::default(),
-                // multisample: wgpu::MultisampleState {
-                //     count: 1,
-                //     mask: !0,
-                //     alpha_to_coverage_enabled: false,
-                // },
                 multiview: None,
                 cache: None,
             });
@@ -957,6 +958,7 @@ impl WindowState {
             msaa_view,
             stencil_view,
             layout: None,
+            url,
             // viewport_width: 0.0,
             viewport_height: 0.0,
             line_render_pipeline,
