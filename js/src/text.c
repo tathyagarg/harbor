@@ -157,6 +157,8 @@ parse_result parse_text_code_points(
   size_t len,
   symbol_id goal_symbol
 ) {
+  switch (goal_symbol) {}
+
   return (parse_result){
     .success = false,
     .syntax_errors = NULL
