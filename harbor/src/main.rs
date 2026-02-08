@@ -15,9 +15,19 @@ pub mod render;
 fn main() {
     env_logger::init();
 
-    let cp: u32 = 0x1F600;
-    let zig_string = unsafe { js::utf16_encode_cp(cp) };
-    println!("{}", zig_string);
+    let data = "Rust str, zig func! 😀"
+        .encode_utf16()
+        .collect::<Vec<u16>>();
+
+    println!("Original string: {}", String::from_utf16_lossy(&data));
+
+    let string: js::ZigString = js::ZigString {
+        data: data.as_ptr(),
+        len: data.len(),
+    };
+    let cps = unsafe { js::string_to_cps(string) };
+
+    println!("Code points: {}", cps);
 
     // js::JsRuntime::new();
 

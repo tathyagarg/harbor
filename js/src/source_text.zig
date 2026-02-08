@@ -15,6 +15,11 @@ pub const CodePointAtResult = extern struct {
     is_unpaired_surrogate: bool,
 };
 
+pub const CodePointSeq = extern struct {
+    data: [*]const root.CodePoint,
+    len: usize,
+};
+
 pub const UTF16_MAX = 0x10FFFF;
 
 pub const HIGH_SURROGATE_START = 0xD800;
@@ -65,14 +70,16 @@ pub fn cps_to_string(text: [*]root.CodePoint, len: usize) !String {
     var result: std.ArrayList(u16) = .empty;
     defer result.deinit(std.heap.page_allocator);
 
-    for (text, 0..len) |cp, _| {
+    for (text[0..len]) |cp| {
         const encoded = utf16_encode_cp(cp);
         _ = try result.appendSlice(std.heap.page_allocator, encoded.data[0..encoded.len]);
     }
 
+    const owned = try result.toOwnedSlice(std.heap.page_allocator);
+
     return String{
-        .data = (try result.toOwnedSlice(std.heap.page_allocator)).ptr,
-        .len = result.items.len,
+        .data = owned.ptr,
+        .len = owned.len,
     };
 }
 
@@ -135,7 +142,7 @@ pub fn code_point_at(text: String, position: usize) CodePointAtResult {
     };
 }
 
-pub fn string_to_cps(text: String) ![*]root.CodePoint {
+pub fn string_to_cps(text: String) !CodePointSeq {
     var code_points: std.ArrayList(root.CodePoint) = .empty;
     defer code_points.deinit(std.heap.page_allocator);
 
@@ -146,5 +153,10 @@ pub fn string_to_cps(text: String) ![*]root.CodePoint {
         i += result.code_unit_count;
     }
 
-    return (try code_points.toOwnedSlice(std.heap.page_allocator)).ptr;
+    const owned = try code_points.toOwnedSlice(std.heap.page_allocator);
+
+    return CodePointSeq{
+        .data = owned.ptr,
+        .len = owned.len,
+    };
 }

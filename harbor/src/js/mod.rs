@@ -44,7 +44,6 @@ pub struct ZigString {
 impl Display for ZigString {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let slice = unsafe { std::slice::from_raw_parts(self.data, self.len) };
-        println!("ZigString slice: {:?}", slice);
         let string = String::from_utf16_lossy(slice);
         write!(f, "{}", string)
     }
@@ -57,6 +56,23 @@ pub struct CodePointAtResult {
     pub is_unpaired_surrogate: bool,
 }
 
+#[repr(C)]
+pub struct CodePointSeq {
+    pub data: *const CodePoint,
+    pub len: usize,
+}
+
+impl Display for CodePointSeq {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let slice = unsafe { std::slice::from_raw_parts(self.data, self.len) };
+        for cp in slice {
+            write!(f, "U+{:04X} ", cp)?;
+        }
+
+        Ok(())
+    }
+}
+
 type CodePoint = u32;
 
 #[link(name = "js", kind = "static")]
@@ -65,5 +81,5 @@ unsafe extern "C" {
     pub fn cps_to_string(cps: *const CodePoint, len: usize) -> ZigString;
     pub fn utf16_surrogate_pair_to_cp(high: u16, low: u16) -> CodePoint;
     pub fn code_point_at(s: ZigString, index: usize) -> CodePointAtResult;
-    pub fn string_to_cps(text: ZigString) -> *const CodePoint;
+    pub fn string_to_cps(text: ZigString) -> CodePointSeq;
 }
