@@ -8,4 +8,5 @@ debug.rs
 flamegraph.svg
 
 .zig-cache
-.optimize = optimize,
+
+libjs.a

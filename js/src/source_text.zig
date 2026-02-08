@@ -2,9 +2,17 @@ const std = @import("std");
 
 const root = @import("root.zig");
 
+// js/mod.rs:ZigString
 pub const String = extern struct {
     data: [*]const u16,
     len: usize,
+};
+
+// js/mod.rs:CodePointAtResult
+pub const CodePointAtResult = extern struct {
+    code_point: root.CodePoint,
+    code_unit_count: usize,
+    is_unpaired_surrogate: bool,
 };
 
 pub const UTF16_MAX = 0x10FFFF;
@@ -19,15 +27,35 @@ pub fn utf16_encode_cp(cp: root.CodePoint) String {
     std.debug.assert(cp <= UTF16_MAX);
 
     if (cp <= 0xFFFF) {
+        const buf = std.heap.page_allocator.alloc(u16, 1) catch {
+            return String{
+                .data = &[_]u16{},
+                .len = 0,
+            };
+        };
+
+        buf[0] = @intCast(cp);
+
         return String{
-            .data = &[_]u16{@intCast(cp)},
+            .data = buf.ptr,
             .len = 1,
         };
     } else {
+        const buf = std.heap.page_allocator.alloc(u16, 2) catch {
+            return String{
+                .data = &[_]u16{},
+                .len = 0,
+            };
+        };
+
         const high_surrogate: u16 = @intCast(((cp - 0x10000) >> 10) + 0xD800);
         const low_surrogate: u16 = @intCast(((cp - 0x10000) & 0x3FF) + 0xDC00);
+
+        buf[0] = high_surrogate;
+        buf[1] = low_surrogate;
+
         return String{
-            .data = &[_]u16{ high_surrogate, low_surrogate },
+            .data = buf.ptr,
             .len = 2,
         };
     }
@@ -56,12 +84,6 @@ pub fn utf16_surrogate_pair_to_cp(high: u16, low: u16) root.CodePoint {
     const low_part: u21 = @intCast(low - 0xDC00);
     return (high_part * 0x400) + low_part + 0x10000;
 }
-
-pub const CodePointAtResult = extern struct {
-    code_point: root.CodePoint,
-    code_unit_count: usize,
-    is_unpaired_surrogate: bool,
-};
 
 pub fn is_leading_surrogate(unit: u16) bool {
     return unit >= HIGH_SURROGATE_START and unit <= HIGH_SURROGATE_END;

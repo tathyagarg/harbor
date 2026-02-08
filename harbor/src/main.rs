@@ -15,7 +15,9 @@ pub mod render;
 fn main() {
     env_logger::init();
 
-    // println!("{}", unsafe { js::add(5, 7) });
+    let cp: u32 = 0x1F600;
+    let zig_string = unsafe { js::utf16_encode_cp(cp) };
+    println!("{}", zig_string);
 
     // js::JsRuntime::new();
 

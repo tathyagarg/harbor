@@ -4,17 +4,23 @@ fn main() {
     let root = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let zig_dir = root.join("../js");
 
-    let zig_src = zig_dir.join("src/root.zig");
+    let zig_src_dir = zig_dir.join("src");
 
     let out = PathBuf::from(env::var("OUT_DIR").unwrap());
     let lib = out.join("libjs.a");
 
-    println!("cargo:rerun-if-changed={}", zig_src.display());
+    for entry in std::fs::read_dir(&zig_src_dir).expect("Failed to read Zig source directory") {
+        let entry = entry.expect("Failed to read directory entry");
+        let path = entry.path();
+        if path.extension().and_then(|s| s.to_str()) == Some("zig") {
+            println!("cargo:rerun-if-changed={}", path.display());
+        }
+    }
 
     let status = Command::new("zig")
         .args([
             "build-lib",
-            zig_src.to_str().unwrap(),
+            zig_src_dir.join("root.zig").to_str().unwrap(),
             "-O",
             "ReleaseFast",
             "-fPIC",
