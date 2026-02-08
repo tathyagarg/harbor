@@ -2,38 +2,35 @@ use std::{env, path::PathBuf, process::Command};
 
 fn main() {
     let root = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
-    let c_dir = root.join("../js");
+    let zig_dir = root.join("../js");
 
-    let include = c_dir.join("include");
-    let src = c_dir.join("src");
+    let zig_src = zig_dir.join("src/root.zig");
 
     let out = PathBuf::from(env::var("OUT_DIR").unwrap());
+    let lib = out.join("libjs.a");
 
-    println!("cargo:rerun-if-changed={}", src.join("js.c").display());
-    println!("cargo:rerun-if-changed={}", include.join("js.h").display());
+    println!("cargo:rerun-if-changed={}", zig_src.display());
 
-    let obj = out.join("js.o");
-    let lib = out.join("libjsruntime.a");
-
-    let status = Command::new("cc")
+    let status = Command::new("zig")
         .args([
-            "-c",
-            src.join("js.c").to_str().unwrap(),
-            "-I",
-            include.to_str().unwrap(),
-            "-o",
-            obj.to_str().unwrap(),
+            "build-lib",
+            zig_src.to_str().unwrap(),
+            "-O",
+            "ReleaseFast",
+            "-fPIC",
+            "--name",
+            "js",
+            "-static",
         ])
         .status()
-        .unwrap();
-    assert!(status.success());
+        .expect("Failed to execute zig");
 
-    let status = Command::new("ar")
-        .args(["crus", lib.to_str().unwrap(), obj.to_str().unwrap()])
-        .status()
-        .unwrap();
-    assert!(status.success());
+    assert!(status.success(), "Zig build failed");
+
+    println!("Built Zig library successfully, copying to output directory...");
+
+    std::fs::copy(root.join("libjs.a"), &lib).expect("Failed to copy built library");
 
     println!("cargo:rustc-link-search=native={}", out.display());
-    println!("cargo:rustc-link-lib=static=jsruntime");
+    println!("cargo:rustc-link-lib=static=js");
 }

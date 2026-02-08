@@ -15,7 +15,9 @@ pub mod render;
 fn main() {
     env_logger::init();
 
-    js::JsRuntime::new();
+    println!("{}", unsafe { js::add(5, 7) });
+
+    // js::JsRuntime::new();
 
     // let ua = Agent::new();
     // let mut app = App {

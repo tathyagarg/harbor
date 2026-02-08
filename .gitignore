@@ -6,3 +6,6 @@ debug.rs
 .DS_Store
 
 flamegraph.svg
+
+.zig-cache
+.optimize = optimize,
