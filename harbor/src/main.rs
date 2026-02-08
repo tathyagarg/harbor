@@ -15,7 +15,7 @@ pub mod render;
 fn main() {
     env_logger::init();
 
-    println!("{}", unsafe { js::add(5, 7) });
+    // println!("{}", unsafe { js::add(5, 7) });
 
     // js::JsRuntime::new();
 

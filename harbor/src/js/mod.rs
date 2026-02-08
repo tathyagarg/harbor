@@ -33,6 +33,4 @@
 // }
 
 #[link(name = "js", kind = "static")]
-unsafe extern "C" {
-    pub fn add(a: i32, b: i32) -> i32;
-}
+unsafe extern "C" {}
