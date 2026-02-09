@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const root = @import("root.zig");
+const unicode = @import("unicode.zig");
 
 // js/mod.rs:ZigString
 pub const String = extern struct {
@@ -28,29 +29,29 @@ pub const GoalSymbol = enum(u8) {
     InputElementHashbangOrRegExp,
 };
 
-// NOTE: https://tc39.es/ecma262/#prod-WhiteSpace
-pub const WHITESPACE_CHARS = [_]root.CodePoint{
-    0x0009, // Tab
-    0x000B, // Vertical Tab
-    0x000C, // Form Feed
-    0xFEFF, // Byte Order Mark
-    0x0020, // Space
-    0x00A0, // No-break space
-};
-
-// NOTE: https://tc39.es/ecma262/#prod-LineTerminator
-pub const LINE_TERMINATOR_CHARS = [_]root.CodePoint{
-    0x000A, // Line Feed
-    0x000D, // Carriage Return
-    0x2028, // Line Separator
-    0x2029, // Paragraph Separator
-};
-
 pub const TokenKind = enum(u8) {
     Whitespace,
     LineTerminator,
     Comment,
     HashBangComment,
+    CommonToken,
+};
+
+pub const CommonTokenKind = enum(u8) {
+    Identifier,
+    NumericLiteral,
+    StringLiteral,
+    Punctuator,
+    Template,
+};
+
+pub const IdentifierData = extern struct {
+    name: String,
+};
+
+pub const CommonTokenData = struct {
+    common_token_kind: CommonTokenKind,
+    data: usize,
 };
 
 pub const Token = extern struct {
@@ -64,12 +65,6 @@ pub const TokenSeq = extern struct {
 };
 
 pub const UTF16_MAX = 0x10FFFF;
-
-pub const HIGH_SURROGATE_START = 0xD800;
-pub const HIGH_SURROGATE_END = 0xDBFF;
-
-pub const LOW_SURROGATE_START = 0xDC00;
-pub const LOW_SURROGATE_END = 0xDFFF;
 
 pub fn utf16_encode_cp(cp: root.CodePoint) String {
     std.debug.assert(cp <= UTF16_MAX);
@@ -135,14 +130,6 @@ pub fn utf16_surrogate_pair_to_cp(high: u16, low: u16) root.CodePoint {
     return (high_part * 0x400) + low_part + 0x10000;
 }
 
-pub fn is_leading_surrogate(unit: u16) bool {
-    return unit >= HIGH_SURROGATE_START and unit <= HIGH_SURROGATE_END;
-}
-
-pub fn is_trailing_surrogate(unit: u16) bool {
-    return unit >= LOW_SURROGATE_START and unit <= LOW_SURROGATE_END;
-}
-
 pub fn code_point_at(text: String, position: usize) CodePointAtResult {
     const size = text.len;
 
@@ -151,7 +138,7 @@ pub fn code_point_at(text: String, position: usize) CodePointAtResult {
     const first_unit: u16 = text.data[position];
     var cp: root.CodePoint = @intCast(first_unit);
 
-    if (!is_leading_surrogate(first_unit) and !is_trailing_surrogate(first_unit)) {
+    if (!unicode.is_leading_surrogate(first_unit) and !unicode.is_trailing_surrogate(first_unit)) {
         return CodePointAtResult{
             .code_point = cp,
             .code_unit_count = 1,
@@ -159,7 +146,7 @@ pub fn code_point_at(text: String, position: usize) CodePointAtResult {
         };
     }
 
-    if (is_trailing_surrogate(first_unit) or position + 1 == size) {
+    if (unicode.is_trailing_surrogate(first_unit) or position + 1 == size) {
         return CodePointAtResult{
             .code_point = cp,
             .code_unit_count = 1,
@@ -169,7 +156,7 @@ pub fn code_point_at(text: String, position: usize) CodePointAtResult {
 
     const second_unit = text.data[position + 1];
 
-    if (!is_trailing_surrogate(second_unit)) {
+    if (!unicode.is_trailing_surrogate(second_unit)) {
         return CodePointAtResult{
             .code_point = cp,
             .code_unit_count = 1,
@@ -248,8 +235,8 @@ pub fn parse_input_element_hashbang_or_regexp(text: CodePointSeq) !TokenSeq {
     while (i < text.len) {
         const cp = text.data[i];
 
-        if (is_whitespace(cp)) {
-            while (i < text.len and is_whitespace(text.data[i])) : (i += 1) {}
+        if (unicode.is_whitespace(cp)) {
+            while (i < text.len and unicode.is_whitespace(text.data[i])) : (i += 1) {}
 
             tokens.append(std.heap.page_allocator, Token{
                 .kind = .Whitespace,
@@ -258,8 +245,8 @@ pub fn parse_input_element_hashbang_or_regexp(text: CodePointSeq) !TokenSeq {
                 std.debug.print("Failed to append token\n", .{});
                 return error.Generic;
             };
-        } else if (is_line_terminator(cp)) {
-            while (i < text.len and is_line_terminator(text.data[i])) : (i += 1) {}
+        } else if (unicode.is_line_terminator(cp)) {
+            while (i < text.len and unicode.is_line_terminator(text.data[i])) : (i += 1) {}
 
             tokens.append(std.heap.page_allocator, Token{
                 .kind = .LineTerminator,
@@ -289,7 +276,7 @@ pub fn parse_input_element_hashbang_or_regexp(text: CodePointSeq) !TokenSeq {
         } else if (cp == 0x002F and (i + 1 < text.len) and text.data[i + 1] == 0x002F) {
             i += 2;
 
-            while (i < text.len and !is_line_terminator(text.data[i])) : (i += 1) {}
+            while (i < text.len and !unicode.is_line_terminator(text.data[i])) : (i += 1) {}
 
             tokens.append(std.heap.page_allocator, Token{
                 .kind = .Comment,
@@ -301,7 +288,7 @@ pub fn parse_input_element_hashbang_or_regexp(text: CodePointSeq) !TokenSeq {
         } else if (cp == 0x021 and (i + 1 < text.len) and text.data[i + 1] == 0x002F) {
             i += 2;
 
-            while (i < text.len and !is_line_terminator(text.data[i])) : (i += 1) {}
+            while (i < text.len and !unicode.is_line_terminator(text.data[i])) : (i += 1) {}
 
             tokens.append(std.heap.page_allocator, Token{
                 .kind = .HashBangComment,
@@ -311,8 +298,46 @@ pub fn parse_input_element_hashbang_or_regexp(text: CodePointSeq) !TokenSeq {
                 return error.Generic;
             };
         } else {
-            // For simplicity, we stop parsing on the first non-whitespace, non-comment character.
-            break;
+            const unicode_res = unicode.is_unicode_escape_sequence(text.data[i..], text.len - i);
+
+            if (unicode.is_identifier_start(cp) or unicode_res != null) {
+                var chars: std.ArrayList(root.CodePoint) = .empty;
+                defer chars.deinit(std.heap.page_allocator);
+
+                while (i < text.len and
+                    (unicode.is_identifier_part(text.data[i]) or
+                        unicode.is_unicode_escape_sequence(text.data[i..], text.len - i) != null))
+                {
+                    if (unicode.is_unicode_escape_sequence(text.data[i..], text.len - i)) |count| {
+                        _ = try chars.appendSlice(
+                            std.heap.page_allocator,
+                            text.data[i .. i + count],
+                        );
+                        i += count;
+                    } else {
+                        _ = try chars.append(std.heap.page_allocator, text.data[i]);
+
+                        i += 1;
+                    }
+                }
+
+                const ident_data = std.heap.page_allocator.create(IdentifierData) catch {
+                    std.debug.print("Failed to create identifier data\n", .{});
+                    return error.Generic;
+                };
+
+                ident_data.* = IdentifierData{
+                    .name = try cps_to_string(chars.items.ptr, chars.items.len),
+                };
+
+                tokens.append(std.heap.page_allocator, Token{
+                    .kind = .CommonToken,
+                    .data = @intFromPtr(ident_data),
+                }) catch {
+                    std.debug.print("Failed to append token\n", .{});
+                    return error.Generic;
+                };
+            }
         }
     }
 
@@ -322,14 +347,6 @@ pub fn parse_input_element_hashbang_or_regexp(text: CodePointSeq) !TokenSeq {
         .data = owned.ptr,
         .len = owned.len,
     };
-}
-
-pub fn is_whitespace(cp: root.CodePoint) bool {
-    return std.mem.indexOf(root.CodePoint, &WHITESPACE_CHARS, &[_]root.CodePoint{cp}) != null;
-}
-
-pub fn is_line_terminator(cp: root.CodePoint) bool {
-    return std.mem.indexOf(root.CodePoint, &LINE_TERMINATOR_CHARS, &[_]root.CodePoint{cp}) != null;
 }
 
 fn u8_array_to_string(text: [*]u8, len: usize) String {
@@ -349,6 +366,8 @@ fn u8_array_to_string(text: [*]u8, len: usize) String {
         .len = len,
     };
 }
+
+// =============================== TESTS ===============================
 
 test "parse input element hashbang or regexp #1" {
     const text =
@@ -376,5 +395,35 @@ test "parse input element hashbang or regexp #1" {
 
     for (tokens.data[0..tokens.len], 0..) |token, i| {
         std.debug.assert(token.kind == expected_kinds[i]);
+    }
+}
+
+test "parse input element hashbang or regexp #2" {
+    const text =
+        \\token
+    ;
+
+    const string = u8_array_to_string(@ptrCast(@constCast(text)), text.len);
+
+    const tokens = parse_text_string(string, .InputElementHashbangOrRegExp);
+
+    const expected_kinds = [_]TokenKind{
+        .CommonToken,
+    };
+
+    const expected_ident = u8_array_to_string(@ptrCast(@constCast("token")), 5);
+
+    for (tokens.data[0..tokens.len], 0..) |token, i| {
+        std.debug.assert(token.kind == expected_kinds[i]);
+
+        if (expected_kinds[i] == .CommonToken) {
+            const ident_data: *IdentifierData = @ptrFromInt(token.data);
+
+            std.debug.assert(ident_data.name.len == expected_ident.len);
+
+            for (ident_data.name.data, 0..ident_data.name.len) |c, j| {
+                std.debug.assert(c == expected_ident.data[j]);
+            }
+        }
     }
 }
