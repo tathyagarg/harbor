@@ -37,15 +37,9 @@ pub const TokenKind = enum(u8) {
     CommonToken,
 };
 
-pub const CommonTokenKind = enum(u8) {
-    Identifier,
-    NumericLiteral,
-    StringLiteral,
-    Punctuator,
-    Template,
-};
+pub const CommonTokenKind = enum(u8) { IdentifierName, PrivateIdentifier, Punctuator, NumericLiteral, StringLiteral, Template };
 
-pub const IdentifierData = extern struct {
+pub const IdentifierNameData = extern struct {
     name: String,
 };
 
@@ -298,45 +292,41 @@ pub fn parse_input_element_hashbang_or_regexp(text: CodePointSeq) !TokenSeq {
                 return error.Generic;
             };
         } else {
-            const unicode_res = unicode.is_unicode_escape_sequence(text.data[i..], text.len - i);
-
-            if (unicode.is_identifier_start(cp) or unicode_res != null) {
-                var chars: std.ArrayList(root.CodePoint) = .empty;
-                defer chars.deinit(std.heap.page_allocator);
-
-                while (i < text.len and
-                    (unicode.is_identifier_part(text.data[i]) or
-                        unicode.is_unicode_escape_sequence(text.data[i..], text.len - i) != null))
-                {
-                    if (unicode.is_unicode_escape_sequence(text.data[i..], text.len - i)) |count| {
-                        _ = try chars.appendSlice(
-                            std.heap.page_allocator,
-                            text.data[i .. i + count],
-                        );
-                        i += count;
-                    } else {
-                        _ = try chars.append(std.heap.page_allocator, text.data[i]);
-
-                        i += 1;
-                    }
-                }
-
-                const ident_data = std.heap.page_allocator.create(IdentifierData) catch {
-                    std.debug.print("Failed to create identifier data\n", .{});
-                    return error.Generic;
-                };
-
-                ident_data.* = IdentifierData{
-                    .name = try cps_to_string(chars.items.ptr, chars.items.len),
-                };
-
-                tokens.append(std.heap.page_allocator, Token{
-                    .kind = .CommonToken,
-                    .data = @intFromPtr(ident_data),
-                }) catch {
+            if (match_identifier_name(text, &i, cp)) |token| {
+                tokens.append(std.heap.page_allocator, token) catch {
                     std.debug.print("Failed to append token\n", .{});
                     return error.Generic;
                 };
+            } else if (cp == 0x0023) {
+                const next_cp = if (i + 1 < text.len) text.data[i + 1] else 0;
+
+                i += 1;
+
+                if (match_identifier_name(text, &i, next_cp)) |token| {
+                    const common_token_data = std.heap.page_allocator.create(CommonTokenData) catch {
+                        std.debug.print("Failed to create common token data\n", .{});
+                        return error.Generic;
+                    };
+
+                    const token_data: *CommonTokenData = @ptrFromInt(token.data);
+
+                    common_token_data.* = CommonTokenData{
+                        .common_token_kind = .PrivateIdentifier,
+                        .data = token_data.data,
+                    };
+
+                    const actual_token = Token{
+                        .kind = .CommonToken,
+                        .data = @intFromPtr(common_token_data),
+                    };
+
+                    tokens.append(std.heap.page_allocator, actual_token) catch {
+                        std.debug.print("Failed to append token\n", .{});
+                        return error.Generic;
+                    };
+                } else {
+                    std.debug.print("Unexpected character after #: {x}\n", .{next_cp});
+                }
             }
         }
     }
@@ -347,6 +337,65 @@ pub fn parse_input_element_hashbang_or_regexp(text: CodePointSeq) !TokenSeq {
         .data = owned.ptr,
         .len = owned.len,
     };
+}
+
+fn match_identifier_name(text: CodePointSeq, i: *usize, cp: root.CodePoint) ?Token {
+    const unicode_res = unicode.is_unicode_escape_sequence(text.data[i.*..], text.len - i.*);
+
+    if (unicode.is_identifier_start(cp) or unicode_res != null) {
+        var chars: std.ArrayList(root.CodePoint) = .empty;
+        defer chars.deinit(std.heap.page_allocator);
+
+        while (i.* < text.len and
+            (unicode.is_identifier_part(text.data[i.*]) or
+                unicode.is_unicode_escape_sequence(text.data[i.*..], text.len - i.*) != null))
+        {
+            if (unicode.is_unicode_escape_sequence(text.data[i.*..], text.len - i.*)) |count| {
+                _ = chars.appendSlice(
+                    std.heap.page_allocator,
+                    text.data[i.* .. i.* + count],
+                ) catch {
+                    return null;
+                };
+                i.* += count;
+            } else {
+                _ = chars.append(std.heap.page_allocator, text.data[i.*]) catch {
+                    return null;
+                };
+
+                i.* += 1;
+            }
+        }
+
+        const ident_data = std.heap.page_allocator.create(IdentifierNameData) catch {
+            std.debug.print("Failed to create identifier data\n", .{});
+            return null;
+        };
+
+        ident_data.* = IdentifierNameData{
+            .name = cps_to_string(chars.items.ptr, chars.items.len) catch {
+                std.debug.print("Failed to convert identifier chars to string\n", .{});
+                return null;
+            },
+        };
+
+        const common_token_data = std.heap.page_allocator.create(CommonTokenData) catch {
+            std.debug.print("Failed to create common token data\n", .{});
+            return null;
+        };
+
+        common_token_data.* = CommonTokenData{
+            .common_token_kind = .IdentifierName,
+            .data = @intFromPtr(ident_data),
+        };
+
+        return Token{
+            .kind = .CommonToken,
+            .data = @intFromPtr(common_token_data),
+        };
+    }
+
+    return null;
 }
 
 fn u8_array_to_string(text: [*]u8, len: usize) String {
@@ -417,7 +466,45 @@ test "parse input element hashbang or regexp #2" {
         std.debug.assert(token.kind == expected_kinds[i]);
 
         if (expected_kinds[i] == .CommonToken) {
-            const ident_data: *IdentifierData = @ptrFromInt(token.data);
+            const common_token: *CommonTokenData = @ptrFromInt(token.data);
+
+            std.debug.assert(common_token.common_token_kind == .IdentifierName);
+
+            const ident_data: *IdentifierNameData = @ptrFromInt(common_token.data);
+
+            std.debug.assert(ident_data.name.len == expected_ident.len);
+
+            for (ident_data.name.data, 0..ident_data.name.len) |c, j| {
+                std.debug.assert(c == expected_ident.data[j]);
+            }
+        }
+    }
+}
+
+test "parse input element hashbang or regexp #3" {
+    const text =
+        \\#privateIdentifier
+    ;
+
+    const string = u8_array_to_string(@ptrCast(@constCast(text)), text.len);
+
+    const tokens = parse_text_string(string, .InputElementHashbangOrRegExp);
+
+    const expected_kinds = [_]TokenKind{
+        .CommonToken,
+    };
+
+    const expected_ident = u8_array_to_string(@ptrCast(@constCast("privateIdentifier")), 17);
+
+    for (tokens.data[0..tokens.len], 0..) |token, i| {
+        std.debug.assert(token.kind == expected_kinds[i]);
+
+        if (expected_kinds[i] == .CommonToken) {
+            const common_token: *CommonTokenData = @ptrFromInt(token.data);
+
+            std.debug.assert(common_token.common_token_kind == .PrivateIdentifier);
+
+            const ident_data: *IdentifierNameData = @ptrFromInt(common_token.data);
 
             std.debug.assert(ident_data.name.len == expected_ident.len);
 
