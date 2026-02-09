@@ -37,7 +37,74 @@ pub const TokenKind = enum(u8) {
     CommonToken,
 };
 
-pub const CommonTokenKind = enum(u8) { IdentifierName, PrivateIdentifier, Punctuator, NumericLiteral, StringLiteral, Template };
+pub const CommonTokenKind = enum(u8) {
+    IdentifierName,
+    PrivateIdentifier,
+    Punctuator,
+    NumericLiteral,
+    StringLiteral,
+    Template,
+};
+
+pub const PunctuatorKind = enum(u8) {
+    OptionalChaining,
+    OpenBrace,
+    CloseBrace,
+    OpenParen,
+    CloseParen,
+    OpenBracket,
+    CloseBracket,
+    Period,
+    Ellipsis,
+    Semicolon,
+    Comma,
+    LessThan,
+    GreaterThan,
+    LessThanEqual,
+    GreaterThanEqual,
+    Equals,
+    NotEquals,
+    StrictEquals,
+    StrictNotEquals,
+    Plus,
+    Minus,
+    Asterisk,
+    Slash,
+    Percent,
+    Exponentiation,
+    Increment,
+    Decrement,
+    LeftShift,
+    RightShift,
+    UnsignedRightShift,
+    BitwiseAnd,
+    BitwiseOr,
+    BitwiseXor,
+    Not,
+    BitwiseNot,
+    LogicalAnd,
+    LogicalOr,
+    NullishCoalescing,
+    QuestionMark,
+    Colon,
+    Assign,
+    PlusAssign,
+    MinusAssign,
+    AsteriskAssign,
+    SlashAssign,
+    PercentAssign,
+    ExponentiationAssign,
+    LeftShiftAssign,
+    RightShiftAssign,
+    UnsignedRightShiftAssign,
+    BitwiseAndAssign,
+    BitwiseOrAssign,
+    BitwiseXorAssign,
+    LogicalAndAssign,
+    LogicalOrAssign,
+    NullishCoalescingAssign,
+    FunctionArrow,
+};
 
 pub const IdentifierNameData = extern struct {
     name: String,
@@ -327,6 +394,11 @@ pub fn parse_input_element_hashbang_or_regexp(text: CodePointSeq) !TokenSeq {
                 } else {
                     std.debug.print("Unexpected character after #: {x}\n", .{next_cp});
                 }
+            } else if (match_punctuator(text, &i, cp)) |token| {
+                tokens.append(std.heap.page_allocator, token) catch {
+                    std.debug.print("Failed to append token\n", .{});
+                    return error.Generic;
+                };
             }
         }
     }
@@ -389,6 +461,282 @@ fn match_identifier_name(text: CodePointSeq, i: *usize, cp: root.CodePoint) ?Tok
             .data = @intFromPtr(ident_data),
         };
 
+        return Token{
+            .kind = .CommonToken,
+            .data = @intFromPtr(common_token_data),
+        };
+    }
+
+    return null;
+}
+
+fn match_punctuator(text: CodePointSeq, i: *usize, cp: root.CodePoint) ?Token {
+    const next = if (i.* + 1 < text.len) text.data[i.* + 1] else 0;
+    const next_to_next = if (i.* + 2 < text.len) text.data[i.* + 2] else 0;
+    const next_to_next_to_next = if (i.* + 3 < text.len) text.data[i.* + 3] else 0;
+
+    const common_token_data = std.heap.page_allocator.create(CommonTokenData) catch {
+        std.debug.print("Failed to create common token data\n", .{});
+        return null;
+    };
+
+    common_token_data.* = CommonTokenData{
+        .common_token_kind = .Punctuator,
+        .data = 0,
+    };
+
+    var kind: ?PunctuatorKind = null;
+
+    if (cp == 0x003F and next == 0x002E and !unicode.is_decimal_digit(next_to_next)) {
+        i.* += 2;
+        kind = PunctuatorKind.OptionalChaining;
+    } else if (cp == 0x007B) {
+        i.* += 1;
+        kind = PunctuatorKind.OpenBrace;
+    } else if (cp == 0x007D) {
+        i.* += 1;
+        kind = PunctuatorKind.CloseBrace;
+    } else if (cp == 0x0028) {
+        i.* += 1;
+        kind = PunctuatorKind.OpenParen;
+    } else if (cp == 0x0029) {
+        i.* += 1;
+        kind = PunctuatorKind.CloseParen;
+    } else if (cp == 0x005B) {
+        i.* += 1;
+        kind = PunctuatorKind.OpenBracket;
+    } else if (cp == 0x005D) {
+        i.* += 1;
+        kind = PunctuatorKind.CloseBracket;
+    } else if (cp == 0x002E) {
+        i.* += 1;
+
+        if (next == 0x002E and next_to_next == 0x002E) {
+            i.* += 2;
+            kind = PunctuatorKind.Ellipsis;
+        } else {
+            kind = PunctuatorKind.Period;
+        }
+    } else if (cp == 0x003B) {
+        i.* += 1;
+        kind = PunctuatorKind.Semicolon;
+    } else if (cp == 0x002C) {
+        i.* += 1;
+        kind = PunctuatorKind.Comma;
+    } else if (cp == 0x003C) {
+        i.* += 1;
+
+        if (next == 0x003D) {
+            i.* += 1;
+            kind = PunctuatorKind.LessThanEqual;
+        } else if (next == 0x003C) {
+            i.* += 1;
+
+            if (next_to_next == 0x003D) {
+                i.* += 1;
+                kind = PunctuatorKind.LeftShiftAssign;
+            } else {
+                kind = PunctuatorKind.LeftShift;
+            }
+        } else {
+            kind = PunctuatorKind.LessThan;
+        }
+    } else if (cp == 0x003E) {
+        i.* += 1;
+
+        if (next == 0x003D) {
+            i.* += 1;
+            kind = PunctuatorKind.GreaterThanEqual;
+        } else if (next == 0x003E) {
+            i.* += 1;
+
+            if (next_to_next == 0x003D) {
+                i.* += 1;
+                kind = PunctuatorKind.RightShiftAssign;
+            } else if (next_to_next == 0x003E) {
+                i.* += 1;
+
+                if (next_to_next_to_next == 0x003D) {
+                    i.* += 1;
+                    kind = PunctuatorKind.UnsignedRightShiftAssign;
+                } else {
+                    kind = PunctuatorKind.UnsignedRightShift;
+                }
+            } else {
+                kind = PunctuatorKind.RightShift;
+            }
+        } else {
+            kind = PunctuatorKind.GreaterThan;
+        }
+    } else if (cp == 0x0021) {
+        i.* += 1;
+
+        if (next == 0x003D and next_to_next == 0x003D) {
+            i.* += 2;
+            kind = PunctuatorKind.StrictNotEquals;
+        } else if (next == 0x003D) {
+            i.* += 1;
+            kind = PunctuatorKind.NotEquals;
+        } else {
+            kind = PunctuatorKind.Not;
+        }
+    } else if (cp == 0x002B) {
+        i.* += 1;
+
+        if (next == 0x002B) {
+            i.* += 1;
+            kind = PunctuatorKind.Increment;
+        } else if (next == 0x003D) {
+            i.* += 1;
+            kind = PunctuatorKind.PlusAssign;
+        } else {
+            kind = PunctuatorKind.Plus;
+        }
+    } else if (cp == 0x002D) {
+        i.* += 1;
+
+        if (next == 0x002D) {
+            i.* += 1;
+            kind = PunctuatorKind.Decrement;
+        } else if (next == 0x003D) {
+            i.* += 1;
+            kind = PunctuatorKind.MinusAssign;
+        } else {
+            kind = PunctuatorKind.Minus;
+        }
+    } else if (cp == 0x002A) {
+        i.* += 1;
+
+        if (next == 0x003D) {
+            i.* += 1;
+            kind = PunctuatorKind.AsteriskAssign;
+        } else if (next == 0x002A) {
+            i.* += 1;
+
+            if (next_to_next == 0x003D) {
+                i.* += 1;
+                kind = PunctuatorKind.ExponentiationAssign;
+            } else {
+                kind = PunctuatorKind.Exponentiation;
+            }
+        } else {
+            kind = PunctuatorKind.Asterisk;
+        }
+    } else if (cp == 0x002F) {
+        i.* += 1;
+
+        if (next == 0x003D) {
+            i.* += 1;
+            kind = PunctuatorKind.SlashAssign;
+        } else {
+            kind = PunctuatorKind.Slash;
+        }
+    } else if (cp == 0x0025) {
+        i.* += 1;
+
+        if (next == 0x003D) {
+            i.* += 1;
+            kind = PunctuatorKind.PercentAssign;
+        } else {
+            kind = PunctuatorKind.Percent;
+        }
+    } else if (cp == 0x0026) {
+        i.* += 1;
+
+        if (next == 0x0026) {
+            i.* += 1;
+
+            if (next_to_next == 0x003D) {
+                i.* += 1;
+                kind = PunctuatorKind.LogicalAndAssign;
+            } else {
+                kind = PunctuatorKind.LogicalAnd;
+            }
+        } else if (next == 0x003D) {
+            i.* += 1;
+            kind = PunctuatorKind.BitwiseAndAssign;
+        } else {
+            kind = PunctuatorKind.BitwiseAnd;
+        }
+    } else if (cp == 0x007C) {
+        i.* += 1;
+
+        if (next == 0x007C) {
+            i.* += 1;
+
+            if (next_to_next == 0x003D) {
+                i.* += 1;
+                kind = PunctuatorKind.LogicalOrAssign;
+            } else {
+                kind = PunctuatorKind.LogicalOr;
+            }
+        } else if (next == 0x003D) {
+            i.* += 1;
+            kind = PunctuatorKind.BitwiseOrAssign;
+        } else {
+            kind = PunctuatorKind.BitwiseOr;
+        }
+    } else if (cp == 0x005E) {
+        i.* += 1;
+
+        if (next == 0x003D) {
+            i.* += 1;
+            kind = PunctuatorKind.BitwiseXorAssign;
+        } else {
+            kind = PunctuatorKind.BitwiseXor;
+        }
+    } else if (cp == 0x007E) {
+        i.* += 1;
+        kind = PunctuatorKind.BitwiseNot;
+    } else if (cp == 0x0021) {
+        i.* += 1;
+
+        if (next == 0x003D and next_to_next == 0x003D) {
+            i.* += 2;
+            kind = PunctuatorKind.StrictNotEquals;
+        } else if (next == 0x003D) {
+            i.* += 1;
+            kind = PunctuatorKind.NotEquals;
+        } else {
+            kind = PunctuatorKind.Not;
+        }
+    } else if (cp == 0x003F) {
+        i.* += 1;
+
+        if (next == 0x003F) {
+            i.* += 1;
+
+            if (next_to_next == 0x003D) {
+                i.* += 1;
+                kind = PunctuatorKind.NullishCoalescingAssign;
+            } else {
+                kind = PunctuatorKind.NullishCoalescing;
+            }
+        } else {
+            kind = PunctuatorKind.QuestionMark;
+        }
+    } else if (cp == 0x003A) {
+        i.* += 1;
+        kind = PunctuatorKind.Colon;
+    } else if (cp == 0x003D) {
+        i.* += 1;
+
+        if (next == 0x003E) {
+            i.* += 1;
+            kind = PunctuatorKind.FunctionArrow;
+        } else if (next == 0x003D and next_to_next == 0x003D) {
+            i.* += 2;
+            kind = PunctuatorKind.StrictEquals;
+        } else if (next == 0x003D) {
+            i.* += 1;
+            kind = PunctuatorKind.Equals;
+        } else {
+            kind = PunctuatorKind.Assign;
+        }
+    }
+
+    if (kind != null) {
+        common_token_data.data = @intFromEnum(kind.?);
         return Token{
             .kind = .CommonToken,
             .data = @intFromPtr(common_token_data),
@@ -511,6 +859,51 @@ test "parse input element hashbang or regexp #3" {
             for (ident_data.name.data, 0..ident_data.name.len) |c, j| {
                 std.debug.assert(c == expected_ident.data[j]);
             }
+        }
+    }
+}
+
+test "parse input element hashbang or regexp #4" {
+    const text =
+        \\?.?.? ??= ?.
+    ;
+
+    const string = u8_array_to_string(@ptrCast(@constCast(text)), text.len);
+
+    const tokens = parse_text_string(string, .InputElementHashbangOrRegExp);
+
+    const expected_kinds = [_]TokenKind{
+        .CommonToken,
+        .CommonToken,
+        .CommonToken,
+        .Whitespace,
+        .CommonToken,
+        .Whitespace,
+        .CommonToken,
+    };
+
+    const expected_punctuators = [_]PunctuatorKind{
+        .OptionalChaining,
+        .OptionalChaining,
+        .QuestionMark,
+        .NullishCoalescingAssign,
+        .OptionalChaining,
+    };
+
+    var seen_punctuators_index: usize = 0;
+
+    for (tokens.data[0..tokens.len], 0..) |token, i| {
+        std.debug.assert(token.kind == expected_kinds[i]);
+
+        if (expected_kinds[i] == .CommonToken) {
+            const common_token: *CommonTokenData = @ptrFromInt(token.data);
+
+            std.debug.assert(common_token.common_token_kind == .Punctuator);
+
+            const punct_data: PunctuatorKind = @enumFromInt(common_token.data);
+
+            std.debug.assert(punct_data == expected_punctuators[seen_punctuators_index]);
+            seen_punctuators_index += 1;
         }
     }
 }

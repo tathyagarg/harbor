@@ -110,3 +110,7 @@ pub fn is_unicode_escape_sequence(cps: [*]const root.CodePoint, len: usize) ?usi
 
     return 6;
 }
+
+pub fn is_decimal_digit(cp: root.CodePoint) bool {
+    return cp >= 0x30 and cp <= 0x39;
+}
