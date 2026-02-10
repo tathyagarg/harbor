@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct ZigString {
     pub data: *const u16,
     pub len: usize,
@@ -28,6 +28,54 @@ pub struct CodePointSeq {
     pub len: usize,
 }
 
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+pub struct IdentifierNameTokenData {
+    pub name: ZigString,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+pub struct CommonTokenData {
+    pub common_token_kind: CommonTokenKind,
+    pub value: usize,
+}
+
+#[repr(u8)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+pub enum CommonTokenKind {
+    IdentifierName = 0,
+    PrivateIdentifier = 1,
+    Punctuator = 2,
+    NumericLiteral = 3,
+    StringLiteral = 4,
+    Template = 5,
+}
+
+#[repr(u8)]
+#[derive(Debug, Eq, PartialEq)]
+pub enum TokenKind {
+    Whitespace = 0,
+    LineTerminator = 1,
+    Comment = 2,
+    HashBangComment = 3,
+    CommonToken = 4,
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct Token {
+    pub kind: TokenKind,
+    pub value: usize,
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct TokenSeq {
+    pub data: *const Token,
+    pub len: usize,
+}
+
 impl Display for CodePointSeq {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let slice = unsafe { std::slice::from_raw_parts(self.data, self.len) };
@@ -48,4 +96,6 @@ unsafe extern "C" {
     pub fn utf16_surrogate_pair_to_cp(high: u16, low: u16) -> CodePoint;
     pub fn code_point_at(s: ZigString, index: usize) -> CodePointAtResult;
     pub fn string_to_cps(text: ZigString) -> CodePointSeq;
+    pub fn parse_text_string(text: ZigString, goal: u8) -> TokenSeq;
+    pub fn parse_text_cps(text: CodePointSeq, goal: u8) -> TokenSeq;
 }

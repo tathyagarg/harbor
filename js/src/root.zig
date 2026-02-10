@@ -39,3 +39,17 @@ pub export fn string_to_cps(text: source_text.String) source_text.CodePointSeq {
         .len = 0,
     };
 }
+
+pub export fn parse_text_string(text: source_text.String, goal: source_text.GoalSymbol) source_text.TokenSeq {
+    return source_text.parse_text_string(text, goal) catch source_text.TokenSeq{
+        .data = &[_]source_text.Token{},
+        .len = 0,
+    };
+}
+
+pub export fn parse_text_cps(cps: source_text.CodePointSeq, goal: source_text.GoalSymbol) source_text.TokenSeq {
+    return source_text.parse_text_cps(cps, goal) catch source_text.TokenSeq{
+        .data = &[_]source_text.Token{},
+        .len = 0,
+    };
+}

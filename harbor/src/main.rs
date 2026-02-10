@@ -15,19 +15,46 @@ pub mod render;
 fn main() {
     env_logger::init();
 
-    let data = "Rust str, zig func! 😀"
-        .encode_utf16()
-        .collect::<Vec<u16>>();
+    let data = "// abc\nabc".encode_utf16().collect::<Vec<u16>>();
 
-    println!("Original string: {}", String::from_utf16_lossy(&data));
+    println!(
+        "========ORIGINAL STRING START=======\n{}\n========ORIGINAL STRING END=========",
+        String::from_utf16_lossy(&data)
+    );
 
     let string: js::ZigString = js::ZigString {
         data: data.as_ptr(),
         len: data.len(),
     };
-    let cps = unsafe { js::string_to_cps(string) };
+    let tokens = unsafe { js::parse_text_string(string, 4) };
 
-    println!("Code points: {}", cps);
+    for token in unsafe { std::slice::from_raw_parts(tokens.data, tokens.len) } {
+        print!("Token: kind={:?}", token.kind);
+        if token.kind == js::TokenKind::CommonToken {
+            // treat value as a pointer to js::CommonTokenData
+            let common_token_data = unsafe { *(token.value as *const js::CommonTokenData) };
+            print!(", common_kind={:?}", common_token_data.common_token_kind);
+
+            if common_token_data.common_token_kind == js::CommonTokenKind::IdentifierName {
+                // treat value as a pointer to js::IdentifierNameTokenData
+                let identifier_name_token_data =
+                    unsafe { *(common_token_data.value as *const js::IdentifierNameTokenData) };
+
+                let name = unsafe {
+                    std::slice::from_raw_parts(
+                        identifier_name_token_data.name.data,
+                        identifier_name_token_data.name.len,
+                    )
+                };
+                let name_string = String::from_utf16_lossy(name);
+                println!(", name={}", name_string);
+            } else {
+                println!();
+            }
+        } else {
+            println!();
+        }
+    }
 
     // js::JsRuntime::new();
 

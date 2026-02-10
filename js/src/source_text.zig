@@ -110,7 +110,7 @@ pub const IdentifierNameData = extern struct {
     name: String,
 };
 
-pub const CommonTokenData = struct {
+pub const CommonTokenData = extern struct {
     common_token_kind: CommonTokenKind,
     data: usize,
 };
@@ -252,22 +252,24 @@ pub fn string_to_cps(text: String) !CodePointSeq {
     };
 }
 
-pub fn parse_text_string(text: String, goal: GoalSymbol) TokenSeq {
-    const cps = string_to_cps(text) catch {
-        std.debug.print("Failed to convert string to code points\n", .{});
-        return TokenSeq{
-            .data = &[_]Token{},
-            .len = 0,
-        };
-    };
+pub fn parse_text_string(text: String, goal: GoalSymbol) !TokenSeq {
+    const cps = try string_to_cps(text);
+    // catch {
+    //     std.debug.print("Failed to convert string to code points\n", .{});
+    //     return TokenSeq{
+    //         .data = &[_]Token{},
+    //         .len = 0,
+    //     };
+    // };
 
-    return parse_text_cps(cps, goal) catch {
-        std.debug.print("Failed to parse text code points\n", .{});
-        return TokenSeq{
-            .data = &[_]Token{},
-            .len = 0,
-        };
-    };
+    return parse_text_cps(cps, goal);
+    // catch {
+    //     std.debug.print("Failed to parse text code points\n", .{});
+    //     return TokenSeq{
+    //         .data = &[_]Token{},
+    //         .len = 0,
+    //     };
+    // };
 }
 
 pub fn parse_text_cps(text: CodePointSeq, goal: GoalSymbol) !TokenSeq {
