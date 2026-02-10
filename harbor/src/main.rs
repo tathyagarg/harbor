@@ -56,6 +56,8 @@ fn main() {
         }
     }
 
+    unsafe { js::free_token_seq(tokens) };
+
     // js::JsRuntime::new();
 
     // let ua = Agent::new();

@@ -766,6 +766,34 @@ fn u8_array_to_string(text: [*]u8, len: usize) String {
     };
 }
 
+pub fn free_string(str: String) void {
+    std.heap.page_allocator.free(str.data[0..str.len]);
+}
+
+pub fn free_token_seq(token_seq: TokenSeq) void {
+    for (token_seq.data[0..token_seq.len]) |token| {
+        if (token.kind == .CommonToken) {
+            const common_token_data: *CommonTokenData = @ptrFromInt(token.data);
+
+            if (common_token_data.common_token_kind == .IdentifierName or
+                common_token_data.common_token_kind == .PrivateIdentifier)
+            {
+                const ident_data: *IdentifierNameData = @ptrFromInt(common_token_data.data);
+                free_string(ident_data.name);
+                std.heap.page_allocator.destroy(ident_data);
+            }
+
+            std.heap.page_allocator.destroy(common_token_data);
+        }
+    }
+
+    std.heap.page_allocator.free(token_seq.data[0..token_seq.len]);
+}
+
+pub fn free_code_point_seq(seq: CodePointSeq) void {
+    std.heap.page_allocator.free(seq.data[0..seq.len]);
+}
+
 // =============================== TESTS ===============================
 
 test "parse input element hashbang or regexp #1" {

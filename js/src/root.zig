@@ -53,3 +53,15 @@ pub export fn parse_text_cps(cps: source_text.CodePointSeq, goal: source_text.Go
         .len = 0,
     };
 }
+
+pub export fn free_string(str: source_text.String) void {
+    source_text.free_string(str);
+}
+
+pub export fn free_code_point_seq(seq: source_text.CodePointSeq) void {
+    source_text.free_code_point_seq(seq);
+}
+
+pub export fn free_token_seq(seq: source_text.TokenSeq) void {
+    source_text.free_token_seq(seq);
+}

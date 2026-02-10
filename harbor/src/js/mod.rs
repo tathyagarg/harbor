@@ -98,4 +98,7 @@ unsafe extern "C" {
     pub fn string_to_cps(text: ZigString) -> CodePointSeq;
     pub fn parse_text_string(text: ZigString, goal: u8) -> TokenSeq;
     pub fn parse_text_cps(text: CodePointSeq, goal: u8) -> TokenSeq;
+    pub fn free_string(s: ZigString);
+    pub fn free_code_point_seq(cps: CodePointSeq);
+    pub fn free_token_seq(tokens: TokenSeq);
 }
