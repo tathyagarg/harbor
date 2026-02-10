@@ -1,5 +1,7 @@
 use std::rc::Rc;
 
+use harbor::js::PunctuatorKind;
+
 use crate::{agent::Agent, render::App};
 
 pub mod agent;
@@ -15,7 +17,7 @@ pub mod render;
 fn main() {
     env_logger::init();
 
-    let data = "// abc\nabc".encode_utf16().collect::<Vec<u16>>();
+    let data = "// abc\nabc.def".encode_utf16().collect::<Vec<u16>>();
 
     println!(
         "========ORIGINAL STRING START=======\n{}\n========ORIGINAL STRING END=========",
@@ -48,6 +50,12 @@ fn main() {
                 };
                 let name_string = String::from_utf16_lossy(name);
                 println!(", name={}", name_string);
+            } else if common_token_data.common_token_kind == js::CommonTokenKind::Punctuator {
+                let punctuator = unsafe {
+                    std::mem::transmute::<u8, js::PunctuatorKind>(common_token_data.value as u8)
+                };
+
+                println!(", punctuator={:?}", punctuator);
             } else {
                 println!();
             }
