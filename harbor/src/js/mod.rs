@@ -114,6 +114,12 @@ pub enum PunctuatorKind {
     FunctionArrow,
 }
 
+impl From<usize> for PunctuatorKind {
+    fn from(value: usize) -> Self {
+        unsafe { std::mem::transmute::<u8, PunctuatorKind>(value as u8) }
+    }
+}
+
 #[repr(u8)]
 #[derive(Debug, Eq, PartialEq)]
 pub enum TokenKind {

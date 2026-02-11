@@ -3,6 +3,31 @@ const std = @import("std");
 const root = @import("root.zig");
 const unicode = @import("unicode.zig");
 
+const OPEN_BRACE = 0x007B;
+const CLOSE_BRACE = 0x007D;
+const OPEN_PAREN = 0x0028;
+const CLOSE_PAREN = 0x0029;
+const OPEN_BRACKET = 0x005B;
+const CLOSE_BRACKET = 0x005D;
+const PERIOD = 0x002E;
+const SEMICOLON = 0x003B;
+const COMMA = 0x002C;
+const LESS_THAN = 0x003C;
+const GREATER_THAN = 0x003E;
+const EXCLAMATION_MARK = 0x0021;
+const PLUS_SIGN = 0x002B;
+const HYPHEN_MINUS = 0x002D;
+const ASTERISK = 0x002A;
+const SOLIDUS = 0x002F;
+const PERCENT_SIGN = 0x0025;
+const AMPERSAND = 0x0026;
+const VERTICAL_LINE = 0x007C;
+const CIRCUMFLEX_ACCENT = 0x005E;
+const TILDE = 0x007E;
+const QUESTION_MARK = 0x003F;
+const COLON = 0x003A;
+const EQUALS_SIGN = 0x003D;
+
 // js/mod.rs:ZigString
 pub const String = extern struct {
     data: [*]const u16,
@@ -254,22 +279,8 @@ pub fn string_to_cps(text: String) !CodePointSeq {
 
 pub fn parse_text_string(text: String, goal: GoalSymbol) !TokenSeq {
     const cps = try string_to_cps(text);
-    // catch {
-    //     std.debug.print("Failed to convert string to code points\n", .{});
-    //     return TokenSeq{
-    //         .data = &[_]Token{},
-    //         .len = 0,
-    //     };
-    // };
 
     return parse_text_cps(cps, goal);
-    // catch {
-    //     std.debug.print("Failed to parse text code points\n", .{});
-    //     return TokenSeq{
-    //         .data = &[_]Token{},
-    //         .len = 0,
-    //     };
-    // };
 }
 
 pub fn parse_text_cps(text: CodePointSeq, goal: GoalSymbol) !TokenSeq {
@@ -489,251 +500,239 @@ fn match_punctuator(text: CodePointSeq, i: *usize, cp: root.CodePoint) ?Token {
 
     var kind: ?PunctuatorKind = null;
 
-    if (cp == 0x003F and next == 0x002E and !unicode.is_decimal_digit(next_to_next)) {
-        i.* += 2;
-        kind = PunctuatorKind.OptionalChaining;
-    } else if (cp == 0x007B) {
+    if (cp == OPEN_BRACE) {
         i.* += 1;
-        kind = PunctuatorKind.OpenBrace;
-    } else if (cp == 0x007D) {
+        kind = .OpenBrace;
+    } else if (cp == CLOSE_BRACE) {
         i.* += 1;
-        kind = PunctuatorKind.CloseBrace;
-    } else if (cp == 0x0028) {
+        kind = .CloseBrace;
+    } else if (cp == OPEN_PAREN) {
         i.* += 1;
-        kind = PunctuatorKind.OpenParen;
-    } else if (cp == 0x0029) {
+        kind = .OpenParen;
+    } else if (cp == CLOSE_PAREN) {
         i.* += 1;
-        kind = PunctuatorKind.CloseParen;
-    } else if (cp == 0x005B) {
+        kind = .CloseParen;
+    } else if (cp == OPEN_BRACKET) {
         i.* += 1;
-        kind = PunctuatorKind.OpenBracket;
-    } else if (cp == 0x005D) {
+        kind = .OpenBracket;
+    } else if (cp == CLOSE_BRACKET) {
         i.* += 1;
-        kind = PunctuatorKind.CloseBracket;
-    } else if (cp == 0x002E) {
+        kind = .CloseBracket;
+    } else if (cp == PERIOD) {
         i.* += 1;
 
-        if (next == 0x002E and next_to_next == 0x002E) {
+        if (next == PERIOD and next_to_next == PERIOD) {
             i.* += 2;
-            kind = PunctuatorKind.Ellipsis;
+            kind = .Ellipsis;
         } else {
-            kind = PunctuatorKind.Period;
+            kind = .Period;
         }
-    } else if (cp == 0x003B) {
+    } else if (cp == SEMICOLON) {
         i.* += 1;
-        kind = PunctuatorKind.Semicolon;
-    } else if (cp == 0x002C) {
+        kind = .Semicolon;
+    } else if (cp == COMMA) {
         i.* += 1;
-        kind = PunctuatorKind.Comma;
-    } else if (cp == 0x003C) {
+        kind = .Comma;
+    } else if (cp == LESS_THAN) {
         i.* += 1;
 
-        if (next == 0x003D) {
+        if (next == EQUALS_SIGN) {
             i.* += 1;
-            kind = PunctuatorKind.LessThanEqual;
-        } else if (next == 0x003C) {
+            kind = .LessThanEqual;
+        } else if (next == LESS_THAN) {
             i.* += 1;
 
-            if (next_to_next == 0x003D) {
+            if (next_to_next == EQUALS_SIGN) {
                 i.* += 1;
-                kind = PunctuatorKind.LeftShiftAssign;
+                kind = .LeftShiftAssign;
             } else {
-                kind = PunctuatorKind.LeftShift;
+                kind = .LeftShift;
             }
         } else {
-            kind = PunctuatorKind.LessThan;
+            kind = .LessThan;
         }
-    } else if (cp == 0x003E) {
+    } else if (cp == GREATER_THAN) {
         i.* += 1;
 
-        if (next == 0x003D) {
+        if (next == EQUALS_SIGN) {
             i.* += 1;
-            kind = PunctuatorKind.GreaterThanEqual;
-        } else if (next == 0x003E) {
+            kind = .GreaterThanEqual;
+        } else if (next == GREATER_THAN) {
             i.* += 1;
 
-            if (next_to_next == 0x003D) {
+            if (next_to_next == EQUALS_SIGN) {
                 i.* += 1;
-                kind = PunctuatorKind.RightShiftAssign;
-            } else if (next_to_next == 0x003E) {
+                kind = .RightShiftAssign;
+            } else if (next_to_next == GREATER_THAN) {
                 i.* += 1;
 
-                if (next_to_next_to_next == 0x003D) {
+                if (next_to_next_to_next == EQUALS_SIGN) {
                     i.* += 1;
-                    kind = PunctuatorKind.UnsignedRightShiftAssign;
+                    kind = .UnsignedRightShiftAssign;
                 } else {
-                    kind = PunctuatorKind.UnsignedRightShift;
+                    kind = .UnsignedRightShift;
                 }
             } else {
-                kind = PunctuatorKind.RightShift;
+                kind = .RightShift;
             }
         } else {
-            kind = PunctuatorKind.GreaterThan;
+            kind = .GreaterThan;
         }
-    } else if (cp == 0x0021) {
+    } else if (cp == EXCLAMATION_MARK) {
         i.* += 1;
 
-        if (next == 0x003D and next_to_next == 0x003D) {
+        if (next == EQUALS_SIGN and next_to_next == EQUALS_SIGN) {
             i.* += 2;
-            kind = PunctuatorKind.StrictNotEquals;
-        } else if (next == 0x003D) {
+            kind = .StrictNotEquals;
+        } else if (next == EQUALS_SIGN) {
             i.* += 1;
-            kind = PunctuatorKind.NotEquals;
+            kind = .NotEquals;
         } else {
-            kind = PunctuatorKind.Not;
+            kind = .Not;
         }
-    } else if (cp == 0x002B) {
+    } else if (cp == PLUS_SIGN) {
         i.* += 1;
 
-        if (next == 0x002B) {
+        if (next == PLUS_SIGN) {
             i.* += 1;
-            kind = PunctuatorKind.Increment;
-        } else if (next == 0x003D) {
+            kind = .Increment;
+        } else if (next == EQUALS_SIGN) {
             i.* += 1;
-            kind = PunctuatorKind.PlusAssign;
+            kind = .PlusAssign;
         } else {
-            kind = PunctuatorKind.Plus;
+            kind = .Plus;
         }
-    } else if (cp == 0x002D) {
+    } else if (cp == HYPHEN_MINUS) {
         i.* += 1;
 
-        if (next == 0x002D) {
+        if (next == HYPHEN_MINUS) {
             i.* += 1;
-            kind = PunctuatorKind.Decrement;
-        } else if (next == 0x003D) {
+            kind = .Decrement;
+        } else if (next == EQUALS_SIGN) {
             i.* += 1;
-            kind = PunctuatorKind.MinusAssign;
+            kind = .MinusAssign;
         } else {
-            kind = PunctuatorKind.Minus;
+            kind = .Minus;
         }
-    } else if (cp == 0x002A) {
+    } else if (cp == ASTERISK) {
         i.* += 1;
 
-        if (next == 0x003D) {
+        if (next == EQUALS_SIGN) {
             i.* += 1;
-            kind = PunctuatorKind.AsteriskAssign;
-        } else if (next == 0x002A) {
+            kind = .AsteriskAssign;
+        } else if (next == ASTERISK) {
             i.* += 1;
 
-            if (next_to_next == 0x003D) {
+            if (next_to_next == EQUALS_SIGN) {
                 i.* += 1;
-                kind = PunctuatorKind.ExponentiationAssign;
+                kind = .ExponentiationAssign;
             } else {
-                kind = PunctuatorKind.Exponentiation;
+                kind = .Exponentiation;
             }
         } else {
-            kind = PunctuatorKind.Asterisk;
+            kind = .Asterisk;
         }
-    } else if (cp == 0x002F) {
+    } else if (cp == SOLIDUS) {
         i.* += 1;
 
-        if (next == 0x003D) {
+        if (next == EQUALS_SIGN) {
             i.* += 1;
-            kind = PunctuatorKind.SlashAssign;
+            kind = .SlashAssign;
         } else {
-            kind = PunctuatorKind.Slash;
+            kind = .Slash;
         }
-    } else if (cp == 0x0025) {
+    } else if (cp == PERCENT_SIGN) {
         i.* += 1;
 
-        if (next == 0x003D) {
+        if (next == EQUALS_SIGN) {
             i.* += 1;
-            kind = PunctuatorKind.PercentAssign;
+            kind = .PercentAssign;
         } else {
-            kind = PunctuatorKind.Percent;
+            kind = .Percent;
         }
-    } else if (cp == 0x0026) {
+    } else if (cp == AMPERSAND) {
         i.* += 1;
 
-        if (next == 0x0026) {
+        if (next == AMPERSAND) {
             i.* += 1;
 
-            if (next_to_next == 0x003D) {
+            if (next_to_next == EQUALS_SIGN) {
                 i.* += 1;
-                kind = PunctuatorKind.LogicalAndAssign;
+                kind = .LogicalAndAssign;
             } else {
-                kind = PunctuatorKind.LogicalAnd;
+                kind = .LogicalAnd;
             }
-        } else if (next == 0x003D) {
+        } else if (next == EQUALS_SIGN) {
             i.* += 1;
-            kind = PunctuatorKind.BitwiseAndAssign;
+            kind = .BitwiseAndAssign;
         } else {
-            kind = PunctuatorKind.BitwiseAnd;
+            kind = .BitwiseAnd;
         }
-    } else if (cp == 0x007C) {
+    } else if (cp == VERTICAL_LINE) {
         i.* += 1;
 
-        if (next == 0x007C) {
+        if (next == VERTICAL_LINE) {
             i.* += 1;
 
-            if (next_to_next == 0x003D) {
+            if (next_to_next == EQUALS_SIGN) {
                 i.* += 1;
-                kind = PunctuatorKind.LogicalOrAssign;
+                kind = .LogicalOrAssign;
             } else {
-                kind = PunctuatorKind.LogicalOr;
+                kind = .LogicalOr;
             }
-        } else if (next == 0x003D) {
+        } else if (next == EQUALS_SIGN) {
             i.* += 1;
-            kind = PunctuatorKind.BitwiseOrAssign;
+            kind = .BitwiseOrAssign;
         } else {
-            kind = PunctuatorKind.BitwiseOr;
+            kind = .BitwiseOr;
         }
-    } else if (cp == 0x005E) {
+    } else if (cp == CIRCUMFLEX_ACCENT) {
         i.* += 1;
 
-        if (next == 0x003D) {
+        if (next == EQUALS_SIGN) {
             i.* += 1;
-            kind = PunctuatorKind.BitwiseXorAssign;
+            kind = .BitwiseXorAssign;
         } else {
-            kind = PunctuatorKind.BitwiseXor;
+            kind = .BitwiseXor;
         }
-    } else if (cp == 0x007E) {
+    } else if (cp == TILDE) {
         i.* += 1;
-        kind = PunctuatorKind.BitwiseNot;
-    } else if (cp == 0x0021) {
+        kind = .BitwiseNot;
+    } else if (cp == QUESTION_MARK) {
         i.* += 1;
 
-        if (next == 0x003D and next_to_next == 0x003D) {
+        if (next == QUESTION_MARK) {
+            i.* += 1;
+
+            if (next_to_next == EQUALS_SIGN) {
+                i.* += 1;
+                kind = .NullishCoalescingAssign;
+            } else {
+                kind = .NullishCoalescing;
+            }
+        } else if (next == PERIOD and !unicode.is_decimal_digit(next_to_next)) {
+            i.* += 1;
+            kind = .OptionalChaining;
+        } else {
+            kind = .QuestionMark;
+        }
+    } else if (cp == COLON) {
+        i.* += 1;
+        kind = .Colon;
+    } else if (cp == EQUALS_SIGN) {
+        i.* += 1;
+
+        if (next == GREATER_THAN) {
+            i.* += 1;
+            kind = .FunctionArrow;
+        } else if (next == EQUALS_SIGN and next_to_next == EQUALS_SIGN) {
             i.* += 2;
-            kind = PunctuatorKind.StrictNotEquals;
-        } else if (next == 0x003D) {
+            kind = .StrictEquals;
+        } else if (next == EQUALS_SIGN) {
             i.* += 1;
-            kind = PunctuatorKind.NotEquals;
+            kind = .Equals;
         } else {
-            kind = PunctuatorKind.Not;
-        }
-    } else if (cp == 0x003F) {
-        i.* += 1;
-
-        if (next == 0x003F) {
-            i.* += 1;
-
-            if (next_to_next == 0x003D) {
-                i.* += 1;
-                kind = PunctuatorKind.NullishCoalescingAssign;
-            } else {
-                kind = PunctuatorKind.NullishCoalescing;
-            }
-        } else {
-            kind = PunctuatorKind.QuestionMark;
-        }
-    } else if (cp == 0x003A) {
-        i.* += 1;
-        kind = PunctuatorKind.Colon;
-    } else if (cp == 0x003D) {
-        i.* += 1;
-
-        if (next == 0x003E) {
-            i.* += 1;
-            kind = PunctuatorKind.FunctionArrow;
-        } else if (next == 0x003D and next_to_next == 0x003D) {
-            i.* += 2;
-            kind = PunctuatorKind.StrictEquals;
-        } else if (next == 0x003D) {
-            i.* += 1;
-            kind = PunctuatorKind.Equals;
-        } else {
-            kind = PunctuatorKind.Assign;
+            kind = .Assign;
         }
     }
 

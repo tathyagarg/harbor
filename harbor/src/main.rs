@@ -51,9 +51,7 @@ fn main() {
                 let name_string = String::from_utf16_lossy(name);
                 println!(", name={}", name_string);
             } else if common_token_data.common_token_kind == js::CommonTokenKind::Punctuator {
-                let punctuator = unsafe {
-                    std::mem::transmute::<u8, js::PunctuatorKind>(common_token_data.value as u8)
-                };
+                let punctuator = PunctuatorKind::from(common_token_data.value);
 
                 println!(", punctuator={:?}", punctuator);
             } else {
