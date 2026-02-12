@@ -1,7 +1,10 @@
 const std = @import("std");
 
-const root = @import("root.zig");
+const root = @import("../root.zig");
 const unicode = @import("unicode.zig");
+const numeral = @import("numeral.zig");
+
+const testing = @import("../testing.zig");
 
 const OPEN_BRACE = 0x007B;
 const CLOSE_BRACE = 0x007D;
@@ -27,6 +30,10 @@ const TILDE = 0x007E;
 const QUESTION_MARK = 0x003F;
 const COLON = 0x003A;
 const EQUALS_SIGN = 0x003D;
+const HASH_SIGN = 0x0023;
+
+const ZERO = 0x0030;
+const UNDERSCORE = 0x005F;
 
 // js/mod.rs:ZigString
 pub const String = extern struct {
@@ -133,6 +140,19 @@ pub const PunctuatorKind = enum(u8) {
 
 pub const IdentifierNameData = extern struct {
     name: String,
+};
+
+pub const NumericLiteralNumberSystem = enum(u8) {
+    Decimal,
+    Binary,
+    Octal,
+    Hexadecimal,
+};
+
+pub const NumericLiteralData = extern struct {
+    value: f64,
+    is_bigint: bool,
+    number_system: NumericLiteralNumberSystem,
 };
 
 pub const CommonTokenData = extern struct {
@@ -329,11 +349,11 @@ pub fn parse_input_element_hashbang_or_regexp(text: CodePointSeq) !TokenSeq {
                 std.debug.print("Failed to append token\n", .{});
                 return error.Generic;
             };
-        } else if (cp == 0x002F and (i + 1 < text.len) and text.data[i + 1] == 0x002A) {
+        } else if (cp == SOLIDUS and (i + 1 < text.len) and text.data[i + 1] == ASTERISK) {
             i += 2;
 
             while (i + 1 < text.len) {
-                if (text.data[i] == 0x002A and text.data[i + 1] == 0x002F) {
+                if (text.data[i] == ASTERISK and text.data[i + 1] == SOLIDUS) {
                     i += 2;
                     break;
                 }
@@ -347,7 +367,7 @@ pub fn parse_input_element_hashbang_or_regexp(text: CodePointSeq) !TokenSeq {
                 std.debug.print("Failed to append token\n", .{});
                 return error.Generic;
             };
-        } else if (cp == 0x002F and (i + 1 < text.len) and text.data[i + 1] == 0x002F) {
+        } else if (cp == SOLIDUS and (i + 1 < text.len) and text.data[i + 1] == SOLIDUS) {
             i += 2;
 
             while (i < text.len and !unicode.is_line_terminator(text.data[i])) : (i += 1) {}
@@ -359,7 +379,7 @@ pub fn parse_input_element_hashbang_or_regexp(text: CodePointSeq) !TokenSeq {
                 std.debug.print("Failed to append token\n", .{});
                 return error.Generic;
             };
-        } else if (cp == 0x021 and (i + 1 < text.len) and text.data[i + 1] == 0x002F) {
+        } else if (cp == HASH_SIGN and (i + 1 < text.len) and text.data[i + 1] == EXCLAMATION_MARK) {
             i += 2;
 
             while (i < text.len and !unicode.is_line_terminator(text.data[i])) : (i += 1) {}
@@ -377,7 +397,7 @@ pub fn parse_input_element_hashbang_or_regexp(text: CodePointSeq) !TokenSeq {
                     std.debug.print("Failed to append token\n", .{});
                     return error.Generic;
                 };
-            } else if (cp == 0x0023) {
+            } else if (cp == HASH_SIGN) {
                 const next_cp = if (i + 1 < text.len) text.data[i + 1] else 0;
 
                 i += 1;
@@ -412,6 +432,14 @@ pub fn parse_input_element_hashbang_or_regexp(text: CodePointSeq) !TokenSeq {
                     std.debug.print("Failed to append token\n", .{});
                     return error.Generic;
                 };
+            } else if (numeral.match_numeric_literal(text, &i, cp)) |token| {
+                tokens.append(std.heap.page_allocator, token) catch {
+                    std.debug.print("Failed to append token\n", .{});
+                    return error.Generic;
+                };
+            } else {
+                std.debug.print("Unexpected character: {x}\n", .{cp});
+                i += 1;
             }
         }
     }
@@ -747,24 +775,6 @@ fn match_punctuator(text: CodePointSeq, i: *usize, cp: root.CodePoint) ?Token {
     return null;
 }
 
-fn u8_array_to_string(text: [*]u8, len: usize) String {
-    const buf = std.heap.page_allocator.alloc(u16, len) catch {
-        return String{
-            .data = &[_]u16{},
-            .len = 0,
-        };
-    };
-
-    for (text, 0..len) |b, i| {
-        buf[i] = @intCast(b);
-    }
-
-    return String{
-        .data = buf.ptr,
-        .len = len,
-    };
-}
-
 pub fn free_string(str: String) void {
     std.heap.page_allocator.free(str.data[0..str.len]);
 }
@@ -797,16 +807,16 @@ pub fn free_code_point_seq(seq: CodePointSeq) void {
 
 test "parse input element hashbang or regexp #1" {
     const text =
-        \\!// This is a hashbang comment
+        \\#! This is a hashbang comment
         \\/* This is a block comment 
         \\that spans multiple lines */
         \\// This is a line comment
         \\    // This is a whitespace followed by a comment
     ;
 
-    const string = u8_array_to_string(@ptrCast(@constCast(text)), text.len);
+    const string = testing.u8_array_to_string(@ptrCast(@constCast(text)), text.len);
 
-    const tokens = parse_text_string(string, .InputElementHashbangOrRegExp);
+    const tokens = try parse_text_string(string, .InputElementHashbangOrRegExp);
 
     const expected_kinds = [_]TokenKind{
         .HashBangComment,
@@ -829,15 +839,15 @@ test "parse input element hashbang or regexp #2" {
         \\token
     ;
 
-    const string = u8_array_to_string(@ptrCast(@constCast(text)), text.len);
+    const string = testing.u8_array_to_string(@ptrCast(@constCast(text)), text.len);
 
-    const tokens = parse_text_string(string, .InputElementHashbangOrRegExp);
+    const tokens = try parse_text_string(string, .InputElementHashbangOrRegExp);
 
     const expected_kinds = [_]TokenKind{
         .CommonToken,
     };
 
-    const expected_ident = u8_array_to_string(@ptrCast(@constCast("token")), 5);
+    const expected_ident = testing.u8_array_to_string(@ptrCast(@constCast("token")), 5);
 
     for (tokens.data[0..tokens.len], 0..) |token, i| {
         std.debug.assert(token.kind == expected_kinds[i]);
@@ -863,15 +873,15 @@ test "parse input element hashbang or regexp #3" {
         \\#privateIdentifier
     ;
 
-    const string = u8_array_to_string(@ptrCast(@constCast(text)), text.len);
+    const string = testing.u8_array_to_string(@ptrCast(@constCast(text)), text.len);
 
-    const tokens = parse_text_string(string, .InputElementHashbangOrRegExp);
+    const tokens = try parse_text_string(string, .InputElementHashbangOrRegExp);
 
     const expected_kinds = [_]TokenKind{
         .CommonToken,
     };
 
-    const expected_ident = u8_array_to_string(@ptrCast(@constCast("privateIdentifier")), 17);
+    const expected_ident = testing.u8_array_to_string(@ptrCast(@constCast("privateIdentifier")), 17);
 
     for (tokens.data[0..tokens.len], 0..) |token, i| {
         std.debug.assert(token.kind == expected_kinds[i]);
@@ -897,9 +907,9 @@ test "parse input element hashbang or regexp #4" {
         \\?.?.? ??= ?.
     ;
 
-    const string = u8_array_to_string(@ptrCast(@constCast(text)), text.len);
+    const string = testing.u8_array_to_string(@ptrCast(@constCast(text)), text.len);
 
-    const tokens = parse_text_string(string, .InputElementHashbangOrRegExp);
+    const tokens = try parse_text_string(string, .InputElementHashbangOrRegExp);
 
     const expected_kinds = [_]TokenKind{
         .CommonToken,

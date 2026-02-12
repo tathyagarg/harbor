@@ -1,5 +1,5 @@
 const std = @import("std");
-const root = @import("root.zig");
+const root = @import("../root.zig");
 
 // NOTE: https://tc39.es/ecma262/#prod-WhiteSpace
 pub const WHITESPACE_CHARS = [_]root.CodePoint{
@@ -113,4 +113,12 @@ pub fn is_unicode_escape_sequence(cps: [*]const root.CodePoint, len: usize) ?usi
 
 pub fn is_decimal_digit(cp: root.CodePoint) bool {
     return cp >= 0x30 and cp <= 0x39;
+}
+
+pub fn is_non_octal_digit(cp: root.CodePoint) bool {
+    return cp >= 0x38 and cp <= 0x39;
+}
+
+pub fn is_octal_digit(cp: root.CodePoint) bool {
+    return cp >= 0x30 and cp <= 0x37;
 }

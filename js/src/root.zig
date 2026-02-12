@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const source_text = @import("source_text.zig");
+const source_text = @import("source/text.zig");
 
 pub const CodePoint = u32;
 pub const SourceCharacter = CodePoint;
