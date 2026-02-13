@@ -43,7 +43,7 @@ fn match_decimal_literal(text: CodePointSeq, i: *usize, cp: root.CodePoint) ?Tok
 
         common_token_data.* = CommonTokenData{
             .common_token_kind = .NumericLiteral,
-            .data = 0, // TODO: Store the actual numeric value
+            .data = @intFromPtr(numeric_literal_data),
         };
 
         return Token{
@@ -56,6 +56,8 @@ fn match_decimal_literal(text: CodePointSeq, i: *usize, cp: root.CodePoint) ?Tok
 }
 
 fn match_decimal_integer_literal(text: CodePointSeq, i: *usize, cp: root.CodePoint) ?u64 {
+    const original_i = i.*;
+
     if (cp == ZERO) {
         if (match_non_octal_decimal_integer_literal(text, i)) |value| {
             return value;
@@ -78,11 +80,13 @@ fn match_decimal_integer_literal(text: CodePointSeq, i: *usize, cp: root.CodePoi
                 value = value * (std.math.log10(res) + 1) + res;
                 return value;
             } else {
+                i.* = original_i;
+
                 std.debug.print("Expected digits after underscore in numeric literal\n", .{});
                 return null;
             }
-        } else if (match_decimal_digits(text, i, false)) |res| {
-            value = value * (std.math.log10(res) + 1) + res;
+        } else if (match_decimal_digits(text, i, true)) |res| {
+            value = (value * std.math.pow(u64, 10, (std.math.log10(res) + 1))) + res;
             return value;
         } else {
             return value;
@@ -93,6 +97,7 @@ fn match_decimal_integer_literal(text: CodePointSeq, i: *usize, cp: root.CodePoi
         return value;
     }
 
+    i.* = original_i;
     return null;
 }
 
@@ -111,6 +116,36 @@ test "decimal integer literal with leading zero and non-octal digits" {
     root.free_code_point_seq(cps);
 }
 
+test "decimal integer literal with leading zero and octal-like digits followed by non-octal digit" {
+    const str = "0123456789";
+
+    const text = testing.u8_array_to_string(@ptrCast(@constCast(str)), str.len);
+    const cps = root.string_to_cps(text);
+
+    var i: usize = 0;
+
+    const result = match_decimal_integer_literal(cps, &i, cps.data[i]) orelse 0;
+    std.debug.assert(result == 123456789);
+
+    root.free_string(text);
+    root.free_code_point_seq(cps);
+}
+
+test "regular decimal integer literal" {
+    const str = "123456789";
+
+    const text = testing.u8_array_to_string(@ptrCast(@constCast(str)), str.len);
+    const cps = root.string_to_cps(text);
+
+    var i: usize = 0;
+
+    const result = match_decimal_integer_literal(cps, &i, cps.data[i]) orelse 0;
+    std.debug.assert(result == 123456789);
+
+    root.free_string(text);
+    root.free_code_point_seq(cps);
+}
+
 fn match_non_octal_decimal_integer_literal(text: CodePointSeq, i: *usize) ?u64 {
     var res: u64 = 0;
 
@@ -123,6 +158,17 @@ fn match_non_octal_decimal_integer_literal(text: CodePointSeq, i: *usize) ?u64 {
             i.* += 2;
 
             res = res * 10 + (next - ZERO);
+
+            while (i.* < text.len) {
+                if (unicode.is_decimal_digit(text.data[i.*])) {
+                    res = res * 10 + (text.data[i.*] - ZERO);
+                    i.* += 1;
+                } else {
+                    break;
+                }
+            }
+
+            return res;
         } else if (match_legacy_octal_like_decimal_integer_literal(text, i, this_cp)) |value| {
             if (unicode.is_non_octal_digit(text.data[i.*])) {
                 const this = text.data[i.*] - ZERO;
@@ -130,10 +176,29 @@ fn match_non_octal_decimal_integer_literal(text: CodePointSeq, i: *usize) ?u64 {
 
                 res = res * (std.math.log10(decimal) + 1) + decimal;
                 i.* += 1;
+
+                while (i.* < text.len) {
+                    if (unicode.is_decimal_digit(text.data[i.*])) {
+                        res = res * 10 + (text.data[i.*] - ZERO);
+                        i.* += 1;
+                    } else {
+                        break;
+                    }
+                }
+
                 return res;
             } else if (unicode.is_decimal_digit(text.data[i.*])) {
                 res = res * 10 + (text.data[i.*] - ZERO);
                 i.* += 1;
+
+                while (i.* < text.len) {
+                    if (unicode.is_decimal_digit(text.data[i.*])) {
+                        res = res * 10 + (text.data[i.*] - ZERO);
+                        i.* += 1;
+                    } else {
+                        break;
+                    }
+                }
 
                 return res;
             } else {
@@ -145,6 +210,16 @@ fn match_non_octal_decimal_integer_literal(text: CodePointSeq, i: *usize) ?u64 {
         if (unicode.is_decimal_digit(text.data[i.*])) {
             res = res * 10 + (text.data[i.*] - ZERO);
             i.* += 1;
+
+            while (i.* < text.len) {
+                if (unicode.is_decimal_digit(text.data[i.*])) {
+                    res = res * 10 + (text.data[i.*] - ZERO);
+                    i.* += 1;
+                } else {
+                    break;
+                }
+            }
+
             return res;
         }
     }

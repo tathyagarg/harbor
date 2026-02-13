@@ -17,7 +17,9 @@ pub mod render;
 fn main() {
     env_logger::init();
 
-    let data = "// abc\nabc.def".encode_utf16().collect::<Vec<u16>>();
+    let data = "// abc\nabc ??= def * ghi"
+        .encode_utf16()
+        .collect::<Vec<u16>>();
 
     println!(
         "========ORIGINAL STRING START=======\n{}\n========ORIGINAL STRING END=========",
@@ -31,11 +33,11 @@ fn main() {
     let tokens = unsafe { js::parse_text_string(string, 4) };
 
     for token in unsafe { std::slice::from_raw_parts(tokens.data, tokens.len) } {
-        print!("Token: kind={:?}", token.kind);
+        print!("{:?}", token.kind);
         if token.kind == js::TokenKind::CommonToken {
             // treat value as a pointer to js::CommonTokenData
             let common_token_data = unsafe { *(token.value as *const js::CommonTokenData) };
-            print!(", common_kind={:?}", common_token_data.common_token_kind);
+            print!(": common_kind={:?}", common_token_data.common_token_kind);
 
             if common_token_data.common_token_kind == js::CommonTokenKind::IdentifierName {
                 // treat value as a pointer to js::IdentifierNameTokenData
