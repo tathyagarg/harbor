@@ -52,7 +52,110 @@ fn match_decimal_literal(text: CodePointSeq, i: *usize, cp: root.CodePoint) ?Tok
         };
     }
 
+    if (match_decimal_integer_literal(text, i, cp)) |value| {
+        const common_token_data = std.heap.page_allocator.create(CommonTokenData) catch {
+            std.debug.print("Failed to create common token data\n", .{});
+            return null;
+        };
+
+        const numeric_literal_data = std.heap.page_allocator.create(NumericLiteralData) catch {
+            std.debug.print("Failed to create numeric literal data\n", .{});
+            return null;
+        };
+
+        numeric_literal_data.* = NumericLiteralData{
+            .value = 0,
+            .is_bigint = false,
+            .number_system = .Decimal,
+        };
+
+        common_token_data.* = CommonTokenData{
+            .common_token_kind = .NumericLiteral,
+            .data = @intFromPtr(numeric_literal_data),
+        };
+
+        if (text.data[i.*] == '.') {
+            i.* += 1;
+
+            if (match_decimal_digits(text, i, true)) |fractional| {
+                const result = @as(f64, @floatFromInt(value)) +
+                    (@as(f64, @floatFromInt(fractional)) / @as(f64, @floatFromInt(std.math.pow(u64, 10, std.math.log10(fractional) + 1))));
+
+                numeric_literal_data.*.value = result;
+
+                return Token{
+                    .kind = .CommonToken,
+                    .data = @intFromPtr(common_token_data),
+                };
+            } else {
+                numeric_literal_data.*.value = @as(f64, @floatFromInt(value));
+
+                return Token{
+                    .kind = .CommonToken,
+                    .data = @intFromPtr(common_token_data),
+                };
+            }
+        } else {
+            numeric_literal_data.*.value = @as(f64, @floatFromInt(value));
+
+            return Token{
+                .kind = .CommonToken,
+                .data = @intFromPtr(common_token_data),
+            };
+        }
+    }
+
     return null;
+}
+
+test "decimal literal with fractional part" {
+    const str = "123.456";
+
+    const text = testing.u8_array_to_string(@ptrCast(@constCast(str)), str.len);
+    const cps = root.string_to_cps(text);
+
+    var i: usize = 0;
+
+    const result = match_decimal_literal(cps, &i, cps.data[i]);
+    std.debug.assert(result != null);
+
+    const definite_result = result.?;
+
+    std.debug.assert(definite_result.kind == .CommonToken);
+
+    const common_data: *const CommonTokenData = @ptrFromInt(definite_result.data);
+    const numeric_data: *const NumericLiteralData = @ptrFromInt(common_data.*.data);
+
+    std.debug.print("Parsed numeric literal value: {}\n", .{numeric_data.*.value});
+
+    std.debug.assert(numeric_data.*.value == 123.456);
+
+    root.free_string(text);
+    root.free_code_point_seq(cps);
+}
+
+test "decimal literal without fractional part" {
+    const str = "123";
+
+    const text = testing.u8_array_to_string(@ptrCast(@constCast(str)), str.len);
+    const cps = root.string_to_cps(text);
+
+    var i: usize = 0;
+
+    const result = match_decimal_literal(cps, &i, cps.data[i]);
+    std.debug.assert(result != null);
+
+    const definite_result = result.?;
+
+    std.debug.assert(definite_result.kind == .CommonToken);
+
+    const common_data: *const CommonTokenData = @ptrFromInt(definite_result.data);
+    const numeric_data: *const NumericLiteralData = @ptrFromInt(common_data.*.data);
+
+    std.debug.assert(numeric_data.*.value == 123);
+
+    root.free_string(text);
+    root.free_code_point_seq(cps);
 }
 
 fn match_decimal_integer_literal(text: CodePointSeq, i: *usize, cp: root.CodePoint) ?u64 {
@@ -77,7 +180,7 @@ fn match_decimal_integer_literal(text: CodePointSeq, i: *usize, cp: root.CodePoi
             i.* += 1;
 
             if (match_decimal_digits(text, i, true)) |res| {
-                value = value * (std.math.log10(res) + 1) + res;
+                value = value * std.math.pow(u64, 10, std.math.log10(res) + 1) + res;
                 return value;
             } else {
                 i.* = original_i;
@@ -99,36 +202,6 @@ fn match_decimal_integer_literal(text: CodePointSeq, i: *usize, cp: root.CodePoi
 
     i.* = original_i;
     return null;
-}
-
-test "decimal integer literal with leading zero and non-octal digits" {
-    const str = "01239";
-
-    const text = testing.u8_array_to_string(@ptrCast(@constCast(str)), str.len);
-    const cps = root.string_to_cps(text);
-
-    var i: usize = 0;
-
-    const result = match_decimal_integer_literal(cps, &i, cps.data[i]) orelse 0;
-    std.debug.assert(result == 1239);
-
-    root.free_string(text);
-    root.free_code_point_seq(cps);
-}
-
-test "decimal integer literal with leading zero and octal-like digits followed by non-octal digit" {
-    const str = "0123456789";
-
-    const text = testing.u8_array_to_string(@ptrCast(@constCast(str)), str.len);
-    const cps = root.string_to_cps(text);
-
-    var i: usize = 0;
-
-    const result = match_decimal_integer_literal(cps, &i, cps.data[i]) orelse 0;
-    std.debug.assert(result == 123456789);
-
-    root.free_string(text);
-    root.free_code_point_seq(cps);
 }
 
 test "regular decimal integer literal" {
@@ -174,7 +247,7 @@ fn match_non_octal_decimal_integer_literal(text: CodePointSeq, i: *usize) ?u64 {
                 const this = text.data[i.*] - ZERO;
                 const decimal = decimal_to_octal(value) * 10 + this;
 
-                res = res * (std.math.log10(decimal) + 1) + decimal;
+                res = res * std.math.pow(u64, 10, std.math.log10(decimal) + 1) + decimal;
                 i.* += 1;
 
                 while (i.* < text.len) {
@@ -225,6 +298,36 @@ fn match_non_octal_decimal_integer_literal(text: CodePointSeq, i: *usize) ?u64 {
     }
 
     return null;
+}
+
+test "non-octal decimal integer literal starting with legacy octal-like prefix" {
+    const str = "0789";
+
+    const text = testing.u8_array_to_string(@ptrCast(@constCast(str)), str.len);
+    const cps = root.string_to_cps(text);
+
+    var i: usize = 0;
+
+    const result = match_decimal_integer_literal(cps, &i, cps.data[i]) orelse 0;
+    std.debug.assert(result == 789);
+
+    root.free_string(text);
+    root.free_code_point_seq(cps);
+}
+
+test "longer non-octal decimal integer literal starting with legacy octal-like prefix" {
+    const str = "0123456789";
+
+    const text = testing.u8_array_to_string(@ptrCast(@constCast(str)), str.len);
+    const cps = root.string_to_cps(text);
+
+    var i: usize = 0;
+
+    const result = match_decimal_integer_literal(cps, &i, cps.data[i]) orelse 0;
+    std.debug.assert(result == 123456789);
+
+    root.free_string(text);
+    root.free_code_point_seq(cps);
 }
 
 fn match_legacy_octal_like_decimal_integer_literal(text: CodePointSeq, i: *usize, cp: root.CodePoint) ?u64 {

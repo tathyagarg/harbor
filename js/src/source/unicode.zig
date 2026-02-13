@@ -122,3 +122,7 @@ pub fn is_non_octal_digit(cp: root.CodePoint) bool {
 pub fn is_octal_digit(cp: root.CodePoint) bool {
     return cp >= 0x30 and cp <= 0x37;
 }
+
+pub fn is_exponent_indicator(cp: root.CodePoint) bool {
+    return cp == 'e' or cp == 'E';
+}
