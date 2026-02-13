@@ -6,22 +6,122 @@ const testing = @import("../testing.zig");
 const CodePointSeq = @import("text.zig").CodePointSeq;
 const CommonTokenData = @import("text.zig").CommonTokenData;
 const NumericLiteralData = @import("text.zig").NumericLiteralData;
+const display_code_point_seq = @import("text.zig").display_code_point_seq;
 const Token = @import("text.zig").Token;
 
 const ZERO = 0x0030;
 const UNDERSCORE = 0x005F;
 
 pub fn match_numeric_literal(text: CodePointSeq, i: *usize, cp: root.CodePoint) ?Token {
+    const original_i = i.*;
+    std.debug.print("Attempting to match numeric literal at index {d} (code point: {x})\n", .{ original_i, cp });
+
     if (match_decimal_literal(text, i, cp)) |token| {
         return token;
     }
 
+    i.* = original_i;
+    std.debug.print("Failed to match numeric literal at index {d}\n", .{original_i});
     return null;
 }
 
-fn match_decimal_literal(text: CodePointSeq, i: *usize, cp: root.CodePoint) ?Token {
-    _ = .{text};
+test "simple decimal literal" {
+    const str = "0";
 
+    const text = testing.u8_array_to_string(@ptrCast(@constCast(str)), str.len);
+    const cps = root.string_to_cps(text);
+
+    var i: usize = 0;
+
+    const result = match_decimal_literal(cps, &i, cps.data[i]);
+    std.debug.assert(result != null);
+
+    const definite_result = result.?;
+
+    std.debug.assert(definite_result.kind == .CommonToken);
+
+    const common_data: *const CommonTokenData = @ptrFromInt(definite_result.data);
+    const numeric_data: *const NumericLiteralData = @ptrFromInt(common_data.*.data);
+
+    std.debug.assert(numeric_data.*.value == 0);
+
+    root.free_string(text);
+    root.free_code_point_seq(cps);
+}
+
+test "decimal literal with underscores" {
+    const str = "1_000_000";
+
+    const text = testing.u8_array_to_string(@ptrCast(@constCast(str)), str.len);
+    const cps = root.string_to_cps(text);
+
+    var i: usize = 0;
+
+    const result = match_decimal_literal(cps, &i, cps.data[i]);
+    std.debug.assert(result != null);
+
+    const definite_result = result.?;
+
+    std.debug.assert(definite_result.kind == .CommonToken);
+
+    const common_data: *const CommonTokenData = @ptrFromInt(definite_result.data);
+    const numeric_data: *const NumericLiteralData = @ptrFromInt(common_data.*.data);
+
+    std.debug.assert(numeric_data.*.value == 1000000);
+
+    root.free_string(text);
+    root.free_code_point_seq(cps);
+}
+
+test "123.456" {
+    const str = "123.456";
+
+    const text = testing.u8_array_to_string(@ptrCast(@constCast(str)), str.len);
+    const cps = root.string_to_cps(text);
+
+    var i: usize = 0;
+
+    const result = match_decimal_literal(cps, &i, cps.data[i]);
+    std.debug.assert(result != null);
+
+    const definite_result = result.?;
+
+    std.debug.assert(definite_result.kind == .CommonToken);
+
+    const common_data: *const CommonTokenData = @ptrFromInt(definite_result.data);
+    const numeric_data: *const NumericLiteralData = @ptrFromInt(common_data.*.data);
+
+    std.debug.assert(numeric_data.*.value == 123.456);
+
+    root.free_string(text);
+    root.free_code_point_seq(cps);
+}
+
+test "1.25" {
+    const str = "1.25";
+
+    const text = testing.u8_array_to_string(@ptrCast(@constCast(str)), str.len);
+    const cps = root.string_to_cps(text);
+
+    var i: usize = 0;
+
+    const result = match_decimal_literal(cps, &i, cps.data[i]);
+    std.debug.assert(result != null);
+
+    const definite_result = result.?;
+
+    std.debug.assert(definite_result.kind == .CommonToken);
+
+    const common_data: *const CommonTokenData = @ptrFromInt(definite_result.data);
+    const numeric_data: *const NumericLiteralData = @ptrFromInt(common_data.*.data);
+
+    std.debug.assert(numeric_data.*.value == 1.25);
+
+    root.free_string(text);
+    root.free_code_point_seq(cps);
+}
+
+fn match_decimal_literal(text: CodePointSeq, i: *usize, cp: root.CodePoint) ?Token {
     if (cp == ZERO) {
         i.* += 1;
 
@@ -126,8 +226,6 @@ test "decimal literal with fractional part" {
     const common_data: *const CommonTokenData = @ptrFromInt(definite_result.data);
     const numeric_data: *const NumericLiteralData = @ptrFromInt(common_data.*.data);
 
-    std.debug.print("Parsed numeric literal value: {}\n", .{numeric_data.*.value});
-
     std.debug.assert(numeric_data.*.value == 123.456);
 
     root.free_string(text);
@@ -177,11 +275,10 @@ fn match_decimal_integer_literal(text: CodePointSeq, i: *usize, cp: root.CodePoi
         var value: u64 = @intCast(cp - ZERO);
 
         if (text.data[i.*] == UNDERSCORE) {
-            i.* += 1;
+            i.* -= 1;
 
             if (match_decimal_digits(text, i, true)) |res| {
-                value = value * std.math.pow(u64, 10, std.math.log10(res) + 1) + res;
-                return value;
+                return res;
             } else {
                 i.* = original_i;
 
@@ -278,6 +375,8 @@ fn match_non_octal_decimal_integer_literal(text: CodePointSeq, i: *usize) ?u64 {
                 std.debug.print("Expected non-octal digit after octal-like decimal integer literal\n", .{});
                 return null;
             }
+        } else {
+            break;
         }
 
         if (unicode.is_decimal_digit(text.data[i.*])) {
@@ -356,6 +455,10 @@ fn match_legacy_octal_like_decimal_integer_literal(text: CodePointSeq, i: *usize
 }
 
 fn match_decimal_digits(text: CodePointSeq, i: *usize, sep: bool) ?u64 {
+    if (i.* >= text.len or !unicode.is_decimal_digit(text.data[i.*])) {
+        return null;
+    }
+
     var res: u64 = 0;
     var last_was_sep = false;
 

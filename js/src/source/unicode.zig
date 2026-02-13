@@ -124,5 +124,52 @@ pub fn is_octal_digit(cp: root.CodePoint) bool {
 }
 
 pub fn is_exponent_indicator(cp: root.CodePoint) bool {
-    return cp == 'e' or cp == 'E';
+    return cp == 0x45 or cp == 0x65;
+}
+
+pub fn is_single_escape_character(cp: root.CodePoint) bool {
+    return cp == 0x22 or // Double Quote
+        cp == 0x27 or // Single Quote
+        cp == 0x5C or // Backslash
+        cp == 0x62 or // b
+        cp == 0x66 or // f
+        cp == 0x6E or // n
+        cp == 0x72 or // r
+        cp == 0x74 or // t
+        cp == 0x76; // v
+}
+
+pub fn is_non_escape_character(cp: root.CodePoint) bool {
+    return !is_escape_character(cp) and !is_line_terminator(cp);
+}
+
+pub fn is_escape_character(cp: root.CodePoint) bool {
+    return is_single_escape_character(cp) or is_decimal_digit(cp) or cp == 0x78 or cp == 0x75; // 'x' or 'u'
+}
+
+pub fn is_character_escape_sequence(cp: root.CodePoint) bool {
+    return is_single_escape_character(cp) or is_non_escape_character(cp);
+}
+
+pub fn get_corresponding_character_escape(cp: root.CodePoint) ?root.CodePoint {
+    switch (cp) {
+        0x22 => return '"',
+        0x27 => return '\'',
+        0x5C => return '\\',
+        0x62 => return '\u{0008}',
+        0x66 => return '\u{000C}',
+        0x6E => return '\n',
+        0x72 => return '\r',
+        0x74 => return '\t',
+        0x76 => return '\u{000B}',
+        else => return null,
+    }
+}
+
+pub fn is_zero_to_three(cp: root.CodePoint) bool {
+    return cp >= 0x30 and cp <= 0x33;
+}
+
+pub fn is_four_to_seven(cp: root.CodePoint) bool {
+    return cp >= 0x34 and cp <= 0x37;
 }

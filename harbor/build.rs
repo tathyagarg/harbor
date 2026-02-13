@@ -1,5 +1,17 @@
 use std::{env, path::PathBuf, process::Command};
 
+fn rerun_if_changed(root: &PathBuf) {
+    for entry in std::fs::read_dir(root).expect("Failed to read directory") {
+        let entry = entry.expect("Failed to read directory entry");
+        let path = entry.path();
+        if path.is_dir() {
+            rerun_if_changed(&path);
+        } else {
+            println!("cargo:rerun-if-changed={}", path.display());
+        }
+    }
+}
+
 fn main() {
     let root = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let zig_dir = root.join("../js");
@@ -9,13 +21,7 @@ fn main() {
     let out = PathBuf::from(env::var("OUT_DIR").unwrap());
     let lib = out.join("libjs.a");
 
-    for entry in std::fs::read_dir(&zig_src_dir).expect("Failed to read Zig source directory") {
-        let entry = entry.expect("Failed to read directory entry");
-        let path = entry.path();
-        if path.extension().and_then(|s| s.to_str()) == Some("zig") {
-            println!("cargo:rerun-if-changed={}", path.display());
-        }
-    }
+    rerun_if_changed(&zig_src_dir);
 
     let status = Command::new("zig")
         .args([

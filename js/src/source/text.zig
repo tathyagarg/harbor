@@ -32,6 +32,10 @@ const COLON = 0x003A;
 const EQUALS_SIGN = 0x003D;
 const HASH_SIGN = 0x0023;
 
+const SINGLE_QUOTE = 0x0027;
+const DOUBLE_QUOTE = 0x0022;
+const BACKSLASH = 0x005C;
+
 const ZERO = 0x0030;
 const UNDERSCORE = 0x005F;
 
@@ -153,6 +157,10 @@ pub const NumericLiteralData = extern struct {
     value: f64,
     is_bigint: bool,
     number_system: NumericLiteralNumberSystem,
+};
+
+pub const StringLiteralData = extern struct {
+    value: String,
 };
 
 pub const CommonTokenData = extern struct {
@@ -392,6 +400,8 @@ pub fn parse_input_element_hashbang_or_regexp(text: CodePointSeq) !TokenSeq {
                 return error.Generic;
             };
         } else {
+            std.debug.print("cp: {x}\n", .{cp});
+
             if (match_identifier_name(text, &i, cp)) |token| {
                 tokens.append(std.heap.page_allocator, token) catch {
                     std.debug.print("Failed to append token\n", .{});
@@ -437,8 +447,14 @@ pub fn parse_input_element_hashbang_or_regexp(text: CodePointSeq) !TokenSeq {
                     std.debug.print("Failed to append token\n", .{});
                     return error.Generic;
                 };
+            } else if (match_string_literal(text, &i, cp)) |token| {
+                tokens.append(std.heap.page_allocator, token) catch {
+                    std.debug.print("Failed to append token\n", .{});
+                    return error.Generic;
+                };
             } else {
-                std.debug.print("Unexpected character: {x}\n", .{cp});
+                // std.debug.print("Unexpected character: {x}\n", .{cp});
+                std.debug.print("test: {any}", .{numeral.match_numeric_literal(text, &i, cp)});
                 i += 1;
             }
         }
@@ -450,6 +466,160 @@ pub fn parse_input_element_hashbang_or_regexp(text: CodePointSeq) !TokenSeq {
         .data = owned.ptr,
         .len = owned.len,
     };
+}
+
+fn match_string_literal(text: CodePointSeq, i: *usize, cp: root.CodePoint) ?Token {
+    std.debug.print("Trying to match string literal at index {d}, char {x}\n", .{ i.*, cp });
+
+    if (cp == DOUBLE_QUOTE or cp == SINGLE_QUOTE) {
+        const quote = cp;
+        var chars: std.ArrayList(root.CodePoint) = .empty;
+        defer chars.deinit(std.heap.page_allocator);
+
+        i.* += 1;
+        std.debug.print("Consumed open quote", .{});
+
+        while (i.* < text.len and text.data[i.*] != quote) {
+            if (text.data[i.*] == BACKSLASH) {
+                const next = if (i.* + 1 < text.len) text.data[i.* + 1] else 0;
+                const next_to_next = if (i.* + 2 < text.len) text.data[i.* + 2] else 0;
+
+                if (unicode.is_character_escape_sequence(cp)) {
+                    const char = unicode.get_corresponding_character_escape(next);
+                    _ = chars.append(std.heap.page_allocator, char.?) catch {
+                        return null;
+                    };
+                } else if (next == ZERO and !unicode.is_decimal_digit(next_to_next)) {
+                    _ = chars.append(std.heap.page_allocator, ZERO) catch {
+                        return null;
+                    };
+                } else {
+                    // For now, we will just treat unrecognized escape sequences as the character itself
+                    _ = chars.append(std.heap.page_allocator, next) catch {
+                        return null;
+                    };
+                }
+
+                i.* += 2;
+            } else {
+                if (text.data[i.*] != quote and text.data[i.*] != BACKSLASH) {
+                    _ = chars.append(std.heap.page_allocator, text.data[i.*]) catch {
+                        return null;
+                    };
+
+                    i.* += 1;
+                }
+            }
+        }
+
+        if (i.* < text.len and text.data[i.*] == quote) {
+            i.* += 1; // Skip closing quote
+
+            const string_data = std.heap.page_allocator.create(StringLiteralData) catch {
+                std.debug.print("Failed to create string literal data\n", .{});
+                return null;
+            };
+
+            string_data.* = StringLiteralData{
+                .value = cps_to_string(chars.items.ptr, chars.items.len) catch {
+                    std.debug.print("Failed to convert string literal chars to string\n", .{});
+                    return null;
+                },
+            };
+
+            const common_token_data = std.heap.page_allocator.create(CommonTokenData) catch {
+                std.debug.print("Failed to create common token data\n", .{});
+                return null;
+            };
+
+            common_token_data.* = CommonTokenData{
+                .common_token_kind = .StringLiteral,
+                .data = @intFromPtr(string_data),
+            };
+
+            return Token{
+                .kind = .CommonToken,
+                .data = @intFromPtr(common_token_data),
+            };
+        } else {
+            std.debug.print("Unterminated string literal\n", .{});
+            return null;
+        }
+    }
+
+    return null;
+}
+
+test "match string literal #1" {
+    const str = "\"Hello, world!\"";
+
+    const text = testing.u8_array_to_string(@ptrCast(@constCast(str)), str.len);
+    const cps = string_to_cps(text) catch {
+        std.debug.print("Failed to convert string to code points\n", .{});
+        return;
+    };
+
+    var i: usize = 0;
+    const token = match_string_literal(cps, &i, text.data[i]);
+    std.debug.assert(token != null);
+    const token_data: *CommonTokenData = @ptrFromInt(token.?.data);
+    const string_data: *StringLiteralData = @ptrFromInt(token_data.data);
+    std.debug.assert(string_data.value.len == 13);
+
+    for (string_data.value.data[0..string_data.value.len], 0..) |unit, idx| {
+        std.debug.assert(unit == "Hello, world!"[idx]);
+    }
+
+    free_code_point_seq(cps);
+    free_string(text);
+}
+
+test "match string literal #2" {
+    const str = "\"Hello, \\\"world\\\"!\"";
+
+    const text = testing.u8_array_to_string(@ptrCast(@constCast(str)), str.len);
+    const cps = string_to_cps(text) catch {
+        std.debug.print("Failed to convert string to code points\n", .{});
+        return;
+    };
+
+    var i: usize = 0;
+    const token = match_string_literal(cps, &i, text.data[i]);
+    std.debug.assert(token != null);
+    const token_data: *CommonTokenData = @ptrFromInt(token.?.data);
+    const string_data: *StringLiteralData = @ptrFromInt(token_data.data);
+    std.debug.assert(string_data.value.len == 15);
+
+    for (string_data.value.data[0..string_data.value.len], 0..) |unit, idx| {
+        std.debug.assert(unit == "Hello, \"world\"!"[idx]);
+    }
+
+    free_code_point_seq(cps);
+    free_string(text);
+}
+
+test "single quote string literal" {
+    const str = "'Hello, world!'";
+
+    const text = testing.u8_array_to_string(@ptrCast(@constCast(str)), str.len);
+    const cps = string_to_cps(text) catch {
+        std.debug.print("Failed to convert string to code points\n", .{});
+        return;
+    };
+
+    var i: usize = 0;
+    const token = match_string_literal(cps, &i, text.data[i]);
+    std.debug.assert(token != null);
+    const token_data: *CommonTokenData = @ptrFromInt(token.?.data);
+    const string_data: *StringLiteralData = @ptrFromInt(token_data.data);
+    std.debug.assert(string_data.value.len == 13);
+
+    for (string_data.value.data[0..string_data.value.len], 0..) |unit, idx| {
+        std.debug.assert(unit == "Hello, world!"[idx]);
+    }
+
+    free_code_point_seq(cps);
+    free_string(text);
 }
 
 fn match_identifier_name(text: CodePointSeq, i: *usize, cp: root.CodePoint) ?Token {
@@ -801,6 +971,13 @@ pub fn free_token_seq(token_seq: TokenSeq) void {
 
 pub fn free_code_point_seq(seq: CodePointSeq) void {
     std.heap.page_allocator.free(seq.data[0..seq.len]);
+}
+
+pub fn display_code_point_seq(seq: CodePointSeq) void {
+    for (seq.data[0..seq.len]) |cp| {
+        std.debug.print("{x} ", .{cp});
+    }
+    std.debug.print("\n", .{});
 }
 
 // =============================== TESTS ===============================

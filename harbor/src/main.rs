@@ -17,7 +17,7 @@ pub mod render;
 fn main() {
     env_logger::init();
 
-    let data = "// abc\nabc ??= def * ghi"
+    let data = "// abc\nabc ??= 1.25 * ghi + \"pluh\""
         .encode_utf16()
         .collect::<Vec<u16>>();
 
@@ -56,6 +56,31 @@ fn main() {
                 let punctuator = PunctuatorKind::from(common_token_data.value);
 
                 println!(", punctuator={:?}", punctuator);
+            } else if common_token_data.common_token_kind == js::CommonTokenKind::NumericLiteral {
+                let numeric_literal_token_data =
+                    unsafe { *(common_token_data.value as *const js::NumericLiteralTokenData) };
+
+                let value = numeric_literal_token_data.value;
+
+                println!(
+                    ", value={}, is_bigint={}, number_kind={:?}",
+                    value,
+                    numeric_literal_token_data.is_bigint,
+                    numeric_literal_token_data.number_kind
+                );
+            } else if common_token_data.common_token_kind == js::CommonTokenKind::StringLiteral {
+                let string_literal_token_data =
+                    unsafe { *(common_token_data.value as *const js::StringLiteralTokenData) };
+
+                let value = unsafe {
+                    std::slice::from_raw_parts(
+                        string_literal_token_data.value.data,
+                        string_literal_token_data.value.len,
+                    )
+                };
+                let value_string = String::from_utf16_lossy(value);
+
+                println!(", value=\"{}\"", value_string);
             } else {
                 println!();
             }

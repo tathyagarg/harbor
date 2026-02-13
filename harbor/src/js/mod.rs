@@ -34,6 +34,29 @@ pub struct IdentifierNameTokenData {
     pub name: ZigString,
 }
 
+#[repr(u8)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+pub enum NumericLiteralKind {
+    Decimal,
+    Binary,
+    Octal,
+    Hexadecimal,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+pub struct NumericLiteralTokenData {
+    pub value: f64,
+    pub is_bigint: bool,
+    pub number_kind: NumericLiteralKind,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+pub struct StringLiteralTokenData {
+    pub value: ZigString,
+}
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
 pub struct CommonTokenData {
