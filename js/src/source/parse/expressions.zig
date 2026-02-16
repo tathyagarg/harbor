@@ -1,6 +1,8 @@
-const String = @import("../text.zig").String;
-const NumericLiteralData = @import("../text.zig").NumericLiteralData;
-const IdentifierNameData = @import("../text.zig").IdentifierNameData;
+pub const String = @import("../text.zig").String;
+pub const NumericLiteralData = @import("../text.zig").NumericLiteralData;
+pub const IdentifierNameData = @import("../text.zig").IdentifierNameData;
+
+const Seq = @import("../text.zig").Seq;
 
 pub fn EXTERN_UNION(comptime T: type) type {
     return extern struct {
@@ -9,10 +11,7 @@ pub fn EXTERN_UNION(comptime T: type) type {
     };
 }
 
-pub const Expression = extern struct {
-    ptr: [*]AssignmentExpression,
-    len: usize,
-};
+pub const Expression = Seq(AssignmentExpression);
 
 pub const PrimaryExpression = EXTERN_UNION(
     extern union {
@@ -24,6 +23,12 @@ pub const PrimaryExpression = EXTERN_UNION(
     },
 );
 
+pub const PRIMARY_EXPR_THIS = 0;
+pub const PRIMARY_EXPR_IDENTIFIER = 1;
+pub const PRIMARY_EXPR_LITERAL = 2;
+pub const PRIMARY_EXPR_ARRAY = 3;
+pub const PRIMARY_EXPR_OBJECT = 4;
+
 pub const YieldExpression = EXTERN_UNION(
     extern union {
         empty: *void,
@@ -31,6 +36,10 @@ pub const YieldExpression = EXTERN_UNION(
         yield_star: *AssignmentExpression,
     },
 );
+
+pub const YIELD_EXPR_EMPTY = 0;
+pub const YIELD_EXPR_YIELD = 1;
+pub const YIELD_EXPR_YIELD_STAR = 2;
 
 pub const LeftHandSideExpression = EXTERN_UNION(
     extern union {
@@ -40,15 +49,22 @@ pub const LeftHandSideExpression = EXTERN_UNION(
     },
 );
 
+pub const LEFT_HAND_SIDE_EXPR_NEW = 0;
+pub const LEFT_HAND_SIDE_EXPR_CALL = 1;
+pub const LEFT_HAND_SIDE_EXPR_OPTIONAL = 2;
+
 pub const OptionalExpression = EXTERN_UNION(
     extern struct {
         kind: extern union {
             member: *MemberExpression,
             call: *CallExpression,
         },
-        chains: []*OptionalChain,
+        chains: Seq(OptionalChain),
     },
 );
+
+pub const OPTIONAL_EXPR_MEMBER = 0;
+pub const OPTIONAL_EXPR_CALL = 1;
 
 pub const OptionalChain = EXTERN_UNION(
     extern union {
@@ -75,16 +91,22 @@ pub const OptionalChain = EXTERN_UNION(
     },
 );
 
+pub const OPTIONAL_CHAIN_ARGS = 0;
+pub const OPTIONAL_CHAIN_MEMBER = 1;
+pub const OPTIONAL_CHAIN_PROPERTY = 2;
+pub const OPTIONAL_CHAIN_PRIVATE_PROPERTY = 3;
+pub const OPTIONAL_CHAIN_CHAIN_ARGS = 4;
+pub const OPTIONAL_CHAIN_CHAIN_MEMBER = 5;
+pub const OPTIONAL_CHAIN_CHAIN_PROPERTY = 6;
+pub const OPTIONAL_CHAIN_CHAIN_PRIVATE_PROPERTY = 7;
+
 pub const Arguments = extern struct {
-    arguments: []*AssignmentExpression,
+    arguments: Seq(AssignmentExpression),
 };
 
 pub const SuperCall = Arguments;
 
-pub const ImportCall = extern struct {
-    ptr: [*]AssignmentExpression,
-    len: usize,
-};
+pub const ImportCall = Seq(AssignmentExpression);
 
 pub const CallExpression = EXTERN_UNION(
     extern union {
@@ -108,6 +130,13 @@ pub const CallExpression = EXTERN_UNION(
         },
     },
 );
+
+pub const CALL_EXPR_SUPER = 0;
+pub const CALL_EXPR_IMPORT = 1;
+pub const CALL_EXPR_SIMPLE_CALL = 2;
+pub const CALL_EXPR_MEMBER = 3;
+pub const CALL_EXPR_PROPERTY = 4;
+pub const CALL_EXPR_PRIVATE_PROPERTY = 5;
 
 pub const MemberExpression = EXTERN_UNION(
     extern union {
@@ -133,6 +162,14 @@ pub const MemberExpression = EXTERN_UNION(
     },
 );
 
+pub const MEMBER_EXPR_PRIMARY = 0;
+pub const MEMBER_EXPR_MEMBER = 1;
+pub const MEMBER_EXPR_PROPERTY = 2;
+pub const MEMBER_EXPR_SUPER = 3;
+pub const MEMBER_EXPR_IMPORT_META = 4;
+pub const MEMBER_EXPR_NEW = 5;
+pub const MEMBER_EXPR_PRIVATE_PROPERTY = 6;
+
 pub const SuperProperty = EXTERN_UNION(
     extern union {
         member: *Expression,
@@ -140,15 +177,23 @@ pub const SuperProperty = EXTERN_UNION(
     },
 );
 
+pub const SUPER_PROP_MEMBER = 0;
+pub const SUPER_PROP_PROPERTY = 1;
+
 pub const MetaProperty = enum(u8) {
     NewTarget = 0,
     ImportMeta = 1,
 };
 
-pub const NewExpression = EXTERN_UNION(extern union {
-    member: *MemberExpression,
-    new: *NewExpression,
-});
+pub const NewExpression = EXTERN_UNION(
+    extern union {
+        member: *MemberExpression,
+        new: *NewExpression,
+    },
+);
+
+pub const NEW_EXPR_MEMBER = 0;
+pub const NEW_EXPR_NEW = 1;
 
 pub const AssignmentExpression = EXTERN_UNION(
     extern union {
@@ -165,6 +210,11 @@ pub const AssignmentExpression = EXTERN_UNION(
         },
     },
 );
+
+pub const ASSIGNMENT_EXPR_CONDITIONAL = 0;
+pub const ASSIGNMENT_EXPR_YIELD = 1;
+pub const ASSIGNMENT_EXPR_RAW = 2;
+pub const ASSIGNMENT_EXPR_OPERATOR = 3;
 
 pub const AssignmentOperator = enum(u8) {
     Star = 0,
@@ -195,12 +245,18 @@ pub const ConditionalExpression = EXTERN_UNION(
     },
 );
 
+pub const CONDITIONAL_EXPR_SHORT_CIRCUIT = 0;
+pub const CONDITIONAL_EXPR_CONDITIONAL = 1;
+
 pub const ShortCircuitExpression = EXTERN_UNION(
     extern union {
         logical_or: *LogicalORExpression,
         nullish_coalescing: *void,
     },
 );
+
+pub const SHORT_CIRCUIT_EXPR_LOGICAL_OR = 0;
+pub const SHORT_CIRCUIT_EXPR_NULLISH_COALESCING = 1;
 
 pub const LogicalORExpression = EXTERN_UNION(
     extern union {
@@ -212,6 +268,9 @@ pub const LogicalORExpression = EXTERN_UNION(
     },
 );
 
+pub const LOGICAL_OR_EXPR_LOGICAL_AND = 0;
+pub const LOGICAL_OR_EXPR_LOGICAL_OR = 1;
+
 pub const LogicalANDExpression = EXTERN_UNION(
     extern union {
         bitwise_or: *BitwiseORExpression,
@@ -221,6 +280,9 @@ pub const LogicalANDExpression = EXTERN_UNION(
         },
     },
 );
+
+pub const LOGICAL_AND_EXPR_BITWISE_OR = 0;
+pub const LOGICAL_AND_EXPR_LOGICAL_AND = 1;
 
 pub const BitwiseORExpression = EXTERN_UNION(
     extern union {
@@ -232,6 +294,9 @@ pub const BitwiseORExpression = EXTERN_UNION(
     },
 );
 
+pub const BITWISE_OR_EXPR_BITWISE_XOR = 0;
+pub const BITWISE_OR_EXPR_BITWISE_OR = 1;
+
 pub const BitwiseXORExpression = EXTERN_UNION(
     extern union {
         bitwise_and: *BitwiseANDExpression,
@@ -241,6 +306,9 @@ pub const BitwiseXORExpression = EXTERN_UNION(
         },
     },
 );
+
+pub const BITWISE_XOR_EXPR_BITWISE_AND = 0;
+pub const BITWISE_XOR_EXPR_BITWISE_XOR = 1;
 
 pub const BitwiseANDExpression = EXTERN_UNION(
     extern union {
@@ -252,6 +320,9 @@ pub const BitwiseANDExpression = EXTERN_UNION(
     },
 );
 
+pub const BITWISE_AND_EXPR_EQUALITY = 0;
+pub const BITWISE_AND_EXPR_BITWISE_AND = 1;
+
 pub const EqualityExpression = EXTERN_UNION(
     extern union {
         relational: *RelationalExpression,
@@ -262,6 +333,9 @@ pub const EqualityExpression = EXTERN_UNION(
         },
     },
 );
+
+pub const EQUALITY_EXPR_RELATIONAL = 0;
+pub const EQUALITY_EXPR_EQUALITY = 1;
 
 pub const EqualityOperator = enum(u8) {
     Equal = 0,
@@ -285,6 +359,10 @@ pub const RelationalExpression = EXTERN_UNION(
     },
 );
 
+pub const RELATIONAL_EXPR_SHIFT = 0;
+pub const RELATIONAL_EXPR_RELATIONAL = 1;
+pub const RELATIONAL_EXPR_PRIVATE_IDENTIFIER_IN = 2;
+
 pub const RelationalOperator = enum(u8) {
     LessThan = 0,
     GreaterThan = 1,
@@ -305,6 +383,9 @@ pub const ShiftExpression = EXTERN_UNION(
     },
 );
 
+pub const SHIFT_EXPR_ADDITIVE = 0;
+pub const SHIFT_EXPR_SHIFT = 1;
+
 pub const ShiftOperator = enum(u8) {
     LeftShift = 0,
     RightShift = 1,
@@ -322,6 +403,9 @@ pub const AdditiveExpression = EXTERN_UNION(
     },
 );
 
+pub const ADDITIVE_EXPR_MULTIPLICATIVE = 0;
+pub const ADDITIVE_EXPR_ADDITIVE = 1;
+
 pub const AdditiveOperator = enum(u8) {
     Plus = 0,
     Minus = 1,
@@ -337,6 +421,9 @@ pub const MultiplicativeExpression = EXTERN_UNION(
         },
     },
 );
+
+pub const MULTIPLICATIVE_EXPR_EXPONENTIATION = 0;
+pub const MULTIPLICATIVE_EXPR_MULTIPLICATIVE = 1;
 
 pub const MultiplicativeOperator = enum(u8) {
     Star = 0,
@@ -354,6 +441,9 @@ pub const ExponentiationExpression = EXTERN_UNION(
     },
 );
 
+pub const EXPONENTIATION_EXPR_UNARY = 0;
+pub const EXPONENTIATION_EXPR_EXPONENTIATION = 1;
+
 pub const UnaryExpression = EXTERN_UNION(
     extern union {
         update: *UpdateExpression,
@@ -364,6 +454,10 @@ pub const UnaryExpression = EXTERN_UNION(
         await: *AwaitExpression,
     },
 );
+
+pub const UNARY_EXPR_UPDATE = 0;
+pub const UNARY_EXPR_UNARY = 1;
+pub const UNARY_EXPR_AWAIT = 2;
 
 pub const UnaryOperator = enum(u8) {
     Delete = 0,
@@ -390,6 +484,9 @@ pub const UpdateExpression = EXTERN_UNION(
     },
 );
 
+pub const UPDATE_EXPR_LEFT_HAND_SIDE = 0;
+pub const UPDATE_EXPR_UPDATE = 1;
+
 pub const UpdateOperator = enum(u8) {
     Increment = 0,
     Decrement = 1,
@@ -397,19 +494,27 @@ pub const UpdateOperator = enum(u8) {
 
 pub const IdentifierReference = EXTERN_UNION(
     extern union {
-        identifier: *String,
+        identifier: *IdentifierNameData,
         yield: *void,
         await: *void,
     },
 );
 
+pub const IDENTIFIER_REF_IDENTIFIER = 0;
+pub const IDENTIFIER_REF_YIELD = 1;
+pub const IDENTIFIER_REF_AWAIT = 2;
+
 pub const BindingIdentifier = EXTERN_UNION(
     extern union {
-        identifier: *String,
+        identifier: *IdentifierNameData,
         yield: *void,
         await: *void,
     },
 );
+
+pub const BINDING_IDENTIFIER_IDENTIFIER = 0;
+pub const BINDING_IDENTIFIER_YIELD = 1;
+pub const BINDING_IDENTIFIER_AWAIT = 2;
 
 pub const Literal = EXTERN_UNION(
     extern union {
@@ -420,8 +525,13 @@ pub const Literal = EXTERN_UNION(
     },
 );
 
+pub const LITERAL_NULL = 0;
+pub const LITERAL_BOOLEAN = 1;
+pub const LITERAL_STRING = 2;
+pub const LITERAL_NUMBER = 3;
+
 pub const ArrayLiteral = extern struct {
-    elements: []*ArrayElement,
+    elements: Seq(ArrayElement),
 };
 
 pub const ArrayElement = EXTERN_UNION(
@@ -432,8 +542,12 @@ pub const ArrayElement = EXTERN_UNION(
     },
 );
 
+pub const ARRAY_ELEMENT_EXPR = 0;
+pub const ARRAY_ELEMENT_SPREAD = 1;
+pub const ARRAY_ELEMENT_ELLISION = 2;
+
 pub const ObjectLiteral = extern struct {
-    properties: []*PropertyDefinition,
+    properties: Seq(PropertyDefinition),
 };
 
 pub const PropertyDefinition = EXTERN_UNION(
@@ -445,6 +559,12 @@ pub const PropertyDefinition = EXTERN_UNION(
         spread: *AssignmentExpression,
     },
 );
+
+pub const PROPERTY_DEF_IDENTIFIER = 0;
+pub const PROPERTY_DEF_COVER_INITIALIZED_NAME = 1;
+pub const PROPERTY_DEF_PROPERTY = 2;
+pub const PROPERTY_DEF_METHOD = 3;
+pub const PROPERTY_DEF_SPREAD = 4;
 
 pub const CoverInitializedName = extern struct {
     identifier: *IdentifierReference,
@@ -459,6 +579,11 @@ pub const PropertyName = EXTERN_UNION(
         computed: *AssignmentExpression,
     },
 );
+
+pub const PROPERTY_NAME_IDENTIFIER = 0;
+pub const PROPERTY_NAME_STRING_LITERAL = 1;
+pub const PROPERTY_NAME_NUMERIC_LITERAL = 2;
+pub const PROPERTY_NAME_COMPUTED = 3;
 
 pub const Property = extern struct {
     key: *PropertyName,

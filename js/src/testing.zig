@@ -19,3 +19,17 @@ pub fn u8_array_to_string(text: [*]u8, len: usize) String {
         .len = len,
     };
 }
+
+pub fn are_equal_strings(actual: String, expected: String) bool {
+    if (actual.len != expected.len) {
+        return false;
+    }
+
+    for (actual.data, 0..actual.len) |a, i| {
+        if (a != expected.data[i]) {
+            return false;
+        }
+    }
+
+    return true;
+}

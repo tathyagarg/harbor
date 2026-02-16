@@ -39,11 +39,15 @@ const BACKSLASH = 0x005C;
 const ZERO = 0x0030;
 const UNDERSCORE = 0x005F;
 
+pub fn Seq(comptime T: type) type {
+    return extern struct {
+        data: [*]const T,
+        len: usize,
+    };
+}
+
 // js/mod.rs:ZigString
-pub const String = extern struct {
-    data: [*]const u16,
-    len: usize,
-};
+pub const String = Seq(u16);
 
 // js/mod.rs:CodePointAtResult
 pub const CodePointAtResult = extern struct {
@@ -52,10 +56,7 @@ pub const CodePointAtResult = extern struct {
     is_unpaired_surrogate: bool,
 };
 
-pub const CodePointSeq = extern struct {
-    data: [*]const root.CodePoint,
-    len: usize,
-};
+pub const CodePointSeq = Seq(root.CodePoint);
 
 pub const GoalSymbol = enum(u8) {
     InputElementDiv,
@@ -173,10 +174,7 @@ pub const Token = extern struct {
     data: usize,
 };
 
-pub const TokenSeq = extern struct {
-    data: [*]const Token,
-    len: usize,
-};
+pub const TokenSeq = Seq(Token);
 
 pub const UTF16_MAX = 0x10FFFF;
 
@@ -400,8 +398,6 @@ pub fn parse_input_element_hashbang_or_regexp(text: CodePointSeq) !TokenSeq {
                 return error.Generic;
             };
         } else {
-            std.debug.print("cp: {x}\n", .{cp});
-
             if (match_identifier_name(text, &i, cp)) |token| {
                 tokens.append(std.heap.page_allocator, token) catch {
                     std.debug.print("Failed to append token\n", .{});
@@ -469,15 +465,12 @@ pub fn parse_input_element_hashbang_or_regexp(text: CodePointSeq) !TokenSeq {
 }
 
 fn match_string_literal(text: CodePointSeq, i: *usize, cp: root.CodePoint) ?Token {
-    std.debug.print("Trying to match string literal at index {d}, char {x}\n", .{ i.*, cp });
-
     if (cp == DOUBLE_QUOTE or cp == SINGLE_QUOTE) {
         const quote = cp;
         var chars: std.ArrayList(root.CodePoint) = .empty;
         defer chars.deinit(std.heap.page_allocator);
 
         i.* += 1;
-        std.debug.print("Consumed open quote", .{});
 
         while (i.* < text.len and text.data[i.*] != quote) {
             if (text.data[i.*] == BACKSLASH) {
