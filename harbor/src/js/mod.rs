@@ -324,6 +324,37 @@ pub union PrimaryExpressionData {
     object: *const ObjectLiteral,
 }
 
+pub const PRIMARY_EXPR_THIS: u8 = 0;
+pub const PRIMARY_EXPR_IDENTIFIER: u8 = 1;
+pub const PRIMARY_EXPR_LITERAL: u8 = 2;
+pub const PRIMARY_EXPR_ARRAY: u8 = 3;
+pub const PRIMARY_EXPR_OBJECT: u8 = 4;
+
+impl Debug for PrimaryExpression {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.tag {
+            PRIMARY_EXPR_THIS => write!(f, "ThisExpression"),
+            PRIMARY_EXPR_IDENTIFIER => {
+                let identifier_ref = unsafe { self.data.identifier };
+                write!(f, "IdentifierReference({:?})", unsafe { *identifier_ref })
+            }
+            PRIMARY_EXPR_LITERAL => {
+                let literal = unsafe { self.data.literal };
+                write!(f, "Literal({:?})", unsafe { *literal })
+            }
+            PRIMARY_EXPR_ARRAY => {
+                let array = unsafe { self.data.array };
+                write!(f, "ArrayLiteral({:p})", array)
+            }
+            PRIMARY_EXPR_OBJECT => {
+                let object = unsafe { self.data.object };
+                write!(f, "ObjectLiteral({:p})", object)
+            }
+            _ => panic!("Unknown PrimaryExpression tag: {}", self.tag),
+        }
+    }
+}
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct IdentifierReference {
@@ -342,6 +373,20 @@ pub union IdentifierReferenceData {
 pub const IDENTIFIER_REF_IDENTIFIER: u8 = 0;
 pub const IDENTIFIER_REF_YIELD: u8 = 1;
 pub const IDENTIFIER_REF_AWAIT: u8 = 2;
+
+impl Debug for IdentifierReference {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.tag {
+            IDENTIFIER_REF_IDENTIFIER => {
+                let identifier_name = unsafe { self.data.identifier };
+                write!(f, "Identifier({:?})", unsafe { *identifier_name })
+            }
+            IDENTIFIER_REF_YIELD => write!(f, "Yield"),
+            IDENTIFIER_REF_AWAIT => write!(f, "Await"),
+            _ => write!(f, "UnknownIdentifierReference"),
+        }
+    }
+}
 
 #[repr(C)]
 #[derive(Copy, Clone)]
@@ -363,6 +408,33 @@ pub const LITERAL_NULL: u8 = 0;
 pub const LITERAL_BOOLEAN: u8 = 1;
 pub const LITERAL_STRING: u8 = 2;
 pub const LITERAL_NUMBER: u8 = 3;
+
+impl Debug for Literal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.tag {
+            LITERAL_NULL => write!(f, "NullLiteral"),
+            LITERAL_BOOLEAN => {
+                let value = unsafe { self.data.boolean };
+                write!(f, "BooleanLiteral({})", value)
+            }
+            LITERAL_STRING => {
+                let string = unsafe { self.data.string };
+                write!(f, "StringLiteral({:?})", unsafe { *string })
+            }
+            LITERAL_NUMBER => {
+                let numeric_data = unsafe { self.data.numeric };
+                write!(
+                    f,
+                    "NumericLiteral(value={}, is_bigint={}, kind={:?})",
+                    unsafe { (*numeric_data).value },
+                    unsafe { (*numeric_data).is_bigint },
+                    unsafe { (*numeric_data).number_kind }
+                )
+            }
+            _ => write!(f, "UnknownLiteral"),
+        }
+    }
+}
 
 #[repr(C)]
 #[derive(Copy, Clone)]
@@ -1102,8 +1174,19 @@ pub struct AwaitExpression {
 }
 
 #[repr(C)]
-#[derive(Debug)]
-pub struct YieldExpression {}
+#[derive(Copy, Clone)]
+pub struct YieldExpression {
+    pub tag: u8,
+    pub data: YieldExpressionData,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union YieldExpressionData {
+    none: (),
+    expr: *const AssignmentExpression,
+    delegation: *const AssignmentExpression,
+}
 
 #[repr(C)]
 #[derive(Copy, Clone)]
@@ -1170,4 +1253,6 @@ unsafe extern "C" {
     pub fn free_string(s: ZigString);
     pub fn free_code_point_seq(cps: CodePointSeq);
     pub fn free_token_seq(tokens: TokenSeq);
+
+    pub fn temp_unsafe_parse_primary_expr(tokens: TokenSeq) -> PrimaryExpression;
 }

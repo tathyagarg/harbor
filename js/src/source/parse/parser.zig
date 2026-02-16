@@ -21,14 +21,16 @@ pub const Parser = struct {
 };
 
 pub fn init(tokens: TokenSeq) Parser {
-    var arena: std.heap.ArenaAllocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-
-    return Parser{
+    var parser = Parser{
         .tokens = tokens,
         .curr = 0,
-        .arena = arena,
-        .allocator = arena.allocator(),
+        .arena = std.heap.ArenaAllocator.init(std.heap.page_allocator),
+        .allocator = undefined,
     };
+
+    parser.allocator = parser.arena.allocator();
+
+    return parser;
 }
 
 pub fn deinit(parser: *Parser) void {
@@ -73,12 +75,12 @@ pub fn match(parser: *Parser, expected: Token) bool {
 pub fn parse_primary_expression(parser: *Parser) !expr.PrimaryExpression {
     const token = peek(parser) orelse return error.UnexpectedEndOfTokens;
 
-    switch (token.kind) {
-        .CommonToken => {
+    const res = switch (token.kind) {
+        .CommonToken => com: {
             const common_token_data: *CommonTokenData = @ptrFromInt(token.data);
 
-            switch (common_token_data.common_token_kind) {
-                .IdentifierName => {
+            break :com switch (common_token_data.common_token_kind) {
+                .IdentifierName => idtfr: {
                     const identifier_data: *IdentifierNameData = @ptrFromInt(common_token_data.data);
 
                     _ = next(parser);
@@ -92,14 +94,14 @@ pub fn parse_primary_expression(parser: *Parser) !expr.PrimaryExpression {
                         },
                     };
 
-                    return expr.PrimaryExpression{
+                    break :idtfr expr.PrimaryExpression{
                         .tag = expr.PRIMARY_EXPR_IDENTIFIER,
                         .data = .{
                             .identifier = identifier_reference,
                         },
                     };
                 },
-                .NumericLiteral => {
+                .NumericLiteral => num: {
                     const numeric_literal_data: *expr.NumericLiteralData = @ptrFromInt(common_token_data.data);
 
                     _ = next(parser);
@@ -113,7 +115,7 @@ pub fn parse_primary_expression(parser: *Parser) !expr.PrimaryExpression {
                         },
                     };
 
-                    return expr.PrimaryExpression{
+                    break :num expr.PrimaryExpression{
                         .tag = expr.PRIMARY_EXPR_LITERAL,
                         .data = .{
                             .literal = literal,
@@ -123,12 +125,17 @@ pub fn parse_primary_expression(parser: *Parser) !expr.PrimaryExpression {
                 else => {
                     return error.UnexpectedToken;
                 },
-            }
+            };
         },
         else => {
             return error.UnexpectedToken;
         },
-    }
+    };
+
+    const primary_expr = parser.allocator.create(expr.PrimaryExpression) catch return error.OutOfMemory;
+    primary_expr.* = res;
+
+    return primary_expr.*;
 }
 
 test "parse primary expr identifier" {
@@ -140,15 +147,30 @@ test "parse primary expr identifier" {
             .kind = .CommonToken,
             .data = @intFromPtr(&CommonTokenData{
                 .common_token_kind = .IdentifierName,
-                .data = @intFromPtr(&IdentifierNameData{ .name = str }),
+                .data = @intFromPtr(&IdentifierNameData{
+                    .name = str,
+                }),
             }),
         },
     };
 
-    var parser = init(TokenSeq{
-        .data = &tokens,
-        .len = 1,
-    });
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+
+    var parser = Parser{
+        .tokens = TokenSeq{
+            .data = &tokens,
+            .len = 1,
+        },
+        .curr = 0,
+        .arena = arena,
+        .allocator = arena.allocator(),
+    };
+
+    // var parser = init(TokenSeq{
+    //     .data = &tokens,
+    //     .len = 1,
+    // });
 
     const result = try parse_primary_expression(&parser);
 
@@ -157,6 +179,7 @@ test "parse primary expr identifier" {
     std.debug.assert(testing.are_equal_strings(result.data.identifier.data.identifier.name, str));
 
     _text.free_string(str);
+    deinit(&parser);
 }
 
 test "parse primary expr numeric literal" {
@@ -184,4 +207,6 @@ test "parse primary expr numeric literal" {
     std.debug.assert(result.tag == expr.PRIMARY_EXPR_LITERAL);
     std.debug.assert(result.data.literal.tag == expr.LITERAL_NUMBER);
     std.debug.assert(result.data.literal.data.number.value == 42.0);
+
+    deinit(&parser);
 }

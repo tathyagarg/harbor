@@ -17,79 +17,106 @@ pub mod render;
 fn main() {
     env_logger::init();
 
-    let data = "// abc\nabc ??= 1.25 * ghi + \"pluh\""
-        .encode_utf16()
-        .collect::<Vec<u16>>();
-
-    println!(
-        "========ORIGINAL STRING START=======\n{}\n========ORIGINAL STRING END=========",
-        String::from_utf16_lossy(&data)
-    );
-
-    let string: js::ZigString = js::ZigString {
-        data: data.as_ptr(),
-        len: data.len(),
+    let numeric_token_data = js::NumericLiteralTokenData {
+        value: 42.0,
+        is_bigint: false,
+        number_kind: js::NumericLiteralKind::Decimal,
     };
-    let tokens = unsafe { js::parse_text_string(string, 4) };
 
-    for token in unsafe { std::slice::from_raw_parts(tokens.data, tokens.len) } {
-        print!("{:?}", token.kind);
-        if token.kind == js::TokenKind::CommonToken {
-            // treat value as a pointer to js::CommonTokenData
-            let common_token_data = unsafe { *(token.value as *const js::CommonTokenData) };
-            print!(": common_kind={:?}", common_token_data.common_token_kind);
+    let common_token_data = js::CommonTokenData {
+        common_token_kind: js::CommonTokenKind::NumericLiteral,
+        value: &numeric_token_data as *const js::NumericLiteralTokenData as usize,
+    };
 
-            if common_token_data.common_token_kind == js::CommonTokenKind::IdentifierName {
-                // treat value as a pointer to js::IdentifierNameTokenData
-                let identifier_name_token_data =
-                    unsafe { *(common_token_data.value as *const js::IdentifierNameTokenData) };
+    let tokens = vec![js::Token {
+        kind: js::TokenKind::CommonToken,
+        value: &common_token_data as *const js::CommonTokenData as usize,
+    }];
 
-                let name = unsafe {
-                    std::slice::from_raw_parts(
-                        identifier_name_token_data.name.data,
-                        identifier_name_token_data.name.len,
-                    )
-                };
-                let name_string = String::from_utf16_lossy(name);
-                println!(", name={}", name_string);
-            } else if common_token_data.common_token_kind == js::CommonTokenKind::Punctuator {
-                let punctuator = PunctuatorKind::from(common_token_data.value);
+    let tokens = js::TokenSeq {
+        data: tokens.as_ptr(),
+        len: tokens.len(),
+    };
 
-                println!(", punctuator={:?}", punctuator);
-            } else if common_token_data.common_token_kind == js::CommonTokenKind::NumericLiteral {
-                let numeric_literal_token_data =
-                    unsafe { *(common_token_data.value as *const js::NumericLiteralTokenData) };
+    println!("Parsing expression: 42.0");
 
-                let value = numeric_literal_token_data.value;
+    let primary_expr = unsafe { js::temp_unsafe_parse_primary_expr(tokens) };
 
-                println!(
-                    ", value={}, is_bigint={}, number_kind={:?}",
-                    value,
-                    numeric_literal_token_data.is_bigint,
-                    numeric_literal_token_data.number_kind
-                );
-            } else if common_token_data.common_token_kind == js::CommonTokenKind::StringLiteral {
-                let string_literal_token_data =
-                    unsafe { *(common_token_data.value as *const js::StringLiteralTokenData) };
+    println!("Expression: {:?}", primary_expr);
 
-                let value = unsafe {
-                    std::slice::from_raw_parts(
-                        string_literal_token_data.value.data,
-                        string_literal_token_data.value.len,
-                    )
-                };
-                let value_string = String::from_utf16_lossy(value);
+    // let data = "// abc\nabc ??= 1.25 * ghi + \"pluh\""
+    //     .encode_utf16()
+    //     .collect::<Vec<u16>>();
 
-                println!(", value=\"{}\"", value_string);
-            } else {
-                println!();
-            }
-        } else {
-            println!();
-        }
-    }
+    // println!(
+    //     "========ORIGINAL STRING START=======\n{}\n========ORIGINAL STRING END=========",
+    //     String::from_utf16_lossy(&data)
+    // );
 
-    unsafe { js::free_token_seq(tokens) };
+    // let string: js::ZigString = js::ZigString {
+    //     data: data.as_ptr(),
+    //     len: data.len(),
+    // };
+    // let tokens = unsafe { js::parse_text_string(string, 4) };
+
+    // for token in unsafe { std::slice::from_raw_parts(tokens.data, tokens.len) } {
+    //     print!("{:?}", token.kind);
+    //     if token.kind == js::TokenKind::CommonToken {
+    //         // treat value as a pointer to js::CommonTokenData
+    //         let common_token_data = unsafe { *(token.value as *const js::CommonTokenData) };
+    //         print!(": common_kind={:?}", common_token_data.common_token_kind);
+
+    //         if common_token_data.common_token_kind == js::CommonTokenKind::IdentifierName {
+    //             // treat value as a pointer to js::IdentifierNameTokenData
+    //             let identifier_name_token_data =
+    //                 unsafe { *(common_token_data.value as *const js::IdentifierNameTokenData) };
+
+    //             let name = unsafe {
+    //                 std::slice::from_raw_parts(
+    //                     identifier_name_token_data.name.data,
+    //                     identifier_name_token_data.name.len,
+    //                 )
+    //             };
+    //             let name_string = String::from_utf16_lossy(name);
+    //             println!(", name={}", name_string);
+    //         } else if common_token_data.common_token_kind == js::CommonTokenKind::Punctuator {
+    //             let punctuator = PunctuatorKind::from(common_token_data.value);
+
+    //             println!(", punctuator={:?}", punctuator);
+    //         } else if common_token_data.common_token_kind == js::CommonTokenKind::NumericLiteral {
+    //             let numeric_literal_token_data =
+    //                 unsafe { *(common_token_data.value as *const js::NumericLiteralTokenData) };
+
+    //             let value = numeric_literal_token_data.value;
+
+    //             println!(
+    //                 ", value={}, is_bigint={}, number_kind={:?}",
+    //                 value,
+    //                 numeric_literal_token_data.is_bigint,
+    //                 numeric_literal_token_data.number_kind
+    //             );
+    //         } else if common_token_data.common_token_kind == js::CommonTokenKind::StringLiteral {
+    //             let string_literal_token_data =
+    //                 unsafe { *(common_token_data.value as *const js::StringLiteralTokenData) };
+
+    //             let value = unsafe {
+    //                 std::slice::from_raw_parts(
+    //                     string_literal_token_data.value.data,
+    //                     string_literal_token_data.value.len,
+    //                 )
+    //             };
+    //             let value_string = String::from_utf16_lossy(value);
+
+    //             println!(", value=\"{}\"", value_string);
+    //         } else {
+    //             println!();
+    //         }
+    //     } else {
+    //         println!();
+    //     }
+    // }
+
+    // unsafe { js::free_token_seq(tokens) };
 
     // js::JsRuntime::new();
 

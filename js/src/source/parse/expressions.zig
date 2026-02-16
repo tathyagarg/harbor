@@ -15,7 +15,7 @@ pub const Expression = Seq(AssignmentExpression);
 
 pub const PrimaryExpression = EXTERN_UNION(
     extern union {
-        this: *void,
+        this: void,
         identifier: *IdentifierReference,
         literal: *Literal,
         array: *ArrayLiteral,
