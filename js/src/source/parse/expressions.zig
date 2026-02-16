@@ -150,7 +150,7 @@ pub const MemberExpression = EXTERN_UNION(
             property: *IdentifierNameData,
         },
         super: *SuperProperty,
-        import_meta: *MetaProperty,
+        import_meta: MetaProperty,
         new: extern struct {
             callee: *MemberExpression,
             arguments: *Arguments,
@@ -205,7 +205,7 @@ pub const AssignmentExpression = EXTERN_UNION(
         },
         operator_assignment: extern struct {
             left: *LeftHandSideExpression,
-            operator: *AssignmentOperator,
+            operator: AssignmentOperator,
             right: *AssignmentExpression,
         },
     },
@@ -238,7 +238,7 @@ pub const ConditionalExpression = EXTERN_UNION(
     extern union {
         short_circuit: *ShortCircuitExpression,
         conditional: extern struct {
-            short_circuit: *ShortCircuitExpression,
+            condition: *ShortCircuitExpression,
             consequent: *AssignmentExpression,
             alternate: *AssignmentExpression,
         },
@@ -251,12 +251,27 @@ pub const CONDITIONAL_EXPR_CONDITIONAL = 1;
 pub const ShortCircuitExpression = EXTERN_UNION(
     extern union {
         logical_or: *LogicalORExpression,
-        nullish_coalescing: *void,
+        nullish_coalescing: *CoalescingExpression,
     },
 );
 
 pub const SHORT_CIRCUIT_EXPR_LOGICAL_OR = 0;
 pub const SHORT_CIRCUIT_EXPR_NULLISH_COALESCING = 1;
+
+pub const CoalescingExpression = extern struct {
+    left: *CoalescingExpressionHead,
+    right: *BitwiseORExpression,
+};
+
+pub const CoalescingExpressionHead = EXTERN_UNION(
+    extern union {
+        coalescing: *CoalescingExpression,
+        bitwise_or: *BitwiseORExpression,
+    },
+);
+
+pub const COALESCING_EXPR_HEAD_COALESCING = 0;
+pub const COALESCING_EXPR_HEAD_BITWISE_OR = 1;
 
 pub const LogicalORExpression = EXTERN_UNION(
     extern union {
@@ -368,8 +383,8 @@ pub const RelationalOperator = enum(u8) {
     GreaterThan = 1,
     LessThanOrEqual = 2,
     GreaterThanOrEqual = 3,
-    InstanceOf = 5,
-    In = 4,
+    InstanceOf = 4,
+    In = 5,
 };
 
 pub const ShiftExpression = EXTERN_UNION(
@@ -519,7 +534,7 @@ pub const BINDING_IDENTIFIER_AWAIT = 2;
 pub const Literal = EXTERN_UNION(
     extern union {
         null: *void,
-        boolean: *bool,
+        boolean: bool,
         string: *String,
         number: *NumericLiteralData,
     },

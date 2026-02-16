@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
@@ -175,6 +175,984 @@ impl Display for CodePointSeq {
         }
 
         Ok(())
+    }
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct Expression {
+    pub data: *const AssignmentExpression,
+    pub len: usize,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct LeftHandSideExpression {
+    pub tag: u8,
+    pub data: LeftHandSideExpressionData,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union LeftHandSideExpressionData {
+    new: *const NewExpression,
+    call: *const CallExpression,
+    optional: *const OptionalExpression,
+}
+
+pub const LEFT_HAND_SIDE_EXPR_NEW: u8 = 0;
+pub const LEFT_HAND_SIDE_EXPR_CALL: u8 = 1;
+pub const LEFT_HAND_SIDE_EXPR_OPTIONAL: u8 = 2;
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct OptionalExpression {
+    pub tag: u8,
+    pub data: OptionalExpressionData,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct OptionalExpressionData {
+    pub kind: OptionalExpressionKind,
+    pub chains: OptionalChainSeq,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union OptionalExpressionKind {
+    member: *const MemberExpression,
+    call: *const CallExpression,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct OptionalChainSeq {
+    pub data: *const OptionalChain,
+    pub len: usize,
+}
+
+pub const OPTIONAL_EXPR_MEMBER: u8 = 0;
+pub const OPTIONAL_EXPR_CALL: u8 = 1;
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct OptionalChain {
+    pub tag: u8,
+    pub data: OptionalChainData,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union OptionalChainData {
+    args: *const Arguments,
+    member: *const Expression,
+    property: *const IdentifierNameTokenData,
+    private_property: *const IdentifierNameTokenData,
+    chain_args: ChainArgsData,
+    chain_member: ChainMemberData,
+    chain_property: ChainPropertyData,
+    chain_private_property: ChainPrivatePropertyData,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct ChainArgsData {
+    pub chain: *const OptionalChain,
+    pub arguments: *const Arguments,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct ChainMemberData {
+    pub chain: *const OptionalChain,
+    pub expr: *const Expression,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct ChainPropertyData {
+    pub chain: *const OptionalChain,
+    pub property: *const IdentifierNameTokenData,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct ChainPrivatePropertyData {
+    pub chain: *const OptionalChain,
+    pub property: *const IdentifierNameTokenData,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct NewExpression {
+    pub tag: u8,
+    pub data: NewExpressionData,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union NewExpressionData {
+    member: *const MemberExpression,
+    new: *const NewExpression,
+}
+
+pub const NEW_EXPR_MEMBER: u8 = 0;
+pub const NEW_EXPR_NEW: u8 = 1;
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct MemberExpression {
+    pub tag: u8,
+    pub data: MemberExpressionData,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct PrimaryExpression {
+    pub tag: u8,
+    pub data: PrimaryExpressionData,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union PrimaryExpressionData {
+    this: (),
+    identifier: *const IdentifierReference,
+    literal: *const Literal,
+    array: *const ArrayLiteral,
+    object: *const ObjectLiteral,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct IdentifierReference {
+    pub tag: u8,
+    pub data: IdentifierReferenceData,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union IdentifierReferenceData {
+    identifier: *const IdentifierNameTokenData,
+    _yield: (),
+    _await: (),
+}
+
+pub const IDENTIFIER_REF_IDENTIFIER: u8 = 0;
+pub const IDENTIFIER_REF_YIELD: u8 = 1;
+pub const IDENTIFIER_REF_AWAIT: u8 = 2;
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct Literal {
+    pub tag: u8,
+    pub data: LiteralData,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union LiteralData {
+    null: (),
+    boolean: bool,
+    string: *const ZigString,
+    numeric: *const NumericLiteralTokenData,
+}
+
+pub const LITERAL_NULL: u8 = 0;
+pub const LITERAL_BOOLEAN: u8 = 1;
+pub const LITERAL_STRING: u8 = 2;
+pub const LITERAL_NUMBER: u8 = 3;
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct ArrayLiteral {
+    pub elements: ArrayElementSeq,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct ArrayElementSeq {
+    pub data: *const ArrayElement,
+    pub len: usize,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct ArrayElement {
+    pub tag: u8,
+    pub data: ArrayElementData,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union ArrayElementData {
+    expression: *const AssignmentExpression,
+    spread: *const AssignmentExpression,
+    elision: (),
+}
+
+pub const ARRAY_ELEMENT_EXPRESSION: u8 = 0;
+pub const ARRAY_ELEMENT_SPREAD: u8 = 1;
+pub const ARRAY_ELEMENT_ELISION: u8 = 2;
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct ObjectLiteral {
+    pub properties: ObjectPropertySeq,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct ObjectPropertySeq {
+    pub data: *const ObjectProperty,
+    pub len: usize,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct ObjectProperty {
+    pub tag: u8,
+    pub data: ObjectPropertyData,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union ObjectPropertyData {
+    identifier: *const IdentifierReference,
+    cover_initialized: *const CoverInitializedName,
+    property: *const PropertyDefinition,
+    method: (), // TODO:
+    spread: *const AssignmentExpression,
+}
+
+pub const OBJECT_PROPERTY_IDENTIFIER: u8 = 0;
+pub const OBJECT_PROPERTY_COVER_INITIALIZED: u8 = 1;
+pub const OBJECT_PROPERTY_PROPERTY: u8 = 2;
+pub const OBJECT_PROPERTY_METHOD: u8 = 3;
+pub const OBJECT_PROPERTY_SPREAD: u8 = 4;
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct CoverInitializedName {
+    pub identifier: *const IdentifierNameTokenData,
+    pub initializer: *const AssignmentExpression,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct PropertyDefinition {
+    pub key: *const PropertyName,
+    pub value: *const AssignmentExpression,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct PropertyName {
+    pub tag: u8,
+    pub data: PropertyNameData,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union PropertyNameData {
+    identifier_name: *const IdentifierNameTokenData,
+    string: *const ZigString,
+    numeric: *const NumericLiteralTokenData,
+    computed: *const AssignmentExpression,
+}
+
+pub const PROPERTY_NAME_IDENTIFIER: u8 = 0;
+pub const PROPERTY_NAME_STRING: u8 = 1;
+pub const PROPERTY_NAME_NUMERIC: u8 = 2;
+pub const PROPERTY_NAME_COMPUTED: u8 = 3;
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union MemberExpressionData {
+    primary: *const PrimaryExpression,
+    member: TrueMemberExpressionData,
+    property: PropertyMemberExpressionData,
+    _super: *const SuperProperty,
+    import_meta: ImportMeta,
+    new: NewMemberExpressionData,
+    private_property: PrivateMemberExpressionData,
+}
+
+pub const MEMBER_EXPR_PRIMARY: u8 = 0;
+pub const MEMBER_EXPR_MEMBER: u8 = 1;
+pub const MEMBER_EXPR_PROPERTY: u8 = 2;
+pub const MEMBER_EXPR_SUPER: u8 = 3;
+pub const MEMBER_EXPR_IMPORT_META: u8 = 4;
+pub const MEMBER_EXPR_NEW: u8 = 5;
+pub const MEMBER_EXPR_PRIVATE_PROPERTY: u8 = 6;
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct TrueMemberExpressionData {
+    pub object: *const MemberExpression,
+    pub expr: *const Expression,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct PropertyMemberExpressionData {
+    pub object: *const MemberExpression,
+    pub property: *const IdentifierNameTokenData,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct SuperProperty {
+    pub tag: u8,
+    pub data: SuperPropertyData,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union SuperPropertyData {
+    member: *const Expression,
+    property: *const IdentifierNameTokenData,
+}
+
+pub const SUPER_PROPERTY_MEMBER: u8 = 0;
+pub const SUPER_PROPERTY_PROPERTY: u8 = 1;
+
+#[repr(u8)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+pub enum ImportMeta {
+    NewTarget = 0,
+    ImportMeta = 1,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct NewMemberExpressionData {
+    pub callee: *const MemberExpression,
+    pub arguments: *const Arguments,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct Arguments {
+    pub arguments: AssignmentExpressionSeq,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct AssignmentExpressionSeq {
+    pub data: *const AssignmentExpression,
+    pub len: usize,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct PrivateMemberExpressionData {
+    pub object: *const MemberExpression,
+    pub property: *const IdentifierNameTokenData,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct CallExpression {
+    pub tag: u8,
+    pub data: CallExpressionData,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union CallExpressionData {
+    _super: *const SuperCall,
+    import: *const ImportCall,
+    call: TrueCallExpressionData,
+    member: MemberCallExpressionData,
+    property: PropertyCallExpressionData,
+    private_property: PrivateCallExpressionData,
+}
+
+pub const CALL_EXPR_SUPER: u8 = 0;
+pub const CALL_EXPR_IMPORT: u8 = 1;
+pub const CALL_EXPR_CALL: u8 = 2;
+pub const CALL_EXPR_MEMBER: u8 = 3;
+pub const CALL_EXPR_PROPERTY: u8 = 4;
+pub const CALL_EXPR_PRIVATE_PROPERTY: u8 = 5;
+
+pub type SuperCall = Arguments;
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct ImportCall {
+    pub data: *const AssignmentExpression,
+    pub len: usize,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct TrueCallExpressionData {
+    pub callee: *const CallExpression,
+    pub arguments: *const Arguments,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct MemberCallExpressionData {
+    pub object: *const CallExpression,
+    pub expr: *const Expression,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct PropertyCallExpressionData {
+    pub object: *const CallExpression,
+    pub property: *const IdentifierNameTokenData,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct PrivateCallExpressionData {
+    pub object: *const CallExpression,
+    pub property: *const IdentifierNameTokenData,
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct RawAssignmentData {
+    pub left: *const LeftHandSideExpression,
+    pub right: *const AssignmentExpression,
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct OperatorAssignmentExpressionData {
+    pub left: *const LeftHandSideExpression,
+    pub operator: AssignmentOperator,
+    pub right: *const AssignmentExpression,
+}
+
+#[repr(u8)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+pub enum AssignmentOperator {
+    Star = 0,
+    Slash = 1,
+    Percent = 2,
+    Plus = 3,
+    Minus = 4,
+    LeftShift = 5,
+    RightShift = 6,
+    UnsignedRightShift = 7,
+    BitwiseAnd = 8,
+    BitwiseXor = 9,
+    BitwiseOr = 10,
+    Exponentiation = 11,
+    ShortCircuitLogicalAnd = 12,
+    ShortCircuitLogicalOr = 13,
+    NullishCoalescing = 14,
+}
+
+#[repr(C)]
+pub struct ConditionalExpression {
+    pub tag: u8,
+    pub data: ConditionalExpressionData,
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct TrueConditionalExpressionData {
+    pub test: *const ShortCircuitExpression,
+    pub consequent: *const AssignmentExpression,
+    pub alternate: *const AssignmentExpression,
+}
+
+#[repr(C)]
+pub union ConditionalExpressionData {
+    short_circuit: *const ShortCircuitExpression,
+    conditional: TrueConditionalExpressionData,
+}
+
+pub const CONDITIONAL_EXPR_SHORT_CIRCUIT: u8 = 0;
+pub const CONDITIONAL_EXPR_CONDITIONAL: u8 = 1;
+
+#[repr(C)]
+pub struct ShortCircuitExpression {
+    pub tag: u8,
+    pub data: ShortCircuitExpressionData,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union ShortCircuitExpressionData {
+    logical_or: *const LogicalOrExpression,
+    nullish_coalescing: *const NullishCoalescingExpression,
+}
+
+pub const SHORT_CIRCUIT_EXPR_LOGICAL_OR: u8 = 0;
+pub const SHORT_CIRCUIT_EXPR_NULLISH_COALESCING: u8 = 1;
+
+#[repr(C)]
+pub struct NullishCoalescingExpression {
+    pub left: *const CoalescingExpressionHead,
+    pub right: *const BitwiseOrExpression,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct CoalescingExpressionHead {
+    pub tag: u8,
+    pub data: CoalescingExpressionHeadData,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union CoalescingExpressionHeadData {
+    nullish_coalescing: *const NullishCoalescingExpression,
+    bitwise_or: *const BitwiseOrExpression,
+}
+
+pub const COALESCING_EXPR_HEAD_NULLISH_COALESCING: u8 = 0;
+pub const COALESCING_EXPR_HEAD_BITWISE_OR: u8 = 1;
+
+#[repr(C)]
+pub struct LogicalOrExpression {
+    pub tag: u8,
+    pub data: LogicalOrExpressionData,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union LogicalOrExpressionData {
+    logical_and: *const LogicalAndExpression,
+    logical_or: TrueLogicalOrExpressionData,
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct TrueLogicalOrExpressionData {
+    pub left: *const LogicalOrExpression,
+    pub right: *const LogicalAndExpression,
+}
+
+pub const LOGICAL_OR_EXPR_LOGICAL_AND: u8 = 0;
+pub const LOGICAL_OR_EXPR_LOGICAL_OR: u8 = 1;
+
+#[repr(C)]
+pub struct LogicalAndExpression {
+    pub tag: u8,
+    pub data: LogicalAndExpressionData,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union LogicalAndExpressionData {
+    bitwise_or: *const BitwiseOrExpression,
+    logical_and: TrueLogicalAndExpressionData,
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct TrueLogicalAndExpressionData {
+    pub left: *const LogicalAndExpression,
+    pub right: *const BitwiseOrExpression,
+}
+
+pub const LOGICAL_AND_EXPR_BITWISE_OR: u8 = 0;
+pub const LOGICAL_AND_EXPR_LOGICAL_AND: u8 = 1;
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct BitwiseOrExpression {
+    pub tag: u8,
+    pub data: BitwiseOrExpressionData,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union BitwiseOrExpressionData {
+    bitwise_xor: *const BitwiseXorExpression,
+    bitwise_or: TrueBitwiseOrExpressionData,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct TrueBitwiseOrExpressionData {
+    pub left: *const BitwiseOrExpression,
+    pub right: *const BitwiseXorExpression,
+}
+
+pub const BITWISE_OR_EXPR_BITWISE_XOR: u8 = 0;
+pub const BITWISE_OR_EXPR_BITWISE_OR: u8 = 1;
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct BitwiseXorExpression {
+    pub tag: u8,
+    pub data: BitwiseXorExpressionData,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union BitwiseXorExpressionData {
+    bitwise_and: *const BitwiseAndExpression,
+    bitwise_xor: TrueBitwiseXorExpressionData,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct TrueBitwiseXorExpressionData {
+    pub left: *const BitwiseXorExpression,
+    pub right: *const BitwiseAndExpression,
+}
+
+pub const BITWISE_XOR_EXPR_BITWISE_AND: u8 = 0;
+pub const BITWISE_XOR_EXPR_BITWISE_XOR: u8 = 1;
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct BitwiseAndExpression {
+    pub tag: u8,
+    pub data: BitwiseAndExpressionData,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union BitwiseAndExpressionData {
+    equality: *const EqualityExpression,
+    bitwise_and: TrueBitwiseAndExpressionData,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct TrueBitwiseAndExpressionData {
+    pub left: *const BitwiseAndExpression,
+    pub right: *const EqualityExpression,
+}
+
+pub const BITWISE_AND_EXPR_EQUALITY: u8 = 0;
+pub const BITWISE_AND_EXPR_BITWISE_AND: u8 = 1;
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct EqualityExpression {
+    pub tag: u8,
+    pub data: EqualityExpressionData,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union EqualityExpressionData {
+    relational: *const RelationalExpression,
+    equality: TrueEqualityExpressionData,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct TrueEqualityExpressionData {
+    pub left: *const EqualityExpression,
+    pub operator: EqualityOperator,
+    pub right: *const RelationalExpression,
+}
+
+#[repr(u8)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+pub enum EqualityOperator {
+    Equal = 0,
+    NotEqual = 1,
+    StrictEqual = 2,
+    StrictNotEqual = 3,
+}
+
+pub const EQUALITY_EXPR_RELATIONAL: u8 = 0;
+pub const EQUALITY_EXPR_EQUALITY: u8 = 1;
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct RelationalExpression {
+    pub tag: u8,
+    pub data: RelationalExpressionData,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union RelationalExpressionData {
+    shift: *const ShiftExpression,
+    relational: TrueRelationalExpressionData,
+    private_identifier_in: PrivateIdentifierInData,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct TrueRelationalExpressionData {
+    pub left: *const RelationalExpression,
+    pub operator: RelationalOperator,
+    pub right: *const ShiftExpression,
+}
+
+#[repr(u8)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+pub enum RelationalOperator {
+    LessThan = 0,
+    GreaterThan = 1,
+    LessThanEqual = 2,
+    GreaterThanEqual = 3,
+    InstanceOf = 4,
+    In = 5,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct PrivateIdentifierInData {
+    pub left: *const IdentifierNameTokenData,
+    pub right: *const ShiftExpression,
+}
+
+pub const RELATIONAL_EXPR_SHIFT: u8 = 0;
+pub const RELATIONAL_EXPR_RELATIONAL: u8 = 1;
+pub const RELATIONAL_EXPR_PRIVATE_IDENTIFIER_IN: u8 = 2;
+
+#[repr(C)]
+pub struct ShiftExpression {
+    pub tag: u8,
+    pub data: ShiftExpressionData,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union ShiftExpressionData {
+    additive: *const AdditiveExpression,
+    shift: TrueShiftExpressionData,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct TrueShiftExpressionData {
+    pub left: *const ShiftExpression,
+    pub operator: ShiftOperator,
+    pub right: *const AdditiveExpression,
+}
+
+#[repr(u8)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+pub enum ShiftOperator {
+    LeftShift = 0,
+    RightShift = 1,
+    UnsignedRightShift = 2,
+}
+
+pub const SHIFT_EXPR_ADDITIVE: u8 = 0;
+pub const SHIFT_EXPR_SHIFT: u8 = 1;
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct AdditiveExpression {
+    pub tag: u8,
+    pub data: AdditiveExpressionData,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union AdditiveExpressionData {
+    multiplicative: *const MultiplicativeExpression,
+    additive: TrueAdditiveExpressionData,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct TrueAdditiveExpressionData {
+    pub left: *const AdditiveExpression,
+    pub operator: AdditiveOperator,
+    pub right: *const MultiplicativeExpression,
+}
+
+#[repr(u8)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+pub enum AdditiveOperator {
+    Plus = 0,
+    Minus = 1,
+}
+
+pub const ADDITIVE_EXPR_MULTIPLICATIVE: u8 = 0;
+pub const ADDITIVE_EXPR_ADDITIVE: u8 = 1;
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct MultiplicativeExpression {
+    pub tag: u8,
+    pub data: MultiplicativeExpressionData,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union MultiplicativeExpressionData {
+    exponentiation: *const ExponentiationExpression,
+    multiplicative: TrueMultiplicativeExpressionData,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct TrueMultiplicativeExpressionData {
+    pub left: *const MultiplicativeExpression,
+    pub operator: MultiplicativeOperator,
+    pub right: *const ExponentiationExpression,
+}
+
+#[repr(u8)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+pub enum MultiplicativeOperator {
+    Star = 0,
+    Slash = 1,
+    Percent = 2,
+}
+
+pub const MULTIPLICATIVE_EXPR_EXPONENTIATION: u8 = 0;
+pub const MULTIPLICATIVE_EXPR_MULTIPLICATIVE: u8 = 1;
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct ExponentiationExpression {
+    pub tag: u8,
+    pub data: ExponentiationExpressionData,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union ExponentiationExpressionData {
+    unary: *const UnaryExpression,
+    exponentiation: TrueExponentiationExpressionData,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct TrueExponentiationExpressionData {
+    pub left: *const UnaryExpression,
+    pub right: *const ExponentiationExpression,
+}
+
+pub const EXPONENTIATION_EXPR_UNARY: u8 = 0;
+pub const EXPONENTIATION_EXPR_EXPONENTIATION: u8 = 1;
+
+#[repr(C)]
+pub struct UnaryExpression {
+    pub tag: u8,
+    pub data: UnaryExpressionData,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union UnaryExpressionData {
+    update: *const UpdateExpression,
+    unary: TrueUnaryExpressionData,
+    _await: *const AwaitExpression,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct TrueUnaryExpressionData {
+    pub operator: UnaryOperator,
+    pub operand: *const UnaryExpression,
+}
+
+#[repr(u8)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+pub enum UnaryOperator {
+    Delete = 0,
+    Void = 1,
+    TypeOf = 2,
+    Plus = 3,
+    Minus = 4,
+    BitwiseNot = 5,
+    LogicalNot = 6,
+}
+
+pub const UNARY_EXPR_UPDATE: u8 = 0;
+pub const UNARY_EXPR_UNARY: u8 = 1;
+pub const UNARY_EXPR_AWAIT: u8 = 2;
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct UpdateExpression {
+    pub tag: u8,
+    pub data: UpdateExpressionData,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union UpdateExpressionData {
+    left_hand_side: *const LeftHandSideExpression,
+    update: TrueUpdateExpressionData,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct TrueUpdateExpressionData {
+    pub operand: *const LeftHandSideExpression,
+    pub operator: UpdateOperator,
+    pub is_prefix: bool,
+}
+
+#[repr(u8)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+pub enum UpdateOperator {
+    Increment = 0,
+    Decrement = 1,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct AwaitExpression {
+    pub expr: *const UnaryExpression,
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct YieldExpression {}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union AssignmentExpressionData {
+    conditional: *const ConditionalExpression,
+    _yield: *const YieldExpression,
+    raw_assignment: RawAssignmentData,
+    operator_assignment: OperatorAssignmentExpressionData,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct AssignmentExpression {
+    pub tag: u8,
+    pub data: AssignmentExpressionData,
+}
+
+pub const ASSIGNMENT_EXPR_CONDITIONAL: u8 = 0;
+pub const ASSIGNMENT_EXPR_YIELD: u8 = 1;
+pub const ASSIGNMENT_EXPR_RAW: u8 = 2;
+pub const ASSIGNMENT_EXPR_OPERATOR: u8 = 3;
+
+impl Debug for AssignmentExpression {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.tag {
+            ASSIGNMENT_EXPR_CONDITIONAL => write!(f, "ConditionalExpression({:p})", unsafe {
+                self.data.conditional
+            }),
+            ASSIGNMENT_EXPR_YIELD => {
+                write!(f, "YieldExpression({:p})", unsafe { self.data._yield })
+            }
+            ASSIGNMENT_EXPR_RAW => {
+                let raw = unsafe { self.data.raw_assignment };
+                write!(
+                    f,
+                    "RawAssignment(left: {:p}, right: {:p})",
+                    raw.left, raw.right
+                )
+            }
+            ASSIGNMENT_EXPR_OPERATOR => {
+                let op = unsafe { self.data.operator_assignment };
+                write!(
+                    f,
+                    "OperatorAssignment(left: {:p}, operator: {:?}, right: {:p})",
+                    op.left, op.operator, op.right
+                )
+            }
+            _ => write!(f, "UnknownAssignmentExpression(tag: {})", self.tag),
+        }
     }
 }
 
