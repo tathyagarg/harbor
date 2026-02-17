@@ -93,5 +93,5 @@ pub export fn temp_unsafe_parse_primary_expr(tokens: source_text.TokenSeq) expr.
         };
     };
 
-    return res;
+    return res.*;
 }

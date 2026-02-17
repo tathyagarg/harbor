@@ -197,7 +197,6 @@ pub const NEW_EXPR_NEW = 1;
 
 pub const AssignmentExpression = EXTERN_UNION(
     extern union {
-        conditional: *ConditionalExpression,
         yield: *YieldExpression,
         raw_assignment: extern struct {
             left: *LeftHandSideExpression,
@@ -208,13 +207,22 @@ pub const AssignmentExpression = EXTERN_UNION(
             operator: AssignmentOperator,
             right: *AssignmentExpression,
         },
+        ternary: *TernaryExpression,
+        binary: *BinaryExpression,
+        unary: *UnaryExpression,
+        primary: *PrimaryExpression,
     },
 );
 
+// 0: deprecated
 pub const ASSIGNMENT_EXPR_CONDITIONAL = 0;
 pub const ASSIGNMENT_EXPR_YIELD = 1;
 pub const ASSIGNMENT_EXPR_RAW = 2;
 pub const ASSIGNMENT_EXPR_OPERATOR = 3;
+pub const ASSIGNMENT_EXPR_TERNARY = 4;
+pub const ASSIGNMENT_EXPR_BINARY = 5;
+pub const ASSIGNMENT_EXPR_UNARY = 6;
+pub const ASSIGNMENT_EXPR_PRIMARY = 7;
 
 pub const AssignmentOperator = enum(u8) {
     Star = 0,
@@ -234,241 +242,58 @@ pub const AssignmentOperator = enum(u8) {
     NullishCoalescing = 14,
 };
 
-pub const ConditionalExpression = EXTERN_UNION(
-    extern union {
-        short_circuit: *ShortCircuitExpression,
-        conditional: extern struct {
-            condition: *ShortCircuitExpression,
-            consequent: *AssignmentExpression,
-            alternate: *AssignmentExpression,
-        },
-    },
-);
-
+// deprecated
 pub const CONDITIONAL_EXPR_SHORT_CIRCUIT = 0;
 pub const CONDITIONAL_EXPR_CONDITIONAL = 1;
 
-pub const ShortCircuitExpression = EXTERN_UNION(
-    extern union {
-        logical_or: *LogicalORExpression,
-        nullish_coalescing: *CoalescingExpression,
-    },
-);
-
-pub const SHORT_CIRCUIT_EXPR_LOGICAL_OR = 0;
-pub const SHORT_CIRCUIT_EXPR_NULLISH_COALESCING = 1;
-
-pub const CoalescingExpression = extern struct {
-    left: *CoalescingExpressionHead,
-    right: *BitwiseORExpression,
+pub const TernaryExpression = extern struct {
+    condition: *AssignmentExpression,
+    consequent: *AssignmentExpression,
+    alternate: *AssignmentExpression,
 };
 
-pub const CoalescingExpressionHead = EXTERN_UNION(
+pub const BinaryOrUnaryExpression = EXTERN_UNION(
     extern union {
-        coalescing: *CoalescingExpression,
-        bitwise_or: *BitwiseORExpression,
+        binary: *BinaryExpression,
+        unary: *UnaryExpression,
     },
 );
 
-pub const COALESCING_EXPR_HEAD_COALESCING = 0;
-pub const COALESCING_EXPR_HEAD_BITWISE_OR = 1;
+pub const BinaryExpression = extern struct {
+    left: *AssignmentExpression,
+    operator: BinaryOperator,
+    right: *AssignmentExpression,
+};
 
-pub const LogicalORExpression = EXTERN_UNION(
-    extern union {
-        logical_and: *LogicalANDExpression,
-        logical_or: extern struct {
-            left: *LogicalORExpression,
-            right: *LogicalANDExpression,
-        },
-    },
-);
-
-pub const LOGICAL_OR_EXPR_LOGICAL_AND = 0;
-pub const LOGICAL_OR_EXPR_LOGICAL_OR = 1;
-
-pub const LogicalANDExpression = EXTERN_UNION(
-    extern union {
-        bitwise_or: *BitwiseORExpression,
-        logical_and: extern struct {
-            left: *LogicalANDExpression,
-            right: *BitwiseORExpression,
-        },
-    },
-);
-
-pub const LOGICAL_AND_EXPR_BITWISE_OR = 0;
-pub const LOGICAL_AND_EXPR_LOGICAL_AND = 1;
-
-pub const BitwiseORExpression = EXTERN_UNION(
-    extern union {
-        bitwise_xor: *BitwiseXORExpression,
-        bitwise_or: extern struct {
-            left: *BitwiseORExpression,
-            right: *BitwiseXORExpression,
-        },
-    },
-);
-
-pub const BITWISE_OR_EXPR_BITWISE_XOR = 0;
-pub const BITWISE_OR_EXPR_BITWISE_OR = 1;
-
-pub const BitwiseXORExpression = EXTERN_UNION(
-    extern union {
-        bitwise_and: *BitwiseANDExpression,
-        bitwise_xor: extern struct {
-            left: *BitwiseXORExpression,
-            right: *BitwiseANDExpression,
-        },
-    },
-);
-
-pub const BITWISE_XOR_EXPR_BITWISE_AND = 0;
-pub const BITWISE_XOR_EXPR_BITWISE_XOR = 1;
-
-pub const BitwiseANDExpression = EXTERN_UNION(
-    extern union {
-        equality: *EqualityExpression,
-        bitwise_and: extern struct {
-            left: *BitwiseANDExpression,
-            right: *EqualityExpression,
-        },
-    },
-);
-
-pub const BITWISE_AND_EXPR_EQUALITY = 0;
-pub const BITWISE_AND_EXPR_BITWISE_AND = 1;
-
-pub const EqualityExpression = EXTERN_UNION(
-    extern union {
-        relational: *RelationalExpression,
-        equality: extern struct {
-            left: *EqualityExpression,
-            operator: *EqualityOperator,
-            right: *RelationalExpression,
-        },
-    },
-);
-
-pub const EQUALITY_EXPR_RELATIONAL = 0;
-pub const EQUALITY_EXPR_EQUALITY = 1;
-
-pub const EqualityOperator = enum(u8) {
+pub const BinaryOperator = enum(u8) {
     Equal = 0,
     NotEqual = 1,
     StrictEqual = 2,
     StrictNotEqual = 3,
+    LessThan = 4,
+    GreaterThan = 5,
+    LessThanOrEqual = 6,
+    GreaterThanOrEqual = 7,
+    InstanceOf = 8,
+    In = 9,
+    LeftShift = 10,
+    RightShift = 11,
+    UnsignedRightShift = 12,
+    Plus = 13,
+    Minus = 14,
+    Star = 15,
+    Slash = 16,
+    Percent = 17,
+    Exponentiation = 18,
+    ShortCircuitLogicalAnd = 19,
+    ShortCircuitLogicalOr = 20,
+    NullishCoalescing = 21,
 };
 
-pub const RelationalExpression = EXTERN_UNION(
-    extern union {
-        shift: *ShiftExpression,
-        relational: extern struct {
-            left: *RelationalExpression,
-            operator: *RelationalOperator,
-            right: *ShiftExpression,
-        },
-        private_identifier_in: extern struct {
-            left: *IdentifierNameData,
-            right: *ShiftExpression,
-        },
-    },
-);
-
-pub const RELATIONAL_EXPR_SHIFT = 0;
-pub const RELATIONAL_EXPR_RELATIONAL = 1;
-pub const RELATIONAL_EXPR_PRIVATE_IDENTIFIER_IN = 2;
-
-pub const RelationalOperator = enum(u8) {
-    LessThan = 0,
-    GreaterThan = 1,
-    LessThanOrEqual = 2,
-    GreaterThanOrEqual = 3,
-    InstanceOf = 4,
-    In = 5,
+pub const UnaryExpression = extern struct {
+    operator: *UnaryOperator,
+    operand: *UnaryExpressionOrLHS,
 };
-
-pub const ShiftExpression = EXTERN_UNION(
-    extern union {
-        additive: *AdditiveExpression,
-        shift: extern struct {
-            left: *ShiftExpression,
-            operator: *ShiftOperator,
-            right: *AdditiveExpression,
-        },
-    },
-);
-
-pub const SHIFT_EXPR_ADDITIVE = 0;
-pub const SHIFT_EXPR_SHIFT = 1;
-
-pub const ShiftOperator = enum(u8) {
-    LeftShift = 0,
-    RightShift = 1,
-    UnsignedRightShift = 2,
-};
-
-pub const AdditiveExpression = EXTERN_UNION(
-    extern union {
-        multiplicative: *MultiplicativeExpression,
-        additive: extern struct {
-            left: *AdditiveExpression,
-            operator: *AdditiveOperator,
-            right: *MultiplicativeExpression,
-        },
-    },
-);
-
-pub const ADDITIVE_EXPR_MULTIPLICATIVE = 0;
-pub const ADDITIVE_EXPR_ADDITIVE = 1;
-
-pub const AdditiveOperator = enum(u8) {
-    Plus = 0,
-    Minus = 1,
-};
-
-pub const MultiplicativeExpression = EXTERN_UNION(
-    extern union {
-        exponentiation: *ExponentiationExpression,
-        multiplicative: extern struct {
-            left: *MultiplicativeExpression,
-            operator: *MultiplicativeOperator,
-            right: *ExponentiationExpression,
-        },
-    },
-);
-
-pub const MULTIPLICATIVE_EXPR_EXPONENTIATION = 0;
-pub const MULTIPLICATIVE_EXPR_MULTIPLICATIVE = 1;
-
-pub const MultiplicativeOperator = enum(u8) {
-    Star = 0,
-    Slash = 1,
-    Percent = 2,
-};
-
-pub const ExponentiationExpression = EXTERN_UNION(
-    extern union {
-        unary: *UnaryExpression,
-        exponentiation: extern struct {
-            left: *UnaryExpression,
-            right: *ExponentiationExpression,
-        },
-    },
-);
-
-pub const EXPONENTIATION_EXPR_UNARY = 0;
-pub const EXPONENTIATION_EXPR_EXPONENTIATION = 1;
-
-pub const UnaryExpression = EXTERN_UNION(
-    extern union {
-        update: *UpdateExpression,
-        unary: extern struct {
-            operator: *UnaryOperator,
-            operand: *UnaryExpression,
-        },
-        await: *AwaitExpression,
-    },
-);
 
 pub const UNARY_EXPR_UPDATE = 0;
 pub const UNARY_EXPR_UNARY = 1;
@@ -482,29 +307,25 @@ pub const UnaryOperator = enum(u8) {
     Minus = 4,
     BitwiseNot = 5,
     LogicalNot = 6,
+    PrefixIncrement = 7,
+    PrefixDecrement = 8,
+    PostfixIncrement = 9,
+    PostfixDecrement = 10,
+    Await = 11,
 };
 
-pub const AwaitExpression = extern struct {
-    expression: *UnaryExpression,
-};
-
-pub const UpdateExpression = EXTERN_UNION(
+pub const UnaryExpressionOrLHS = EXTERN_UNION(
     extern union {
+        unary: *UnaryExpression,
         left_hand_side: *LeftHandSideExpression,
-        update: extern struct {
-            operand: *LeftHandSideExpression,
-            operator: *UpdateOperator,
-            prefix: bool,
-        },
     },
 );
 
-pub const UPDATE_EXPR_LEFT_HAND_SIDE = 0;
-pub const UPDATE_EXPR_UPDATE = 1;
+pub const UNARY_EXPR_OR_LHS_UNARY = 0;
+pub const UNARY_EXPR_OR_LHS_LHS = 1;
 
-pub const UpdateOperator = enum(u8) {
-    Increment = 0,
-    Decrement = 1,
+pub const AwaitExpression = extern struct {
+    expression: *UnaryExpression,
 };
 
 pub const IdentifierReference = EXTERN_UNION(
