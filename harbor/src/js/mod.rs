@@ -1,17 +1,20 @@
 use std::fmt::{Debug, Display};
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone)]
 pub struct ZigString {
     pub data: *const u16,
     pub len: usize,
 }
 
-impl Display for ZigString {
+impl Debug for ZigString {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let slice = unsafe { std::slice::from_raw_parts(self.data, self.len) };
         let string = String::from_utf16_lossy(slice);
-        write!(f, "{}", string)
+        write!(f, "\"{}\"", string)?;
+        write!(f, " [len={}]", self.len)?;
+
+        Ok(())
     }
 }
 
@@ -29,9 +32,15 @@ pub struct CodePointSeq {
 }
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone)]
 pub struct IdentifierNameTokenData {
     pub name: ZigString,
+}
+
+impl Debug for IdentifierNameTokenData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "INTD({:?})", self.name)
+    }
 }
 
 #[repr(u8)]
@@ -344,7 +353,32 @@ impl Debug for PrimaryExpression {
             }
             PRIMARY_EXPR_ARRAY => {
                 let array = unsafe { self.data.array };
-                write!(f, "ArrayLiteral({:p})", array)
+                write!(f, "ArrayLiteral[\n")?;
+
+                let elements = unsafe {
+                    std::slice::from_raw_parts((*array).elements.data, (*array).elements.len)
+                };
+
+                for element in elements {
+                    match element.tag {
+                        ARRAY_ELEMENT_EXPRESSION => {
+                            let expr = unsafe { element.data.expression };
+                            write!(f, "    Expression({:?}),\n", unsafe { *expr })?;
+                        }
+                        ARRAY_ELEMENT_SPREAD => {
+                            let spread = unsafe { element.data.spread };
+                            write!(f, "    Spread({:?}),\n", unsafe { *spread })?;
+                        }
+                        ARRAY_ELEMENT_ELISION => {
+                            write!(f, "    Elision,\n")?;
+                        }
+                        _ => panic!("Unknown ArrayElement tag: {}", element.tag),
+                    }
+                }
+
+                write!(f, "]")?;
+
+                Ok(())
             }
             PRIMARY_EXPR_OBJECT => {
                 let object = unsafe { self.data.object };
@@ -722,27 +756,45 @@ pub enum AssignmentOperator {
 }
 
 #[repr(C)]
-pub struct ConditionalExpression {
-    pub tag: u8,
-    pub data: ConditionalExpressionData,
-}
-
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct TrueConditionalExpressionData {
-    pub test: *const ShortCircuitExpression,
+pub struct TernaryExpression {
+    pub test: *const AssignmentExpression,
     pub consequent: *const AssignmentExpression,
     pub alternate: *const AssignmentExpression,
 }
 
 #[repr(C)]
-pub union ConditionalExpressionData {
-    short_circuit: *const ShortCircuitExpression,
-    conditional: TrueConditionalExpressionData,
+pub struct BinaryExpression {
+    pub left: *const AssignmentExpression,
+    pub operator: BinaryOperator,
+    pub right: *const AssignmentExpression,
 }
 
-pub const CONDITIONAL_EXPR_SHORT_CIRCUIT: u8 = 0;
-pub const CONDITIONAL_EXPR_CONDITIONAL: u8 = 1;
+#[repr(u8)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+pub enum BinaryOperator {
+    Equal = 0,
+    NotEqual = 1,
+    StrictEqual = 2,
+    StrictNotEqual = 3,
+    LessThan = 4,
+    GreaterThan = 5,
+    LessThanOrEqual = 6,
+    GreaterThanOrEqual = 7,
+    InstanceOf = 8,
+    In = 9,
+    LeftShift = 10,
+    RightShift = 11,
+    UnsignedRightShift = 12,
+    Plus = 13,
+    Minus = 14,
+    Star = 15,
+    Slash = 16,
+    Percent = 17,
+    Exponentiation = 18,
+    ShortCircuitLogicalAnd = 19,
+    ShortCircuitLogicalOr = 20,
+    NullishCoalescing = 21,
+}
 
 #[repr(C)]
 pub struct ShortCircuitExpression {
@@ -1103,23 +1155,22 @@ pub const EXPONENTIATION_EXPR_EXPONENTIATION: u8 = 1;
 
 #[repr(C)]
 pub struct UnaryExpression {
-    pub tag: u8,
-    pub data: UnaryExpressionData,
-}
-
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub union UnaryExpressionData {
-    update: *const UpdateExpression,
-    unary: TrueUnaryExpressionData,
-    _await: *const AwaitExpression,
-}
-
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub struct TrueUnaryExpressionData {
     pub operator: UnaryOperator,
-    pub operand: *const UnaryExpression,
+    pub operand: *const UnaryExpressionOrLHS,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct UnaryExpressionOrLHS {
+    pub tag: u8,
+    pub data: UnaryExpressionOrLHSData,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union UnaryExpressionOrLHSData {
+    unary: *const UnaryExpression,
+    lhs: *const LeftHandSideExpression,
 }
 
 #[repr(u8)]
@@ -1132,6 +1183,11 @@ pub enum UnaryOperator {
     Minus = 4,
     BitwiseNot = 5,
     LogicalNot = 6,
+    PrefixIncrement = 7,
+    PrefixDecrement = 8,
+    PostfixIncrement = 9,
+    PostfixDecrement = 10,
+    Await = 11,
 }
 
 pub const UNARY_EXPR_UPDATE: u8 = 0;
@@ -1190,31 +1246,35 @@ pub union YieldExpressionData {
 
 #[repr(C)]
 #[derive(Copy, Clone)]
-pub union AssignmentExpressionData {
-    conditional: *const ConditionalExpression,
-    _yield: *const YieldExpression,
-    raw_assignment: RawAssignmentData,
-    operator_assignment: OperatorAssignmentExpressionData,
+pub struct AssignmentExpression {
+    pub tag: u8,
+    pub data: AssignmentExpressionData,
 }
 
 #[repr(C)]
 #[derive(Copy, Clone)]
-pub struct AssignmentExpression {
-    pub tag: u8,
-    pub data: AssignmentExpressionData,
+pub union AssignmentExpressionData {
+    _yield: *const YieldExpression,
+    raw_assignment: RawAssignmentData,
+    operator_assignment: OperatorAssignmentExpressionData,
+    ternary: *const TernaryExpression,
+    binary: *const BinaryExpression,
+    unary: *const UnaryExpression,
+    primary: *const PrimaryExpression,
 }
 
 pub const ASSIGNMENT_EXPR_CONDITIONAL: u8 = 0;
 pub const ASSIGNMENT_EXPR_YIELD: u8 = 1;
 pub const ASSIGNMENT_EXPR_RAW: u8 = 2;
 pub const ASSIGNMENT_EXPR_OPERATOR: u8 = 3;
+pub const ASSIGNMENT_EXPR_TERNARY: u8 = 4;
+pub const ASSIGNMENT_EXPR_BINARY: u8 = 5;
+pub const ASSIGNMENT_EXPR_UNARY: u8 = 6;
+pub const ASSIGNMENT_EXPR_PRIMARY: u8 = 7;
 
 impl Debug for AssignmentExpression {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.tag {
-            ASSIGNMENT_EXPR_CONDITIONAL => write!(f, "ConditionalExpression({:p})", unsafe {
-                self.data.conditional
-            }),
             ASSIGNMENT_EXPR_YIELD => {
                 write!(f, "YieldExpression({:p})", unsafe { self.data._yield })
             }
@@ -1233,6 +1293,37 @@ impl Debug for AssignmentExpression {
                     "OperatorAssignment(left: {:p}, operator: {:?}, right: {:p})",
                     op.left, op.operator, op.right
                 )
+            }
+            ASSIGNMENT_EXPR_TERNARY => {
+                write!(
+                    f,
+                    "TernaryExpression(test: {:p}, consequent: {:p}, alternate: {:p})",
+                    unsafe { (*self.data.ternary).test },
+                    unsafe { (*self.data.ternary).consequent },
+                    unsafe { (*self.data.ternary).alternate },
+                )
+            }
+            ASSIGNMENT_EXPR_BINARY => {
+                let binary = unsafe { self.data.binary };
+                write!(
+                    f,
+                    "BinaryExpression(left: {:p}, operator: {:?}, right: {:p})",
+                    unsafe { (*binary).left },
+                    unsafe { (*binary).operator },
+                    unsafe { (*binary).right },
+                )
+            }
+            ASSIGNMENT_EXPR_UNARY => {
+                let unary = unsafe { self.data.unary };
+                write!(
+                    f,
+                    "UnaryExpression(operator: {:?}, operand: {:p})",
+                    unsafe { (*unary).operator },
+                    unsafe { (*unary).operand },
+                )
+            }
+            ASSIGNMENT_EXPR_PRIMARY => {
+                write!(f, "PrimaryExpression({:?})", unsafe { *self.data.primary })
             }
             _ => write!(f, "UnknownAssignmentExpression(tag: {})", self.tag),
         }

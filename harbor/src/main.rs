@@ -17,28 +17,62 @@ pub mod render;
 fn main() {
     env_logger::init();
 
-    let numeric_token_data = js::NumericLiteralTokenData {
-        value: 42.0,
-        is_bigint: false,
-        number_kind: js::NumericLiteralKind::Decimal,
+    let string = "identifier".encode_utf16().collect::<Vec<u16>>();
+
+    let zig_string = js::ZigString {
+        data: string.as_ptr(),
+        len: string.len(),
     };
 
-    let common_token_data = js::CommonTokenData {
-        common_token_kind: js::CommonTokenKind::NumericLiteral,
-        value: &numeric_token_data as *const js::NumericLiteralTokenData as usize,
-    };
-
-    let tokens = vec![js::Token {
-        kind: js::TokenKind::CommonToken,
-        value: &common_token_data as *const js::CommonTokenData as usize,
-    }];
+    let tokens = vec![
+        js::Token {
+            kind: js::TokenKind::CommonToken,
+            value: &(js::CommonTokenData {
+                common_token_kind: js::CommonTokenKind::Punctuator,
+                value: PunctuatorKind::OpenBracket as usize,
+            }) as *const js::CommonTokenData as usize,
+        },
+        js::Token {
+            kind: js::TokenKind::CommonToken,
+            value: &(js::CommonTokenData {
+                common_token_kind: js::CommonTokenKind::NumericLiteral,
+                value: &(js::NumericLiteralTokenData {
+                    value: 42.0,
+                    is_bigint: false,
+                    number_kind: js::NumericLiteralKind::Decimal,
+                }) as *const js::NumericLiteralTokenData as usize,
+            }) as *const js::CommonTokenData as usize,
+        },
+        js::Token {
+            kind: js::TokenKind::CommonToken,
+            value: &(js::CommonTokenData {
+                common_token_kind: js::CommonTokenKind::Punctuator,
+                value: PunctuatorKind::Comma as usize,
+            }) as *const js::CommonTokenData as usize,
+        },
+        js::Token {
+            kind: js::TokenKind::CommonToken,
+            value: &(js::CommonTokenData {
+                common_token_kind: js::CommonTokenKind::IdentifierName,
+                value: &(js::IdentifierNameTokenData { name: zig_string })
+                    as *const js::IdentifierNameTokenData as usize,
+            }) as *const js::CommonTokenData as usize,
+        },
+        js::Token {
+            kind: js::TokenKind::CommonToken,
+            value: &(js::CommonTokenData {
+                common_token_kind: js::CommonTokenKind::Punctuator,
+                value: PunctuatorKind::CloseBracket as usize,
+            }) as *const js::CommonTokenData as usize,
+        },
+    ];
 
     let tokens = js::TokenSeq {
         data: tokens.as_ptr(),
         len: tokens.len(),
     };
 
-    println!("Parsing expression: 42.0");
+    println!("Parsing expression: [42.0, identifier]");
 
     let primary_expr = unsafe { js::temp_unsafe_parse_primary_expr(tokens) };
 

@@ -295,10 +295,6 @@ pub const UnaryExpression = extern struct {
     operand: *UnaryExpressionOrLHS,
 };
 
-pub const UNARY_EXPR_UPDATE = 0;
-pub const UNARY_EXPR_UNARY = 1;
-pub const UNARY_EXPR_AWAIT = 2;
-
 pub const UnaryOperator = enum(u8) {
     Delete = 0,
     Void = 1,
