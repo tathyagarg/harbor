@@ -6,7 +6,7 @@ use std::rc::Rc;
 use crate::{
     css::{cssom::CSSStyleSheet, parser::parse_stylesheet, tokenize::tokenize},
     html5::{dom::Document, parse::Parser},
-    http::{Client, Protocol, Request, url::URL},
+    http::{Client, Header, Protocol, Request, url::URL},
     infra::{InputStream, Serializable},
 };
 
@@ -19,7 +19,7 @@ pub struct Agent {
 }
 
 impl Agent {
-    pub fn new() -> Rc<RefCell<Self>> {
+    pub fn new(url: Option<String>) -> Rc<RefCell<Self>> {
         let client = Client::new(Protocol::HTTP1_1, true);
 
         let stylesheet_content = fs::read_to_string("res/css/ua.css").unwrap();
@@ -48,10 +48,12 @@ impl Agent {
         // let event_loop = EventLoop::with_user_event().build().unwrap();
         // event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
 
-        {
-            let mut this = self_rc.borrow_mut();
-            this.open("https://flavorless.hackclub.com/");
-        }
+        // {
+        //     let mut this = self_rc.borrow_mut();
+        //     let url = this.url.as_ref().unwrap().clone();
+
+        //     this.open(&url);
+        // }
 
         // let mut app = {
         //     let mut this = self_rc.borrow_mut();
@@ -68,7 +70,8 @@ impl Agent {
             return None;
         }
 
-        let resolved_url = maybe_resolved_url.unwrap().serialize();
+        let raw_url = maybe_resolved_url.as_ref().unwrap();
+        let resolved_url = raw_url.serialize();
 
         if let Some(doc) = self.cached_pages.get(&resolved_url) {
             return Some(doc.clone());
@@ -77,48 +80,61 @@ impl Agent {
             //     app.document = Some(document);
             // }
         } else {
-            let url_obj = self.http_client.connect_to_url(resolved_url);
+            if raw_url.scheme == "http" || raw_url.scheme == "https" {
+                let url_obj = self.http_client.connect_to_url(resolved_url);
 
-            let _response = self.http_client.send_request(Request {
-                method: String::from("GET"),
-                request_target: url_obj.path.serialize(),
-                protocol: Protocol::HTTP1_1,
-                headers: vec![
-                    crate::http::Header::new(
-                        String::from("User-Agent"),
-                        String::from("Harbor Browser"),
-                    ),
-                    crate::http::Header::new(
-                        String::from("Host"),
-                        url_obj.host.unwrap().serialize(),
-                    ),
-                ],
-                body: None,
-            });
+                let _response = self.http_client.send_request(Request {
+                    method: String::from("GET"),
+                    request_target: url_obj.path.serialize(),
+                    protocol: Protocol::HTTP1_1,
+                    headers: vec![
+                        Header::new(String::from("User-Agent"), String::from("Harbor Browser")),
+                        Header::new(String::from("Host"), url_obj.host.unwrap().serialize()),
+                    ],
+                    body: None,
+                });
 
-            let response = match _response {
-                Some(resp) => resp,
-                None => return None,
-            };
+                let response = match _response {
+                    Some(resp) => resp,
+                    None => return None,
+                };
 
-            println!(
-                "Received response: \n\n{}",
-                response.body.clone().unwrap_or_default()
-            );
+                println!(
+                    "Received response: \n\n{}",
+                    response.body.clone().unwrap_or_default()
+                );
 
-            let html_content = match response.body {
-                Some(body) => body,
-                None => return None,
-            };
+                let html_content = match response.body {
+                    Some(body) => body,
+                    None => return None,
+                };
 
-            let mut stream = InputStream::new(&html_content.chars().collect::<Vec<char>>()[..]);
+                let mut stream = InputStream::new(&html_content.chars().collect::<Vec<char>>()[..]);
 
-            let document = Parser::parse_stream(&mut stream);
-            document
-                .borrow_mut()
-                .insert_stylesheet(0, self.ua_stylesheet.clone());
+                let document = Parser::parse_stream(&mut stream);
+                document
+                    .borrow_mut()
+                    .insert_stylesheet(0, self.ua_stylesheet.clone());
 
-            return Some(Rc::clone(&document));
+                return Some(Rc::clone(&document));
+            } else if raw_url.scheme == "file" {
+                let path = raw_url.path.serialize().trim_end_matches('/').to_string();
+
+                let html_content = fs::read_to_string(path).unwrap();
+
+                let mut stream = InputStream::new(&html_content.chars().collect::<Vec<char>>()[..]);
+
+                let document = Parser::parse_stream(&mut stream);
+                document
+                    .borrow_mut()
+                    .insert_stylesheet(0, self.ua_stylesheet.clone());
+
+                self.cached_pages.insert(resolved_url, Rc::clone(&document));
+
+                return Some(document);
+            }
+
+            None
 
             // if let Some(app) = &mut self.app {
             //     app.document = Some(Rc::clone(&document));

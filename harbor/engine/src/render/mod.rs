@@ -93,6 +93,8 @@ pub struct App {
     pub document: Option<Rc<RefCell<Document>>>,
 
     pub callbacks: Option<CallbackData>,
+
+    pub initial_url: Option<String>,
 }
 
 impl ApplicationHandler<AppEvent> for App {
@@ -120,7 +122,7 @@ impl ApplicationHandler<AppEvent> for App {
         self.state = Some(pollster::block_on(WindowState::new(
             window,
             self.window_options.clone(),
-            Some("https://flavorless.hackclub.com/".to_string()),
+            self.initial_url.clone(),
         )));
 
         if let Some(agent) = &self.agent {

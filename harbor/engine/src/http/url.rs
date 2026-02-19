@@ -54,7 +54,8 @@ pub fn special_scheme_default_port(scheme: &String) -> Option<u16> {
 fn _is_windows_drive_letter(codepoint: &String, second: &[char]) -> bool {
     let mut iter = codepoint.chars();
 
-    iter.next().unwrap().is_ascii_alphabetic() && second.contains(&iter.next().unwrap())
+    iter.next()
+        .is_some_and(|c| c.is_ascii_alphabetic() && second.contains(&iter.next().unwrap()))
 }
 
 fn is_windows_drive_letter(codepoint: &String) -> bool {

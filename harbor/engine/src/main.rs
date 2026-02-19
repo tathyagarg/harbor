@@ -154,7 +154,9 @@ fn main() {
 
     // js::JsRuntime::new();
 
-    let ua = Agent::new();
+    let ua = Agent::new(Some(
+        "file:///Users/tathyagarg/programming/harbor/assets/html/custom006.html".to_string(),
+    ));
     let mut app = App {
         window_options: render::WindowOptions {
             use_transparent: true,
@@ -169,6 +171,9 @@ fn main() {
         document: None,
         agent: Some(Rc::clone(&ua)),
         callbacks: None,
+        initial_url: Some(
+            "file:///Users/tathyagarg/programming/harbor/assets/html/custom006.html".to_string(),
+        ),
     };
 
     app.run();
