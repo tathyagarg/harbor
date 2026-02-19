@@ -17,66 +17,66 @@ pub mod render;
 fn main() {
     env_logger::init();
 
-    let string = "identifier".encode_utf16().collect::<Vec<u16>>();
+    // let string = "identifier".encode_utf16().collect::<Vec<u16>>();
 
-    let zig_string = js::ZigString {
-        data: string.as_ptr(),
-        len: string.len(),
-    };
+    // let zig_string = js::ZigString {
+    //     data: string.as_ptr(),
+    //     len: string.len(),
+    // };
 
-    let tokens = vec![
-        js::Token {
-            kind: js::TokenKind::CommonToken,
-            value: &(js::CommonTokenData {
-                common_token_kind: js::CommonTokenKind::Punctuator,
-                value: PunctuatorKind::OpenBracket as usize,
-            }) as *const js::CommonTokenData as usize,
-        },
-        js::Token {
-            kind: js::TokenKind::CommonToken,
-            value: &(js::CommonTokenData {
-                common_token_kind: js::CommonTokenKind::NumericLiteral,
-                value: &(js::NumericLiteralTokenData {
-                    value: 42.0,
-                    is_bigint: false,
-                    number_kind: js::NumericLiteralKind::Decimal,
-                }) as *const js::NumericLiteralTokenData as usize,
-            }) as *const js::CommonTokenData as usize,
-        },
-        js::Token {
-            kind: js::TokenKind::CommonToken,
-            value: &(js::CommonTokenData {
-                common_token_kind: js::CommonTokenKind::Punctuator,
-                value: PunctuatorKind::Comma as usize,
-            }) as *const js::CommonTokenData as usize,
-        },
-        js::Token {
-            kind: js::TokenKind::CommonToken,
-            value: &(js::CommonTokenData {
-                common_token_kind: js::CommonTokenKind::IdentifierName,
-                value: &(js::IdentifierNameTokenData { name: zig_string })
-                    as *const js::IdentifierNameTokenData as usize,
-            }) as *const js::CommonTokenData as usize,
-        },
-        js::Token {
-            kind: js::TokenKind::CommonToken,
-            value: &(js::CommonTokenData {
-                common_token_kind: js::CommonTokenKind::Punctuator,
-                value: PunctuatorKind::CloseBracket as usize,
-            }) as *const js::CommonTokenData as usize,
-        },
-    ];
+    // let tokens = vec![
+    //     js::Token {
+    //         kind: js::TokenKind::CommonToken,
+    //         value: &(js::CommonTokenData {
+    //             common_token_kind: js::CommonTokenKind::Punctuator,
+    //             value: PunctuatorKind::OpenBracket as usize,
+    //         }) as *const js::CommonTokenData as usize,
+    //     },
+    //     js::Token {
+    //         kind: js::TokenKind::CommonToken,
+    //         value: &(js::CommonTokenData {
+    //             common_token_kind: js::CommonTokenKind::NumericLiteral,
+    //             value: &(js::NumericLiteralTokenData {
+    //                 value: 42.0,
+    //                 is_bigint: false,
+    //                 number_kind: js::NumericLiteralKind::Decimal,
+    //             }) as *const js::NumericLiteralTokenData as usize,
+    //         }) as *const js::CommonTokenData as usize,
+    //     },
+    //     js::Token {
+    //         kind: js::TokenKind::CommonToken,
+    //         value: &(js::CommonTokenData {
+    //             common_token_kind: js::CommonTokenKind::Punctuator,
+    //             value: PunctuatorKind::Comma as usize,
+    //         }) as *const js::CommonTokenData as usize,
+    //     },
+    //     js::Token {
+    //         kind: js::TokenKind::CommonToken,
+    //         value: &(js::CommonTokenData {
+    //             common_token_kind: js::CommonTokenKind::IdentifierName,
+    //             value: &(js::IdentifierNameTokenData { name: zig_string })
+    //                 as *const js::IdentifierNameTokenData as usize,
+    //         }) as *const js::CommonTokenData as usize,
+    //     },
+    //     js::Token {
+    //         kind: js::TokenKind::CommonToken,
+    //         value: &(js::CommonTokenData {
+    //             common_token_kind: js::CommonTokenKind::Punctuator,
+    //             value: PunctuatorKind::CloseBracket as usize,
+    //         }) as *const js::CommonTokenData as usize,
+    //     },
+    // ];
 
-    let tokens = js::TokenSeq {
-        data: tokens.as_ptr(),
-        len: tokens.len(),
-    };
+    // let tokens = js::TokenSeq {
+    //     data: tokens.as_ptr(),
+    //     len: tokens.len(),
+    // };
 
-    println!("Parsing expression: [42.0, identifier]");
+    // println!("Parsing expression: [42.0, identifier]");
 
-    let primary_expr = unsafe { js::temp_unsafe_parse_primary_expr(tokens) };
+    // let primary_expr = unsafe { js::temp_unsafe_parse_primary_expr(tokens) };
 
-    println!("Expression: {:?}", primary_expr);
+    // println!("Expression: {:?}", primary_expr);
 
     // let data = "// abc\nabc ??= 1.25 * ghi + \"pluh\""
     //     .encode_utf16()
@@ -154,24 +154,24 @@ fn main() {
 
     // js::JsRuntime::new();
 
-    // let ua = Agent::new();
-    // let mut app = App {
-    //     window_options: render::WindowOptions {
-    //         use_transparent: true,
-    //         background_color: wgpu::Color {
-    //             r: 1.0,
-    //             g: 1.0,
-    //             b: 1.0,
-    //             a: 0.0,
-    //         },
-    //     },
-    //     state: None,
-    //     document: None,
-    //     agent: Some(Rc::clone(&ua)),
-    //     callbacks: None,
-    // };
+    let ua = Agent::new();
+    let mut app = App {
+        window_options: render::WindowOptions {
+            use_transparent: true,
+            background_color: wgpu::Color {
+                r: 1.0,
+                g: 1.0,
+                b: 1.0,
+                a: 0.0,
+            },
+        },
+        state: None,
+        document: None,
+        agent: Some(Rc::clone(&ua)),
+        callbacks: None,
+    };
 
-    // app.run();
+    app.run();
 
     // let url_target = String::from("https://rupnil.codes/");
     // println!("Parsing target: {}", url_target);
