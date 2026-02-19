@@ -14,7 +14,6 @@ const UNDERSCORE = 0x005F;
 
 pub fn match_numeric_literal(text: CodePointSeq, i: *usize, cp: root.CodePoint) ?Token {
     const original_i = i.*;
-    std.debug.print("Attempting to match numeric literal at index {d} (code point: {x})\n", .{ original_i, cp });
 
     if (match_decimal_literal(text, i, cp)) |token| {
         return token;

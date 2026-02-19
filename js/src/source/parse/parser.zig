@@ -105,6 +105,26 @@ pub fn expect(parser: *Parser, expected: Token) !void {
     }
 }
 
+pub fn expect_skip_whitespace(parser: *Parser, expected: Token) !void {
+    const initial_position = parser.curr;
+
+    while (true) {
+        const token = peek(parser) orelse return error.UnexpectedEndOfTokens;
+
+        if (token.kind == .Whitespace or token.kind == .LineTerminator) {
+            _ = next(parser);
+            continue;
+        }
+
+        break;
+    }
+
+    expect(parser, expected) catch |err| {
+        reset_to(parser, initial_position);
+        return err;
+    };
+}
+
 pub fn match(parser: *Parser, expected: Token) bool {
     const token = peek(parser);
     if (token == null) {
@@ -115,6 +135,10 @@ pub fn match(parser: *Parser, expected: Token) bool {
     }
     next(parser);
     return true;
+}
+
+pub fn reset_to(parser: *Parser, position: usize) void {
+    parser.curr = position;
 }
 
 pub fn parse_assignment_expression(parser: *Parser) !*expr.AssignmentExpression {
@@ -212,7 +236,7 @@ pub fn parse_primary_expression(parser: *Parser) error{ UnexpectedEndOfTokens, O
 
                             const inner = try parse_primary_expression(parser);
 
-                            try expect(parser, Token{
+                            try expect_skip_whitespace(parser, Token{
                                 .kind = .CommonToken,
                                 .data = @intFromPtr(&CommonTokenData{
                                     .common_token_kind = .Punctuator,
@@ -274,7 +298,7 @@ pub fn parse_primary_expression(parser: *Parser) error{ UnexpectedEndOfTokens, O
 
                                         try elems.append(parser.allocator, array_element.*);
 
-                                        try expect(parser, Token{
+                                        try expect_skip_whitespace(parser, Token{
                                             .kind = .CommonToken,
                                             .data = @intFromPtr(&CommonTokenData{
                                                 .common_token_kind = .Punctuator,
@@ -296,13 +320,13 @@ pub fn parse_primary_expression(parser: *Parser) error{ UnexpectedEndOfTokens, O
 
                                     try elems.append(parser.allocator, array_elem.*);
 
-                                    expect(parser, Token{
+                                    expect_skip_whitespace(parser, Token{
                                         .kind = .CommonToken,
                                         .data = @intFromPtr(&CommonTokenData{
                                             .common_token_kind = .Punctuator,
                                             .data = @intFromEnum(_text.PunctuatorKind.Comma),
                                         }),
-                                    }) catch try expect(parser, Token{
+                                    }) catch try expect_skip_whitespace(parser, Token{
                                         .kind = .CommonToken,
                                         .data = @intFromPtr(&CommonTokenData{
                                             .common_token_kind = .Punctuator,
@@ -534,5 +558,41 @@ test "parse primary expr array literal" {
     std.debug.assert(result.data.array.elements.data[1].data.expression.data.primary.data.literal.tag == expr.LITERAL_NUMBER);
     std.debug.assert(result.data.array.elements.data[1].data.expression.data.primary.data.literal.data.number.value == 2.0);
 
+    deinit(&parser);
+}
+
+test "parse primary expr from string" {
+    const text = "[1, 2]";
+    const str = testing.u8_array_to_string(@ptrCast(@constCast(text)), text.len);
+
+    const tokens = try _text.parse_text_string(str, .InputElementHashbangOrRegExp);
+
+    var parser = Parser{
+        .tokens = tokens,
+        .curr = 0,
+        .arena = std.heap.ArenaAllocator.init(std.heap.page_allocator),
+        .allocator = undefined,
+    };
+    parser.allocator = parser.arena.allocator();
+
+    const result = (try parse_primary_expression(&parser)).*;
+
+    std.debug.assert(result.tag == expr.PRIMARY_EXPR_ARRAY);
+    std.debug.assert(result.data.array.elements.len == 2);
+
+    std.debug.assert(result.data.array.elements.data[0].tag == expr.ARRAY_ELEMENT_EXPR);
+    std.debug.assert(result.data.array.elements.data[0].data.expression.tag == expr.ASSIGNMENT_EXPR_PRIMARY);
+    std.debug.assert(result.data.array.elements.data[0].data.expression.data.primary.tag == expr.PRIMARY_EXPR_LITERAL);
+    std.debug.assert(result.data.array.elements.data[0].data.expression.data.primary.data.literal.tag == expr.LITERAL_NUMBER);
+    std.debug.assert(result.data.array.elements.data[0].data.expression.data.primary.data.literal.data.number.value == 1.0);
+
+    std.debug.assert(result.data.array.elements.data[1].tag == expr.ARRAY_ELEMENT_EXPR);
+    std.debug.assert(result.data.array.elements.data[1].data.expression.tag == expr.ASSIGNMENT_EXPR_PRIMARY);
+    std.debug.assert(result.data.array.elements.data[1].data.expression.data.primary.tag == expr.PRIMARY_EXPR_LITERAL);
+    std.debug.assert(result.data.array.elements.data[1].data.expression.data.primary.data.literal.tag == expr.LITERAL_NUMBER);
+    std.debug.assert(result.data.array.elements.data[1].data.expression.data.primary.data.literal.data.number.value == 2.0);
+
+    _text.free_string(str);
+    _text.free_token_seq(tokens);
     deinit(&parser);
 }
