@@ -80,8 +80,8 @@ impl Agent {
             //     app.document = Some(document);
             // }
         } else {
-            if raw_url.scheme == "http" || raw_url.scheme == "https" {
-                let url_obj = self.http_client.connect_to_url(resolved_url);
+            let html_content = if raw_url.scheme == "http" || raw_url.scheme == "https" {
+                let url_obj = self.http_client.connect_to_url(resolved_url.clone());
 
                 let _response = self.http_client.send_request(Request {
                     method: String::from("GET"),
@@ -104,37 +104,28 @@ impl Agent {
                     response.body.clone().unwrap_or_default()
                 );
 
-                let html_content = match response.body {
+                match response.body {
                     Some(body) => body,
                     None => return None,
-                };
-
-                let mut stream = InputStream::new(&html_content.chars().collect::<Vec<char>>()[..]);
-
-                let document = Parser::parse_stream(&mut stream);
-                document
-                    .borrow_mut()
-                    .insert_stylesheet(0, self.ua_stylesheet.clone());
-
-                return Some(Rc::clone(&document));
+                }
             } else if raw_url.scheme == "file" {
                 let path = raw_url.path.serialize().trim_end_matches('/').to_string();
 
-                let html_content = fs::read_to_string(path).unwrap();
+                fs::read_to_string(path).unwrap()
+            } else {
+                return None;
+            };
 
-                let mut stream = InputStream::new(&html_content.chars().collect::<Vec<char>>()[..]);
+            let mut stream = InputStream::new(&html_content.chars().collect::<Vec<char>>()[..]);
 
-                let document = Parser::parse_stream(&mut stream);
-                document
-                    .borrow_mut()
-                    .insert_stylesheet(0, self.ua_stylesheet.clone());
+            let document = Parser::parse_stream(&mut stream);
+            document
+                .borrow_mut()
+                .insert_stylesheet(0, self.ua_stylesheet.clone());
 
-                self.cached_pages.insert(resolved_url, Rc::clone(&document));
+            self.cached_pages.insert(resolved_url, Rc::clone(&document));
 
-                return Some(document);
-            }
-
-            None
+            return Some(document);
 
             // if let Some(app) = &mut self.app {
             //     app.document = Some(Rc::clone(&document));
