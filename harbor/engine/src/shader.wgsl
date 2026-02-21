@@ -53,8 +53,8 @@ fn vs_main(model: VertexInput) -> VertexOutput {
 
   out.color = model.color;
   out.clip_position = vec4<f32>(
-    model.position.x,
-    model.position.y,
+    (model.position.x / globals.screen_size[0]) * 2.0 - 1.0,
+    1.0 - (model.position.y / globals.screen_size[1]) * 2.0,
     0.0,
     1.0
   );

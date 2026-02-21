@@ -43,6 +43,7 @@ pub struct WindowState {
     pub glyph_fill_render_pipeline: wgpu::RenderPipeline,
     pub glyph_stencil_render_pipeline: wgpu::RenderPipeline,
     pub fill_render_pipeline: wgpu::RenderPipeline,
+    pub tab_bar_render_pipeline: wgpu::RenderPipeline,
     pub circle_render_pipeline: wgpu::RenderPipeline,
 
     pub is_surface_configured: bool,
@@ -55,16 +56,29 @@ pub struct WindowState {
     pub globals_buffer: wgpu::Buffer,
     pub globals_bind_group: wgpu::BindGroup,
 
+    pub tab_buffer: wgpu::Buffer,
+
     pub cursor_position: (f64, f64),
 }
 
 impl WindowState {
+    pub fn render_tabs_bar(&self, render_pass: &mut wgpu::RenderPass) {
+        render_pass.set_stencil_reference(1);
+        render_pass.set_pipeline(&self.tab_bar_render_pipeline);
+
+        render_pass.set_vertex_buffer(0, self.tab_buffer.slice(..));
+        render_pass.draw(0..6, 0..1);
+    }
+
     /// Renders a layout box and its children recursively
     /// # Arguments
     /// * `layout_box` - The layout box to render
     /// * `position` - The position offset to apply to the box
     /// * `parents` - A mutable reference to a vector of parent boxes and their positions
     /// * `render_pass` - A mutable reference to the current render pass
+    ///
+    /// Yes this was written by me because I kept getting confused by what the variables
+    /// represneted
     pub fn render_box(
         &mut self,
         layout_box: Box,
@@ -112,8 +126,10 @@ impl WindowState {
 
             let window_size = self.window.inner_size();
 
-            let x_pos = (adj_position.0 as f32 / window_size.width as f32) * 2.0 - 1.0;
-            let y_pos = 1.0 - (adj_position.1 as f32 / window_size.height as f32) * 2.0;
+            // let x_pos = (adj_position.0 as f32 / window_size.width as f32) * 2.0 - 1.0;
+            // let y_pos = 1.0 - (adj_position.1 as f32 / window_size.height as f32) * 2.0;
+
+            let (x_pos, y_pos) = adj_position;
 
             let pixel_w = layout_box.content_edges().horizontal() as f32;
             let pixel_h = layout_box.content_edges().vertical() as f32;
@@ -121,7 +137,7 @@ impl WindowState {
             let width = (pixel_w / window_size.width as f32) * 2.0;
             let height = (pixel_h / window_size.height as f32) * 2.0;
 
-            let verts = rectangle_at(x_pos, y_pos, width, height, bg_color);
+            let verts = rectangle_at(x_pos as f32, y_pos as f32, width, height, bg_color);
 
             let bg_vertex_buffer =
                 self.device
@@ -394,6 +410,8 @@ impl WindowState {
             *pos.1 = Some(pos.1.unwrap_or(0.0) + tabs_bar_size.1);
 
             self.render_box(root_box, &mut vec![], &mut _render_pass);
+
+            self.render_tabs_bar(&mut _render_pass);
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
@@ -474,13 +492,6 @@ impl WindowState {
 
         let shader = device.create_shader_module(wgpu::include_wgsl!("../shader.wgsl"));
 
-        let render_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[],
-                push_constant_ranges: &[],
-            });
-
         let globals_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("Globals Bind Group Layout"),
@@ -496,15 +507,16 @@ impl WindowState {
                 }],
             });
 
+        let render_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("Render Pipeline Layout"),
+                bind_group_layouts: &[&globals_bind_group_layout],
+                push_constant_ranges: &[],
+            });
+
         let line_render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Render Pipeline"),
-            layout: Some(
-                &device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                    label: Some("Line Render Pipeline Layout"),
-                    bind_group_layouts: &[&globals_bind_group_layout],
-                    push_constant_ranges: &[],
-                }),
-            ),
+            layout: Some(&render_pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: Some("glyph_vs_main"),
@@ -570,7 +582,7 @@ impl WindowState {
             depth_stencil: Some(wgpu::DepthStencilState {
                 format: wgpu::TextureFormat::Depth24PlusStencil8,
                 depth_write_enabled: false,
-                depth_compare: wgpu::CompareFunction::Always,
+                depth_compare: wgpu::CompareFunction::Less,
                 stencil: wgpu::StencilState {
                     front: wgpu::StencilFaceState {
                         compare: wgpu::CompareFunction::Always,
@@ -597,13 +609,7 @@ impl WindowState {
         let glyph_stencil_render_pipeline =
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some("Glyph Stencil Render Pipeline"),
-                layout: Some(
-                    &device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                        label: Some("Glyph Stencil Render Pipeline Layout"),
-                        bind_group_layouts: &[&globals_bind_group_layout],
-                        push_constant_ranges: &[],
-                    }),
-                ),
+                layout: Some(&render_pipeline_layout),
                 vertex: wgpu::VertexState {
                     module: &shader,
                     entry_point: Some("glyph_vs_main"),
@@ -670,7 +676,7 @@ impl WindowState {
                 depth_stencil: Some(wgpu::DepthStencilState {
                     format: wgpu::TextureFormat::Depth24PlusStencil8,
                     depth_write_enabled: false,
-                    depth_compare: wgpu::CompareFunction::Always,
+                    depth_compare: wgpu::CompareFunction::Less,
                     stencil: wgpu::StencilState {
                         front: wgpu::StencilFaceState {
                             compare: wgpu::CompareFunction::Always,
@@ -697,13 +703,7 @@ impl WindowState {
         let glyph_fill_render_pipeline =
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some("Render Pipeline"),
-                layout: Some(
-                    &device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                        label: Some("Glyph Fill Render Pipeline Layout"),
-                        bind_group_layouts: &[&globals_bind_group_layout],
-                        push_constant_ranges: &[],
-                    }),
-                ),
+                layout: Some(&render_pipeline_layout),
                 vertex: wgpu::VertexState {
                     module: &shader,
                     entry_point: Some("glyph_vs_main"),
@@ -770,7 +770,7 @@ impl WindowState {
                 depth_stencil: Some(wgpu::DepthStencilState {
                     format: wgpu::TextureFormat::Depth24PlusStencil8,
                     depth_write_enabled: false,
-                    depth_compare: wgpu::CompareFunction::Always,
+                    depth_compare: wgpu::CompareFunction::Less,
                     stencil: wgpu::StencilState {
                         front: wgpu::StencilFaceState {
                             compare: wgpu::CompareFunction::NotEqual,
@@ -836,7 +836,7 @@ impl WindowState {
             depth_stencil: Some(wgpu::DepthStencilState {
                 format: wgpu::TextureFormat::Depth24PlusStencil8,
                 depth_write_enabled: false,
-                depth_compare: wgpu::CompareFunction::Always,
+                depth_compare: wgpu::CompareFunction::Less,
                 stencil: wgpu::StencilState {
                     front: wgpu::StencilFaceState {
                         compare: wgpu::CompareFunction::Equal,
@@ -859,6 +859,73 @@ impl WindowState {
             multiview: None,
             cache: None,
         });
+
+        let tab_bar_render_pipeline =
+            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("Fill Render Pipeline"),
+                layout: Some(&render_pipeline_layout),
+                vertex: wgpu::VertexState {
+                    module: &shader,
+                    entry_point: Some("vs_main"),
+                    buffers: &[fill_descriptor()],
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: &shader,
+                    entry_point: Some("fs_main"),
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format: config.format,
+                        blend: Some(wgpu::BlendState {
+                            color: wgpu::BlendComponent {
+                                src_factor: wgpu::BlendFactor::SrcAlpha,
+                                dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                                operation: wgpu::BlendOperation::Add,
+                            },
+                            alpha: wgpu::BlendComponent {
+                                src_factor: wgpu::BlendFactor::One,
+                                dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                                operation: wgpu::BlendOperation::Add,
+                            },
+                        }),
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                }),
+                primitive: wgpu::PrimitiveState {
+                    topology: wgpu::PrimitiveTopology::TriangleList,
+                    strip_index_format: None,
+                    front_face: wgpu::FrontFace::Ccw,
+                    cull_mode: None,
+                    unclipped_depth: false,
+                    polygon_mode: wgpu::PolygonMode::Fill,
+                    conservative: false,
+                },
+                depth_stencil: Some(wgpu::DepthStencilState {
+                    format: wgpu::TextureFormat::Depth24PlusStencil8,
+                    depth_write_enabled: false,
+                    depth_compare: wgpu::CompareFunction::Less,
+                    stencil: wgpu::StencilState {
+                        front: wgpu::StencilFaceState {
+                            compare: wgpu::CompareFunction::Always,
+                            pass_op: wgpu::StencilOperation::Replace,
+                            fail_op: wgpu::StencilOperation::Keep,
+                            depth_fail_op: wgpu::StencilOperation::Keep,
+                        },
+                        back: wgpu::StencilFaceState {
+                            compare: wgpu::CompareFunction::Always,
+                            pass_op: wgpu::StencilOperation::Replace,
+                            fail_op: wgpu::StencilOperation::Keep,
+                            depth_fail_op: wgpu::StencilOperation::Keep,
+                        },
+                        read_mask: 0x1,
+                        write_mask: 0x1,
+                    },
+                    bias: wgpu::DepthBiasState::default(),
+                }),
+                multisample: wgpu::MultisampleState::default(),
+                multiview: None,
+                cache: None,
+            });
 
         let circle_render_pipeline =
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -903,7 +970,7 @@ impl WindowState {
                 depth_stencil: Some(wgpu::DepthStencilState {
                     format: wgpu::TextureFormat::Depth24PlusStencil8,
                     depth_write_enabled: false,
-                    depth_compare: wgpu::CompareFunction::Always,
+                    depth_compare: wgpu::CompareFunction::Less,
                     stencil: wgpu::StencilState {
                         front: wgpu::StencilFaceState {
                             compare: wgpu::CompareFunction::Equal,
@@ -961,6 +1028,25 @@ impl WindowState {
 
         let stencil_view = stencil_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
+        let tabs_bar_size = (
+            config.width as f64,
+            TABS_BAR_OFFSET(config.width as f64, config.height as f64).1,
+        );
+
+        let tab_bar_verts = rectangle_at(
+            0.0,
+            0.0,
+            tabs_bar_size.0 as f32,
+            tabs_bar_size.1 as f32,
+            [0.9, 0.9, 0.9, 1.0],
+        );
+
+        let tabs_vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Tabs Bar Vertex Buffer"),
+            contents: bytemuck::cast_slice(&tab_bar_verts),
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        });
+
         Self {
             surface,
             window,
@@ -983,10 +1069,12 @@ impl WindowState {
             glyph_stencil_render_pipeline,
             glyph_fill_render_pipeline,
             fill_render_pipeline,
+            tab_bar_render_pipeline,
             circle_render_pipeline,
             is_surface_configured: false,
             window_options,
             prev_hovered_elements: vec![],
+            tab_buffer: tabs_vertex_buffer,
             globals_buffer,
             globals_bind_group,
             cursor_position: (0.0, 0.0),
@@ -1059,6 +1147,28 @@ impl WindowState {
 
             self.stencil_view =
                 stencil_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+            let tabs_bar_size = (
+                self.config.width as f64,
+                TABS_BAR_OFFSET(self.config.width as f64, self.config.height as f64).1,
+            );
+
+            let tab_bar_verts = rectangle_at(
+                0.0,
+                0.0,
+                tabs_bar_size.0 as f32,
+                tabs_bar_size.1 as f32,
+                [0.9, 0.9, 0.9, 1.0],
+            );
+
+            self.queue
+                .write_buffer(&self.tab_buffer, 0, bytemuck::cast_slice(&tab_bar_verts));
+
+            // let tabs_vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            //     label: Some("Tabs Bar Vertex Buffer"),
+            //     contents: bytemuck::cast_slice(&tab_bar_verts),
+            //     usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            // });
         }
     }
 }

@@ -19,7 +19,7 @@ pub struct Agent {
 }
 
 impl Agent {
-    pub fn new(url: Option<String>) -> Rc<RefCell<Self>> {
+    pub fn new() -> Rc<RefCell<Self>> {
         let client = Client::new(Protocol::HTTP1_1, true);
 
         let stylesheet_content = fs::read_to_string("res/css/ua.css").unwrap();

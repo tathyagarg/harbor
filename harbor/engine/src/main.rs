@@ -154,9 +154,7 @@ fn main() {
 
     // js::JsRuntime::new();
 
-    let ua = Agent::new(Some(
-        "file:///Users/tathyagarg/programming/harbor/assets/html/custom006.html".to_string(),
-    ));
+    let ua = Agent::new();
     let mut app = App {
         window_options: render::WindowOptions {
             use_transparent: true,

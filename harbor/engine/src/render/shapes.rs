@@ -49,7 +49,7 @@ pub fn rectangle_at(
             color,
         },
         ColoredVertex {
-            position: [x + width, y - height],
+            position: [x + width, y + height],
             color,
         },
         ColoredVertex {
@@ -57,11 +57,11 @@ pub fn rectangle_at(
             color,
         },
         ColoredVertex {
-            position: [x + width, y - height],
+            position: [x + width, y + height],
             color,
         },
         ColoredVertex {
-            position: [x, y - height],
+            position: [x, y + height],
             color,
         },
     ]
