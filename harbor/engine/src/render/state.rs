@@ -30,7 +30,7 @@ pub struct WindowState {
 
     pub layout: Option<Layout>,
 
-    pub tab_urls: Vec<String>,
+    pub tab_urls: Vec<(String, f64, f64)>,
     pub active_tab: usize,
 
     // pub viewport_width: f64,
@@ -56,9 +56,6 @@ pub struct WindowState {
     pub globals_bind_group: wgpu::BindGroup,
 
     pub cursor_position: (f64, f64),
-
-    pub scroll_x: f64,
-    pub scroll_y: f64,
 }
 
 impl WindowState {
@@ -74,7 +71,13 @@ impl WindowState {
         parents: &mut Vec<(Box, (f64, f64))>,
         render_pass: &mut wgpu::RenderPass,
     ) {
-        let _maybe_res = (layout_box.clone(), (-self.scroll_x, -self.scroll_y));
+        let tab = self
+            .tab_urls
+            .get(self.active_tab)
+            .cloned()
+            .unwrap_or_else(|| ("about:blank".to_string(), 0.0, 0.0));
+
+        let _maybe_res = (layout_box.clone(), (-tab.1, -tab.2));
 
         let respected_parent = if let Some(rel_to) = layout_box.position_relative_to {
             if rel_to > parents.len() {
@@ -969,7 +972,7 @@ impl WindowState {
             stencil_view,
             layout: None,
             tab_urls: if let Some(url) = url {
-                vec![url]
+                vec![(url, 0.0, 0.0)]
             } else {
                 vec![]
             },
@@ -987,8 +990,6 @@ impl WindowState {
             globals_buffer,
             globals_bind_group,
             cursor_position: (0.0, 0.0),
-            scroll_x: 0.0,
-            scroll_y: 0.0,
         }
     }
 

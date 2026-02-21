@@ -130,8 +130,9 @@ impl ApplicationHandler<AppEvent> for App {
 
             let state = self.state.as_mut().unwrap();
 
-            let active_url = state.tab_urls[state.active_tab].clone();
-            let doc = agent_clone.borrow_mut().open(&active_url);
+            let tab_state = state.tab_urls[state.active_tab].clone();
+
+            let doc = agent_clone.borrow_mut().open(&tab_state.0);
 
             if let Some(document) = doc {
                 self.document = Some(Rc::clone(&document));
@@ -168,14 +169,15 @@ impl ApplicationHandler<AppEvent> for App {
                 }
 
                 let layout = state.layout.as_ref().unwrap();
+                let tab_state = state.tab_urls.get(state.active_tab).unwrap();
 
                 if let Some(root) = layout.root_box.as_ref() {
                     let elems = CssBox::get_elements_under(
                         root,
                         position.x,
                         position.y,
-                        -state.scroll_x,
-                        -state.scroll_y,
+                        -tab_state.1,
+                        -tab_state.2,
                     );
 
                     let inner_size = state.window.inner_size();
@@ -210,14 +212,15 @@ impl ApplicationHandler<AppEvent> for App {
                 }
 
                 let layout = state.layout.as_ref().unwrap();
+                let tab_state = state.tab_urls.get(state.active_tab).unwrap();
 
                 if let Some(root) = layout.root_box.as_ref() {
                     let elems = CssBox::get_elements_under(
                         root,
                         state.cursor_position.0,
                         state.cursor_position.1,
-                        -state.scroll_x,
-                        -state.scroll_y,
+                        -tab_state.1,
+                        -tab_state.2,
                     );
 
                     for (i, child) in elems.iter().enumerate() {
@@ -259,11 +262,11 @@ impl ApplicationHandler<AppEvent> for App {
                 //     state.window.inner_size().width
                 // );
 
-                state.scroll_x = (state.scroll_x - delta_x).max(0.0);
-                // .min(state.viewport_width - state.window.inner_size().width as f64);
-                state.scroll_y = (state.scroll_y - delta_y)
-                    .max(0.0)
-                    .min(state.viewport_height - state.window.inner_size().height as f64);
+                let tab_state = state.tab_urls.get_mut(state.active_tab).unwrap();
+
+                tab_state.1 = (tab_state.1 - delta_x).max(0.0);
+                tab_state.2 = (tab_state.2 - delta_y).max(0.0);
+                // .min(state.viewport_height - state.window.inner_size().height as f64);
             }
             WindowEvent::KeyboardInput {
                 event:
@@ -309,16 +312,18 @@ impl ApplicationHandler<AppEvent> for App {
                             state.active_tab = digit;
 
                             if let Some(callbacks) = &self.callbacks {
-                                (callbacks.link_callback)(&url);
+                                (callbacks.link_callback)(&url.0);
                             }
                         }
                     }
                 }
                 (KeyCode::Minus, ElementState::Pressed) => {
                     if let Some(state) = &mut self.state {
-                        state
-                            .tab_urls
-                            .push(String::from("https://flavorless.hackclub.com/"));
+                        state.tab_urls.push((
+                            String::from("https://flavorless.hackclub.com/"),
+                            0.0,
+                            0.0,
+                        ));
                     }
                 }
                 _ => {}
@@ -349,10 +354,9 @@ impl ApplicationHandler<AppEvent> for App {
                         let layout = Layout::make_layout(Rc::clone(&document), viewport_size);
 
                         if let Some(state) = &mut self.state {
-                            state.tab_urls[state.active_tab] = url;
-
-                            state.scroll_x = 0.0;
-                            state.scroll_y = 0.0;
+                            if state.tab_urls[state.active_tab].0 != url {
+                                state.tab_urls[state.active_tab] = (url.clone(), 0.0, 0.0);
+                            }
 
                             let root_box = layout.root_box.as_ref().unwrap();
 
