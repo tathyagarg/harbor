@@ -12,6 +12,10 @@ pub const INITIAL_WINDOW_HEIGHT: u32 = 600;
 pub const MINIMUM_WINDOW_WIDTH: u32 = 400;
 pub const MINIMUM_WINDOW_HEIGHT: u32 = 300;
 
+// TODO: Make this configurable
+pub const TABS_BAR_OFFSET: fn(f64, f64) -> (f64, f64) =
+    |_window_width, window_height| (0.0, (window_height * 0.05).max(50.0));
+
 pub static FONTS: LazyLock<HashMap<String, Arc<TTCData>>> = LazyLock::new(|| {
     let arial = Arc::new(font::parse_ttc(include_bytes!("../res/fonts/Arial.ttc")));
 

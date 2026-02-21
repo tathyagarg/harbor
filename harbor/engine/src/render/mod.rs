@@ -130,7 +130,8 @@ impl ApplicationHandler<AppEvent> for App {
 
             let state = self.state.as_mut().unwrap();
 
-            let doc = agent_clone.borrow_mut().open(state.url.as_ref().unwrap());
+            let active_url = state.tab_urls[state.active_tab].clone();
+            let doc = agent_clone.borrow_mut().open(&active_url);
 
             if let Some(document) = doc {
                 self.document = Some(Rc::clone(&document));
@@ -274,6 +275,52 @@ impl ApplicationHandler<AppEvent> for App {
                 ..
             } => match (code, key_state) {
                 (KeyCode::Escape, ElementState::Pressed) => event_loop.exit(),
+                (
+                    KeyCode::Digit0
+                    | KeyCode::Digit1
+                    | KeyCode::Digit2
+                    | KeyCode::Digit3
+                    | KeyCode::Digit4
+                    | KeyCode::Digit5
+                    | KeyCode::Digit6
+                    | KeyCode::Digit7
+                    | KeyCode::Digit8
+                    | KeyCode::Digit9,
+                    ElementState::Pressed,
+                ) => {
+                    let digit = match code {
+                        KeyCode::Digit0 => 0,
+                        KeyCode::Digit1 => 1,
+                        KeyCode::Digit2 => 2,
+                        KeyCode::Digit3 => 3,
+                        KeyCode::Digit4 => 4,
+                        KeyCode::Digit5 => 5,
+                        KeyCode::Digit6 => 6,
+                        KeyCode::Digit7 => 7,
+                        KeyCode::Digit8 => 8,
+                        KeyCode::Digit9 => 9,
+                        _ => unreachable!(),
+                    };
+
+                    if digit < state.tab_urls.len() {
+                        let url = state.tab_urls[digit].clone();
+
+                        if let Some(state) = &mut self.state {
+                            state.active_tab = digit;
+
+                            if let Some(callbacks) = &self.callbacks {
+                                (callbacks.link_callback)(&url);
+                            }
+                        }
+                    }
+                }
+                (KeyCode::Minus, ElementState::Pressed) => {
+                    if let Some(state) = &mut self.state {
+                        state
+                            .tab_urls
+                            .push(String::from("https://flavorless.hackclub.com/"));
+                    }
+                }
                 _ => {}
             },
             _ => {}
@@ -297,13 +344,12 @@ impl ApplicationHandler<AppEvent> for App {
                             (INITIAL_WINDOW_WIDTH as f64, INITIAL_WINDOW_HEIGHT as f64)
                         };
 
-                        let layout = Layout::make_layout(Rc::clone(&document), window_size);
+                        let viewport_size = (window_size.0, window_size.1 * 0.9);
 
-                        // self.layout = Some(layout);
-                        // println!("Layout: {:#?}", self.layout.as_ref().unwrap().root_box);
+                        let layout = Layout::make_layout(Rc::clone(&document), viewport_size);
 
                         if let Some(state) = &mut self.state {
-                            state.url = Some(url);
+                            state.tab_urls[state.active_tab] = url;
 
                             state.scroll_x = 0.0;
                             state.scroll_y = 0.0;

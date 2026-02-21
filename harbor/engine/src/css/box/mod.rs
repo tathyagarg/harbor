@@ -284,6 +284,10 @@ impl Box {
         )
     }
 
+    pub fn position_mut(&mut self) -> (&mut Option<f64>, &mut Option<f64>) {
+        (&mut self._position_x, &mut self._position_y)
+    }
+
     pub fn get_font_size(&self) -> f64 {
         if let Some(node_rc) = &self.associated_node {
             if let Some(style) = node_rc.borrow().style() {

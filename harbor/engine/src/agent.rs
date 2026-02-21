@@ -44,25 +44,6 @@ impl Agent {
         println!("Agent triggered");
     }
 
-    pub fn run(self_rc: Rc<RefCell<Self>>) {
-        // let event_loop = EventLoop::with_user_event().build().unwrap();
-        // event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
-
-        // {
-        //     let mut this = self_rc.borrow_mut();
-        //     let url = this.url.as_ref().unwrap().clone();
-
-        //     this.open(&url);
-        // }
-
-        // let mut app = {
-        //     let mut this = self_rc.borrow_mut();
-        //     this.app.take().unwrap()
-        // };
-
-        // let _ = event_loop.run_app(&mut app);
-    }
-
     pub fn open(&mut self, url: &str) -> Option<Rc<RefCell<Document>>> {
         let maybe_resolved_url = URL::pure_parse(url.to_string());
 
@@ -75,10 +56,6 @@ impl Agent {
 
         if let Some(doc) = self.cached_pages.get(&resolved_url) {
             return Some(doc.clone());
-
-            // if let Some(app) = &mut self.app {
-            //     app.document = Some(document);
-            // }
         } else {
             let html_content = if raw_url.scheme == "http" || raw_url.scheme == "https" {
                 let url_obj = self.http_client.connect_to_url(resolved_url.clone());
@@ -98,11 +75,6 @@ impl Agent {
                     Some(resp) => resp,
                     None => return None,
                 };
-
-                println!(
-                    "Received response: \n\n{}",
-                    response.body.clone().unwrap_or_default()
-                );
 
                 match response.body {
                     Some(body) => body,
@@ -126,18 +98,6 @@ impl Agent {
             self.cached_pages.insert(resolved_url, Rc::clone(&document));
 
             return Some(document);
-
-            // if let Some(app) = &mut self.app {
-            //     app.document = Some(Rc::clone(&document));
-            //     app.layout = Some(layout);
-
-            //     if let Some(window) = &app.state {
-            //         println!("\n\n\n\n\n\nRequesting redraw for new page\n\n\n\n\n\n");
-            //         window.window.request_redraw();
-            //     }
-            // } else {
-            //     println!("App not initialized in Agent");
-            // }
         }
     }
 }

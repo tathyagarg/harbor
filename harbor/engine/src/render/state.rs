@@ -9,7 +9,7 @@ use crate::{
         layout::Layout,
         properties::FontStyle,
     },
-    globals::DEFAULT_FONT_FAMILY,
+    globals::{DEFAULT_FONT_FAMILY, TABS_BAR_OFFSET},
     html5::dom::{Element, NodeKind},
     render::{
         Globals, RendererIdentifier, WindowOptions, fill_descriptor,
@@ -30,7 +30,8 @@ pub struct WindowState {
 
     pub layout: Option<Layout>,
 
-    pub url: Option<String>,
+    pub tab_urls: Vec<String>,
+    pub active_tab: usize,
 
     // pub viewport_width: f64,
     pub viewport_height: f64,
@@ -100,6 +101,7 @@ impl WindowState {
             .style()
             .map(|s| s.background.color().used())
             .unwrap_or([0.0, 0.0, 0.0, 0.0]);
+
         if bg_color[3] > 0.0 {
             render_pass.set_pipeline(&self.fill_render_pipeline);
 
@@ -378,7 +380,13 @@ impl WindowState {
 
             _render_pass.set_bind_group(0, &self.globals_bind_group, &[]);
 
-            let root_box = layout.root_box.as_ref().unwrap().borrow().clone();
+            let mut root_box = layout.root_box.as_ref().unwrap().borrow().clone();
+            let pos = root_box.position_mut();
+            let tabs_bar_size =
+                TABS_BAR_OFFSET(self.config.width as f64, self.config.height as f64);
+
+            *pos.0 = Some(pos.0.unwrap_or(0.0) + tabs_bar_size.0);
+            *pos.1 = Some(pos.1.unwrap_or(0.0) + tabs_bar_size.1);
 
             self.render_box(root_box, &mut vec![], &mut _render_pass);
         }
@@ -958,7 +966,12 @@ impl WindowState {
             msaa_view,
             stencil_view,
             layout: None,
-            url,
+            tab_urls: if let Some(url) = url {
+                vec![url]
+            } else {
+                vec![]
+            },
+            active_tab: 0,
             // viewport_width: 0.0,
             viewport_height: 0.0,
             line_render_pipeline,
