@@ -91,7 +91,9 @@ impl WindowState {
             layout_box.position().1 + respected_parent.1.1 + layout_box.margin().top(),
         );
 
-        if (adj_position.1 + layout_box._content_height < 0.0)
+        let tabs_offset = TABS_BAR_OFFSET(self.config.width as f64, self.config.height as f64);
+
+        if (adj_position.1 + layout_box._content_height < tabs_offset.1)
             || (adj_position.1 > self.window.inner_size().height as f64)
         {
             return;
