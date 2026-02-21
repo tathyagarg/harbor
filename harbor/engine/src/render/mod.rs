@@ -18,7 +18,7 @@ use crate::globals::{
     INITIAL_WINDOW_HEIGHT, INITIAL_WINDOW_WIDTH, MINIMUM_WINDOW_HEIGHT, MINIMUM_WINDOW_WIDTH,
 };
 use crate::html5::dom::Document;
-use crate::render::state::WindowState;
+use crate::render::state::{TabData, WindowState};
 
 pub mod shapes;
 pub mod state;
@@ -98,6 +98,7 @@ pub struct App {
 }
 
 impl ApplicationHandler<AppEvent> for App {
+    // Initialization
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         #[allow(unused_mut)]
         let mut window_attributes = Window::default_attributes()
@@ -130,9 +131,10 @@ impl ApplicationHandler<AppEvent> for App {
 
             let state = self.state.as_mut().unwrap();
 
-            let tab_state = state.tab_urls[state.active_tab].clone();
+            let tab_data = state.tab_datas[state.active_tab].clone();
 
-            let doc = agent_clone.borrow_mut().open(&tab_state.0);
+            let doc = agent_clone.borrow_mut().open(&tab_data.url);
+            state.tab_datas[state.active_tab].document = doc.clone();
 
             if let Some(document) = doc {
                 self.document = Some(Rc::clone(&document));
@@ -143,6 +145,7 @@ impl ApplicationHandler<AppEvent> for App {
                 );
 
                 state.layout = Some(layout.clone());
+                state.tab_datas[state.active_tab].layout = Some(layout);
             }
         }
     }
@@ -169,15 +172,15 @@ impl ApplicationHandler<AppEvent> for App {
                 }
 
                 let layout = state.layout.as_ref().unwrap();
-                let tab_state = state.tab_urls.get(state.active_tab).unwrap();
+                let tab_data = state.tab_datas.get(state.active_tab).unwrap();
 
                 if let Some(root) = layout.root_box.as_ref() {
                     let elems = CssBox::get_elements_under(
                         root,
                         position.x,
                         position.y,
-                        -tab_state.1,
-                        -tab_state.2,
+                        -tab_data.scroll_x,
+                        -tab_data.scroll_y,
                     );
 
                     let inner_size = state.window.inner_size();
@@ -212,15 +215,15 @@ impl ApplicationHandler<AppEvent> for App {
                 }
 
                 let layout = state.layout.as_ref().unwrap();
-                let tab_state = state.tab_urls.get(state.active_tab).unwrap();
+                let tab_data = state.tab_datas.get(state.active_tab).unwrap();
 
                 if let Some(root) = layout.root_box.as_ref() {
                     let elems = CssBox::get_elements_under(
                         root,
                         state.cursor_position.0,
                         state.cursor_position.1,
-                        -tab_state.1,
-                        -tab_state.2,
+                        -tab_data.scroll_x,
+                        -tab_data.scroll_y,
                     );
 
                     for (i, child) in elems.iter().enumerate() {
@@ -262,10 +265,10 @@ impl ApplicationHandler<AppEvent> for App {
                 //     state.window.inner_size().width
                 // );
 
-                let tab_state = state.tab_urls.get_mut(state.active_tab).unwrap();
+                let tab_data = state.tab_datas.get_mut(state.active_tab).unwrap();
 
-                tab_state.1 = (tab_state.1 - delta_x).max(0.0);
-                tab_state.2 = (tab_state.2 - delta_y).max(0.0);
+                tab_data.scroll_x = (tab_data.scroll_x - delta_x).max(0.0);
+                tab_data.scroll_y = (tab_data.scroll_y - delta_y).max(0.0);
                 // .min(state.viewport_height - state.window.inner_size().height as f64);
             }
             WindowEvent::KeyboardInput {
@@ -305,25 +308,23 @@ impl ApplicationHandler<AppEvent> for App {
                         _ => unreachable!(),
                     };
 
-                    if digit < state.tab_urls.len() {
-                        let url = state.tab_urls[digit].clone();
+                    if digit < state.tab_datas.len() {
+                        let tab_data = state.tab_datas[digit].clone();
 
                         if let Some(state) = &mut self.state {
                             state.active_tab = digit;
 
                             if let Some(callbacks) = &self.callbacks {
-                                (callbacks.link_callback)(&url.0);
+                                (callbacks.link_callback)(&tab_data.url);
                             }
                         }
                     }
                 }
                 (KeyCode::Minus, ElementState::Pressed) => {
                     if let Some(state) = &mut self.state {
-                        state.tab_urls.push((
-                            String::from("https://flavorless.hackclub.com/"),
-                            0.0,
-                            0.0,
-                        ));
+                        state.tab_datas.push(TabData::empty_from(String::from(
+                            "https://flavorless.hackclub.com/",
+                        )));
                     }
                 }
                 _ => {}
@@ -335,36 +336,45 @@ impl ApplicationHandler<AppEvent> for App {
     fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: AppEvent) {
         match event {
             AppEvent::OpenUrl(url) => {
-                if let Some(agent) = &self.agent {
-                    let agent_clone = Rc::clone(agent);
-                    let doc = agent_clone.borrow_mut().open(&url);
+                if self.agent.is_none() || self.agent.is_none() {
+                    return;
+                }
 
-                    if let Some(document) = doc {
-                        self.document = Some(Rc::clone(&document));
+                let state = self.state.as_mut().unwrap();
+                let agent = self.agent.as_ref().unwrap();
 
-                        let window_size = if let Some(state) = &self.state {
-                            let size = state.window.inner_size();
-                            (size.width as f64, size.height as f64)
-                        } else {
-                            (INITIAL_WINDOW_WIDTH as f64, INITIAL_WINDOW_HEIGHT as f64)
-                        };
+                self.document = Some(
+                    state.tab_datas[state.active_tab]
+                        .document
+                        .clone()
+                        .unwrap_or_else(|| {
+                            let doc = agent.borrow_mut().open(&url).unwrap();
+                            state.tab_datas[state.active_tab].document = Some(Rc::clone(&doc));
+                            doc
+                        }),
+                );
 
-                        let viewport_size = (window_size.0, window_size.1 * 0.9);
+                let layout = state.tab_datas[state.active_tab]
+                    .layout
+                    .clone()
+                    .unwrap_or_else(|| {
+                        let layout = Layout::make_layout(
+                            self.document.as_ref().unwrap().clone(),
+                            (
+                                state.window.inner_size().width as f64,
+                                state.window.inner_size().height as f64,
+                            ),
+                        );
+                        state.tab_datas[state.active_tab].layout = Some(layout.clone());
+                        layout
+                    });
 
-                        let layout = Layout::make_layout(Rc::clone(&document), viewport_size);
+                state.viewport_height = layout.root_box.as_ref().unwrap().borrow()._content_height;
+                state.layout = Some(layout);
 
-                        if let Some(state) = &mut self.state {
-                            if state.tab_urls[state.active_tab].0 != url {
-                                state.tab_urls[state.active_tab] = (url.clone(), 0.0, 0.0);
-                            }
-
-                            let root_box = layout.root_box.as_ref().unwrap();
-
-                            state.viewport_height = root_box.borrow()._content_height;
-
-                            state.layout = Some(layout);
-                        }
-                    }
+                if state.tab_datas[state.active_tab].url != url {
+                    state.tab_datas[state.active_tab].scroll_x = 0.0;
+                    state.tab_datas[state.active_tab].scroll_y = 0.0;
                 }
             }
         }

@@ -10,13 +10,45 @@ use crate::{
         properties::FontStyle,
     },
     globals::{DEFAULT_FONT_FAMILY, TABS_BAR_OFFSET},
-    html5::dom::{Element, NodeKind},
+    html5::dom::{Document, Element, NodeKind},
     render::{
         Globals, RendererIdentifier, WindowOptions, fill_descriptor,
         shapes::{circle_at, rectangle_at},
         text::{GlyphInstance, GlyphVertex},
     },
 };
+
+#[derive(Clone)]
+pub struct TabData {
+    pub url: String,
+
+    pub scroll_x: f64,
+    pub scroll_y: f64,
+
+    pub document: Option<Rc<RefCell<Document>>>,
+    pub layout: Option<Layout>,
+}
+
+impl Default for TabData {
+    fn default() -> Self {
+        Self {
+            url: String::from("about:blank"),
+            scroll_x: 0.0,
+            scroll_y: 0.0,
+            document: None,
+            layout: None,
+        }
+    }
+}
+
+impl TabData {
+    pub fn empty_from(url: String) -> Self {
+        Self {
+            url,
+            ..Default::default()
+        }
+    }
+}
 
 /// WindowState
 /// Holds all data about the WGPU state, along with the window
@@ -30,7 +62,7 @@ pub struct WindowState {
 
     pub layout: Option<Layout>,
 
-    pub tab_urls: Vec<(String, f64, f64)>,
+    pub tab_datas: Vec<TabData>,
     pub active_tab: usize,
 
     // pub viewport_width: f64,
@@ -85,13 +117,9 @@ impl WindowState {
         parents: &mut Vec<(Box, (f64, f64))>,
         render_pass: &mut wgpu::RenderPass,
     ) {
-        let tab = self
-            .tab_urls
-            .get(self.active_tab)
-            .cloned()
-            .unwrap_or_else(|| ("about:blank".to_string(), 0.0, 0.0));
+        let tab = self.tab_datas.get(self.active_tab).unwrap();
 
-        let _maybe_res = (layout_box.clone(), (-tab.1, -tab.2));
+        let _maybe_res = (layout_box.clone(), (-tab.scroll_x, -tab.scroll_y));
 
         let respected_parent = if let Some(rel_to) = layout_box.position_relative_to {
             if rel_to > parents.len() {
@@ -1044,8 +1072,8 @@ impl WindowState {
             msaa_view,
             stencil_view,
             layout: None,
-            tab_urls: if let Some(url) = url {
-                vec![(url, 0.0, 0.0)]
+            tab_datas: if let Some(url) = url {
+                vec![TabData::empty_from(url)]
             } else {
                 vec![]
             },
