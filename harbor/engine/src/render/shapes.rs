@@ -73,20 +73,11 @@ pub fn circle_at(
     radius: f32,
     segments: u32,
     color: UsedColor,
-    screen_width: f32,
-    screen_height: f32,
 ) -> Vec<ColoredVertex> {
     let mut vertices = Vec::with_capacity((segments * 3) as usize);
 
-    let to_clip = |x: f32, y: f32| -> [f32; 2] {
-        [
-            (x / screen_width) * 2.0 - 1.0,
-            1.0 - (y / screen_height) * 2.0,
-        ]
-    };
-
     let angle_increment = 2.0 * std::f32::consts::PI / segments as f32;
-    let center = to_clip(center_x, center_y);
+    let center = [center_x, center_y];
 
     for i in 0..segments {
         let theta1 = i as f32 * angle_increment;
@@ -103,11 +94,11 @@ pub fn circle_at(
             color,
         });
         vertices.push(ColoredVertex {
-            position: to_clip(x1, y1),
+            position: [x1, y1],
             color,
         });
         vertices.push(ColoredVertex {
-            position: to_clip(x2, y2),
+            position: [x2, y2],
             color,
         });
     }

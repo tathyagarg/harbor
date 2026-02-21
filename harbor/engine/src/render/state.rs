@@ -294,25 +294,12 @@ impl WindowState {
                 // use circle render pipeline
                 render_pass.set_pipeline(&self.circle_render_pipeline);
 
-                let window_size = self.window.inner_size();
-
-                let pixel_x = adj_position.0 as f32;
-                let pixel_y = adj_position.1 as f32;
-
-                let x_pos = pixel_x;
-                let y_pos = pixel_y;
+                let x_pos = adj_position.0 as f32;
+                let y_pos = adj_position.1 as f32;
 
                 let radius = layout_box.content_edges().horizontal() / 2.0;
 
-                let verts = circle_at(
-                    x_pos,
-                    y_pos,
-                    radius as f32,
-                    32,
-                    [0.0, 0.0, 0.0, 1.0],
-                    window_size.width as f32,
-                    window_size.height as f32,
-                );
+                let verts = circle_at(x_pos, y_pos, radius as f32, 32, [0.0, 0.0, 0.0, 1.0]);
 
                 let buffer = wgpu::util::BufferInitDescriptor {
                     label: Some("Circle Vertex Buffer"),
@@ -1163,12 +1150,6 @@ impl WindowState {
 
             self.queue
                 .write_buffer(&self.tab_buffer, 0, bytemuck::cast_slice(&tab_bar_verts));
-
-            // let tabs_vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            //     label: Some("Tabs Bar Vertex Buffer"),
-            //     contents: bytemuck::cast_slice(&tab_bar_verts),
-            //     usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-            // });
         }
     }
 }

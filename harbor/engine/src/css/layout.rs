@@ -48,9 +48,7 @@ impl Layout {
 
     pub fn layout(&mut self) {
         if let Some(root_box) = &self.root_box {
-            let res = root_box.borrow_mut().layout(
-                // None,
-                // None,
+            _ = root_box.borrow_mut().layout(
                 Some(self._window_size.0),
                 Some(self._window_size.1),
                 // fuhhh
@@ -59,8 +57,6 @@ impl Layout {
                 &mut vec![],
                 &self._renderers,
             );
-
-            println!("Layout result: {:#?}", res);
         }
     }
 
