@@ -26,7 +26,7 @@ pub struct TabData {
     pub scroll_y: f64,
 
     pub document: Option<Rc<RefCell<Document>>>,
-    pub layout: Option<Layout>,
+    pub layout: Option<Rc<RefCell<Layout>>>,
 }
 
 impl Default for TabData {
@@ -292,8 +292,7 @@ impl WindowState {
                                     &wgpu::util::BufferInitDescriptor {
                                         label: Some("Glyph Instance Buffer"),
                                         contents: bytemuck::cast_slice(&instances),
-                                        usage: wgpu::BufferUsages::VERTEX
-                                            | wgpu::BufferUsages::COPY_DST,
+                                        usage: wgpu::BufferUsages::VERTEX,
                                     },
                                 );
 

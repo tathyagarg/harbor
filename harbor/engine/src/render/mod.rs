@@ -145,7 +145,9 @@ impl ApplicationHandler<AppEvent> for App {
                 );
 
                 state.layout = Some(layout.clone());
-                state.tab_datas[state.active_tab].layout = Some(layout);
+
+                let rc = Rc::new(RefCell::new(layout));
+                state.tab_datas[state.active_tab].layout = Some(rc);
             }
         }
     }
@@ -309,14 +311,12 @@ impl ApplicationHandler<AppEvent> for App {
                     };
 
                     if digit < state.tab_datas.len() {
-                        let tab_data = state.tab_datas[digit].clone();
+                        let tab_data = &state.tab_datas[digit];
 
-                        if let Some(state) = &mut self.state {
-                            state.active_tab = digit;
+                        state.active_tab = digit;
 
-                            if let Some(callbacks) = &self.callbacks {
-                                (callbacks.link_callback)(&tab_data.url);
-                            }
+                        if let Some(callbacks) = &self.callbacks {
+                            (callbacks.link_callback)(&tab_data.url);
                         }
                     }
                 }
@@ -365,12 +365,21 @@ impl ApplicationHandler<AppEvent> for App {
                                 state.window.inner_size().height as f64,
                             ),
                         );
-                        state.tab_datas[state.active_tab].layout = Some(layout.clone());
-                        layout
+
+                        let rc = Rc::new(RefCell::new(layout));
+
+                        state.tab_datas[state.active_tab].layout = Some(rc.clone());
+                        rc
                     });
 
-                state.viewport_height = layout.root_box.as_ref().unwrap().borrow()._content_height;
-                state.layout = Some(layout);
+                state.viewport_height = layout
+                    .borrow()
+                    .root_box
+                    .as_ref()
+                    .unwrap()
+                    .borrow()
+                    ._content_height;
+                state.layout = Some(layout.borrow().clone());
 
                 if state.tab_datas[state.active_tab].url != url {
                     state.tab_datas[state.active_tab].scroll_x = 0.0;

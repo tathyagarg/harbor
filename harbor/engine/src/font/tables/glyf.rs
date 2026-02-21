@@ -374,163 +374,18 @@ impl TableTrait for GlyfTable {
                 y_max,
             };
 
+            // Skipped first 10 bytes
             let mut offset = 10;
+
             if number_of_contours >= 0 {
-                // Simple glyph
-
-                let mut end_pts_of_contours =
-                    Vec::<uint16>::with_capacity(number_of_contours as usize);
-
-                for _ in 0..number_of_contours {
-                    let end_pt = uint16::from_data(&glyph_data[offset..offset + 2]);
-                    end_pts_of_contours.push(end_pt);
-                    offset += 2;
-                }
-
-                let instruction_length = uint16::from_data(&glyph_data[offset..offset + 2]);
-                offset += 2;
-
-                let instructions =
-                    glyph_data[offset..offset + (instruction_length as usize)].to_vec();
-                offset += instruction_length as usize;
-
-                let mut contours = Vec::<Contour>::with_capacity(number_of_contours as usize);
-                let mut prev_countour_end = 0;
-
-                let mut total_length = 0;
-
-                for contour_index in 0..number_of_contours as usize {
-                    let contour_length = end_pts_of_contours[contour_index] - prev_countour_end + 1;
-                    prev_countour_end = end_pts_of_contours[contour_index] + 1;
-
-                    total_length += contour_length as usize;
-
-                    let mut points = Vec::new();
-
-                    for _ in 0..contour_length {
-                        points.push(Point::empty());
-                    }
-
-                    contours.push(Contour {
-                        points,
-                        length: contour_length as usize,
-                    });
-                }
-
-                let mut flags = Vec::new();
-
-                while flags.len() < total_length {
-                    let flag = glyph_data[offset];
-                    offset += 1;
-
-                    flags.push(flag);
-
-                    if flag & SimpleGlyphFlags::RepeatFlag != 0 {
-                        let repeat_count = glyph_data[offset];
-                        offset += 1;
-
-                        for _ in 0..repeat_count {
-                            flags.push(flag);
-                        }
-                    }
-                }
-
-                assert!(flags.len() == total_length);
-
-                let mut curr_point_index = 0;
-
-                for contour in &mut contours {
-                    for i in 0..contour.length {
-                        contour.points[i].on_curve =
-                            (flags[curr_point_index] & SimpleGlyphFlags::OnCurvePoint) as uint32;
-
-                        curr_point_index += 1;
-                    }
-                }
-
-                let mut prev_x = 0.0;
-                let mut curr_flag_index = 0;
-
-                for contour in &mut contours {
-                    for i in 0..contour.length {
-                        let flag = flags[curr_flag_index];
-                        curr_flag_index += 1;
-
-                        let dx = if flag & SimpleGlyphFlags::XShortVector != 0 {
-                            let x_byte = glyph_data[offset];
-                            offset += 1;
-
-                            let x_val =
-                                if flag & SimpleGlyphFlags::XIsSameOrPositiveXShortVector != 0 {
-                                    x_byte as int16
-                                } else {
-                                    -(x_byte as int16)
-                                };
-
-                            x_val
-                        } else {
-                            if flag & SimpleGlyphFlags::XIsSameOrPositiveXShortVector != 0 {
-                                0
-                            } else {
-                                let dx = int16::from_data(&glyph_data[offset..offset + 2]);
-                                offset += 2;
-
-                                dx
-                            }
-                        } as f32;
-
-                        contour.points[i].x = prev_x + dx;
-                        prev_x = contour.points[i].x;
-                    }
-                }
-
-                let mut prev_y = 0.0;
-                curr_flag_index = 0;
-
-                for contour in &mut contours {
-                    for i in 0..contour.length {
-                        let flag = flags[curr_flag_index];
-                        curr_flag_index += 1;
-
-                        let dy = if flag & SimpleGlyphFlags::YShortVector != 0 {
-                            let y_byte = glyph_data[offset];
-                            offset += 1;
-
-                            let y_val =
-                                if flag & SimpleGlyphFlags::YIsSameOrPositiveYShortVector != 0 {
-                                    y_byte as int16
-                                } else {
-                                    -(y_byte as int16)
-                                };
-
-                            y_val
-                        } else {
-                            if flag & SimpleGlyphFlags::YIsSameOrPositiveYShortVector != 0 {
-                                0
-                            } else {
-                                let dy = int16::from_data(&glyph_data[offset..offset + 2]);
-                                offset += 2;
-
-                                dy
-                            }
-                        } as f32;
-
-                        contour.points[i].y = prev_y + dy;
-                        prev_y = contour.points[i].y;
-                    }
-                }
+                let glyph_data =
+                    self.construct_simple_glyph(offset, glyph_data, number_of_contours as usize);
 
                 self.glyphs.push(GlyphData {
                     header,
-                    data: GlyphDataType::Simple(SimpleGlyphData {
-                        end_pts_of_contours,
-                        instruction_length,
-                        instructions,
-                        contours,
-                    }),
-                })
+                    data: glyph_data,
+                });
             } else {
-                // Composite glyph
                 let mut components = Vec::<GlyphComponent>::new();
 
                 let mut we_have_instructions = false;
@@ -634,5 +489,150 @@ impl GlyfTable {
     pub fn with_locas(mut self, loca_offsets: Vec<uint32>) -> Self {
         self._loca_offsets = loca_offsets;
         self
+    }
+
+    pub fn construct_simple_glyph(
+        &mut self,
+        mut offset: usize,
+        glyph_data: &[u8],
+        number_of_contours: usize,
+    ) -> GlyphDataType {
+        let mut end_pts_of_contours = Vec::<uint16>::with_capacity(number_of_contours);
+
+        for _ in 0..number_of_contours {
+            let end_pt = uint16::from_data(&glyph_data[offset..offset + 2]);
+            end_pts_of_contours.push(end_pt);
+            offset += 2;
+        }
+
+        // instructions are ignored in the rest of the code, but still keep them for completeness
+        let instruction_length = uint16::from_data(&glyph_data[offset..offset + 2]);
+        offset += 2;
+
+        let instructions = glyph_data[offset..offset + (instruction_length as usize)].to_vec();
+        offset += instruction_length as usize;
+
+        let mut contours = Vec::<Contour>::with_capacity(number_of_contours as usize);
+        let mut prev_countour_end = 0;
+
+        let mut total_length = 0;
+
+        for contour_index in 0..number_of_contours as usize {
+            let contour_length = end_pts_of_contours[contour_index] - prev_countour_end + 1;
+            prev_countour_end = end_pts_of_contours[contour_index] + 1;
+
+            total_length += contour_length as usize;
+
+            let points = vec![Point::empty(); contour_length as usize];
+
+            contours.push(Contour {
+                points,
+                length: contour_length as usize,
+            });
+        }
+
+        let mut flags = Vec::with_capacity(total_length);
+
+        while flags.len() < total_length {
+            let flag = glyph_data[offset];
+            offset += 1;
+
+            flags.push(flag);
+
+            if flag & SimpleGlyphFlags::RepeatFlag != 0 {
+                let repeat_count = glyph_data[offset];
+                offset += 1;
+
+                for _ in 0..repeat_count {
+                    flags.push(flag);
+                }
+            }
+        }
+
+        assert!(flags.len() == total_length);
+
+        let mut curr_point_index = 0;
+
+        for contour in &mut contours {
+            for i in 0..contour.length {
+                contour.points[i].on_curve =
+                    (flags[curr_point_index] & SimpleGlyphFlags::OnCurvePoint) as uint32;
+
+                curr_point_index += 1;
+            }
+        }
+
+        let mut prev_x = 0.0;
+        let mut curr_flag_index = 0;
+
+        for contour in &mut contours {
+            for i in 0..contour.length {
+                let flag = flags[curr_flag_index];
+                curr_flag_index += 1;
+
+                let dx = if flag & SimpleGlyphFlags::XShortVector != 0 {
+                    let x_byte = glyph_data[offset];
+                    offset += 1;
+
+                    if flag & SimpleGlyphFlags::XIsSameOrPositiveXShortVector != 0 {
+                        x_byte as int16
+                    } else {
+                        -(x_byte as int16)
+                    }
+                } else {
+                    if flag & SimpleGlyphFlags::XIsSameOrPositiveXShortVector != 0 {
+                        0
+                    } else {
+                        let dx = int16::from_data(&glyph_data[offset..offset + 2]);
+                        offset += 2;
+
+                        dx
+                    }
+                } as f32;
+
+                contour.points[i].x = prev_x + dx;
+                prev_x = contour.points[i].x;
+            }
+        }
+
+        let mut prev_y = 0.0;
+        curr_flag_index = 0;
+
+        for contour in &mut contours {
+            for i in 0..contour.length {
+                let flag = flags[curr_flag_index];
+                curr_flag_index += 1;
+
+                let dy = if flag & SimpleGlyphFlags::YShortVector != 0 {
+                    let y_byte = glyph_data[offset];
+                    offset += 1;
+
+                    if flag & SimpleGlyphFlags::YIsSameOrPositiveYShortVector != 0 {
+                        y_byte as int16
+                    } else {
+                        -(y_byte as int16)
+                    }
+                } else {
+                    if flag & SimpleGlyphFlags::YIsSameOrPositiveYShortVector != 0 {
+                        0
+                    } else {
+                        let dy = int16::from_data(&glyph_data[offset..offset + 2]);
+                        offset += 2;
+
+                        dy
+                    }
+                } as f32;
+
+                contour.points[i].y = prev_y + dy;
+                prev_y = contour.points[i].y;
+            }
+        }
+
+        GlyphDataType::Simple(SimpleGlyphData {
+            end_pts_of_contours,
+            instruction_length,
+            instructions,
+            contours,
+        })
     }
 }
