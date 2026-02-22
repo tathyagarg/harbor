@@ -50,6 +50,10 @@ impl TabData {
     }
 }
 
+const TAB_BAR_COLOR: [f32; 4] = [0.118, 0.122, 0.149, 1.0];
+const TAB_COLOR: [f32; 4] = [0.169, 0.176, 0.227, 1.0];
+const ACTIVE_TAB_COLOR: [f32; 4] = [0.298, 0.553, 1.0, 1.0];
+
 /// WindowState
 /// Holds all data about the WGPU state, along with the window
 pub struct WindowState {
@@ -175,16 +179,22 @@ impl WindowState {
 
         let tab_width = self.config.width as f64 / 4.0 - (2.0 * padding);
 
-        for tab in &self.tab_datas {
+        for (i, tab) in self.tab_datas.iter().enumerate() {
             render_pass.set_stencil_reference(0);
             render_pass.set_pipeline(&self.fill_render_pipeline);
+
+            let color = if i == self.active_tab {
+                ACTIVE_TAB_COLOR
+            } else {
+                TAB_COLOR
+            };
 
             let verts = rectangle_at(
                 (pen_x - padding) as f32,
                 0.0,
                 tab_width as f32,
                 tabs_bar_offset.1 as f32,
-                [0.8, 0.8, 0.8, 1.0],
+                color,
             );
 
             let bg_vertex_buffer =
@@ -212,7 +222,7 @@ impl WindowState {
                 &self.device,
                 renderer,
                 font_size,
-                [0.0, 0.0, 0.0, 1.0],
+                [1.0, 1.0, 1.0, 1.0],
                 title[..char_count].to_string(),
             );
 
@@ -1146,7 +1156,7 @@ impl WindowState {
             0.0,
             tabs_bar_size.0 as f32,
             tabs_bar_size.1 as f32,
-            [0.9, 0.9, 0.9, 1.0],
+            TAB_BAR_COLOR,
         );
 
         let tabs_vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -1266,7 +1276,7 @@ impl WindowState {
                 0.0,
                 tabs_bar_size.0 as f32,
                 tabs_bar_size.1 as f32,
-                [0.9, 0.9, 0.9, 1.0],
+                TAB_BAR_COLOR,
             );
 
             self.queue
