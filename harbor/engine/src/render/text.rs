@@ -28,6 +28,57 @@ pub struct TextRenderer {
 }
 
 impl TextRenderer {
+    pub fn advance_width(&self, text_content: String, font_size: f32) -> f32 {
+        let mut total_advance = 0.0;
+
+        for ch in text_content.chars() {
+            let glyph_id = self.font.cmap_lookup(ch as u32);
+
+            if let Some(gid) = glyph_id {
+                total_advance += self.font.advance_width(gid).unwrap_or_else(|| {
+                    self.font
+                        .advance_width(self.font.last_glyph_index().unwrap())
+                        .unwrap_or(0)
+                }) as f32;
+            }
+        }
+
+        total_advance * (font_size / self.font.units_per_em() as f32)
+    }
+
+    pub fn find_char_count_under_width(
+        &self,
+        text_content: &String,
+        font_size: f32,
+        max_width: f32,
+    ) -> usize {
+        let mut total_advance = 0.0;
+        let mut char_count = 0;
+
+        // ideally i'd use a binary search but the strings aren't long enough for it to matter
+        for ch in text_content.chars() {
+            let glyph_id = self.font.cmap_lookup(ch as u32);
+
+            if let Some(gid) = glyph_id {
+                let advance = self.font.advance_width(gid).unwrap_or_else(|| {
+                    self.font
+                        .advance_width(self.font.last_glyph_index().unwrap())
+                        .unwrap_or(0)
+                }) as f32
+                    * (font_size / self.font.units_per_em() as f32);
+
+                if total_advance + advance > max_width {
+                    break;
+                }
+
+                total_advance += advance;
+                char_count += 1;
+            }
+        }
+
+        char_count
+    }
+
     pub fn get_from_char(
         &mut self,
         ch: char,

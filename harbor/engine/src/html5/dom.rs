@@ -1345,6 +1345,8 @@ pub struct Document {
     parser_cannot_change_mode: bool,
 
     document_or_shadow_root_style: DocumentOrShadowRootStyle,
+
+    _title: Option<String>,
 }
 
 impl Debug for Document {
@@ -1395,6 +1397,8 @@ impl Default for Document {
                     style_sheets: vec![],
                 },
             },
+
+            _title: None,
         };
 
         document._node.borrow_mut().node_document =
@@ -1546,5 +1550,52 @@ impl Document {
             .style_sheets
             .style_sheets
             .insert(index, Rc::new(RefCell::new(sheet)));
+    }
+
+    pub fn title(&mut self) -> Option<String> {
+        if self._title.is_some() {
+            return self._title.clone();
+        }
+
+        let head = self
+            .get_elements_by_tag_name("head")
+            .iter()
+            .find_map(|node| {
+                if let NodeKind::Element(element) = node.borrow().deref() {
+                    Some(element.clone())
+                } else {
+                    None
+                }
+            });
+
+        if head.is_none() {
+            return None;
+        }
+
+        for child in head.unwrap().borrow().node().borrow().child_nodes().iter() {
+            if let NodeKind::Element(element) = child.borrow().deref() {
+                if element.borrow().local_name == "title" {
+                    let res = element
+                        .borrow()
+                        ._node
+                        .borrow()
+                        .child_nodes()
+                        .iter()
+                        .find_map(|child| {
+                            if let NodeKind::Text(text) = child.borrow().deref() {
+                                Some(text.borrow().data().to_string())
+                            } else {
+                                None
+                            }
+                        });
+
+                    self._title = res.clone();
+
+                    return res;
+                }
+            }
+        }
+
+        None
     }
 }

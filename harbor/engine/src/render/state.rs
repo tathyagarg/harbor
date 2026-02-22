@@ -14,7 +14,7 @@ use crate::{
     render::{
         Globals, RendererIdentifier, WindowOptions, fill_descriptor,
         shapes::{circle_at, rectangle_at},
-        text::{GlyphInstance, GlyphVertex},
+        text::{GlyphInstance, GlyphVertex, TextRenderer},
     },
 };
 
@@ -94,12 +94,154 @@ pub struct WindowState {
 }
 
 impl WindowState {
-    pub fn render_tabs_bar(&self, render_pass: &mut wgpu::RenderPass) {
+    fn get_char_instances(
+        initial_pos: (f64, f64),
+        device: &wgpu::Device,
+        renderer: &mut TextRenderer,
+        font_size: f32,
+        color: [f32; 4],
+        text_content: String,
+    ) -> HashMap<(char, u32), Vec<GlyphInstance>> {
+        let mut glyph_instances: HashMap<(char, u32), Vec<GlyphInstance>> = HashMap::new();
+
+        let mut pen_x = initial_pos.0 as f32;
+        let pen_y = initial_pos.1 as f32
+            + renderer.font.ascent().unwrap() as f32
+                * (font_size / renderer.font.units_per_em() as f32);
+
+        for ch in text_content.chars() {
+            let glyph_mesh = renderer.get_from_char(ch, font_size as u32, device);
+            // .cloned();
+
+            if let Some(glyph) = glyph_mesh {
+                glyph_instances
+                    .entry((ch, font_size as u32))
+                    .or_default()
+                    .push(GlyphInstance {
+                        offset: [pen_x, pen_y],
+                        color,
+                    });
+
+                pen_x += glyph.advance_width;
+            } else {
+                pen_x += renderer
+                    .font
+                    .advance_width(renderer.font.cmap_lookup(ch as u32).unwrap_or_else(|| {
+                        renderer
+                            .font
+                            .advance_width(renderer.font.last_glyph_index().unwrap())
+                            .unwrap_or(0)
+                    }))
+                    .unwrap_or(0) as f32
+                    * (font_size / renderer.font.units_per_em() as f32);
+            }
+        }
+
+        glyph_instances
+    }
+
+    pub fn render_tabs_bar(&mut self, render_pass: &mut wgpu::RenderPass) {
         render_pass.set_stencil_reference(1);
         render_pass.set_pipeline(&self.tab_bar_render_pipeline);
 
         render_pass.set_vertex_buffer(0, self.tab_buffer.slice(..));
         render_pass.draw(0..6, 0..1);
+
+        let tabs_bar_offset = TABS_BAR_OFFSET(self.config.width as f64, self.config.height as f64);
+
+        let renderer = {
+            let layout = self.layout.as_mut().unwrap();
+
+            if let Some(r) = layout
+                ._renderers
+                .get_mut(&RendererIdentifier {
+                    font_family: DEFAULT_FONT_FAMILY.to_string(),
+                    font_weight: 400,
+                    italic: false,
+                })
+                .map_or(None, |r| r.as_mut())
+            {
+                r
+            } else {
+                layout
+                    .get_renderer_mut(DEFAULT_FONT_FAMILY.to_string())
+                    .expect("No renderer found for font family")
+            }
+        };
+
+        let padding = 10.0;
+        let mut pen_x = tabs_bar_offset.0 + padding;
+        let font_size = tabs_bar_offset.1 as f32 * 0.5;
+
+        let tab_width = self.config.width as f64 / 4.0 - (2.0 * padding);
+
+        for tab in &self.tab_datas {
+            render_pass.set_stencil_reference(0);
+            render_pass.set_pipeline(&self.fill_render_pipeline);
+
+            let verts = rectangle_at(
+                (pen_x - padding) as f32,
+                0.0,
+                tab_width as f32,
+                tabs_bar_offset.1 as f32,
+                [0.8, 0.8, 0.8, 1.0],
+            );
+
+            let bg_vertex_buffer =
+                self.device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("Tab Background Vertex Buffer"),
+                        contents: bytemuck::cast_slice(&verts),
+                        usage: wgpu::BufferUsages::VERTEX,
+                    });
+
+            render_pass.set_vertex_buffer(0, bg_vertex_buffer.slice(..));
+            render_pass.draw(0..verts.len() as u32, 0..1);
+
+            let adj_position = (pen_x, tabs_bar_offset.1 / 4.0);
+
+            let title = tab.document.as_ref().map_or(tab.url.clone(), |doc| {
+                doc.borrow_mut().title().unwrap_or_else(|| tab.url.clone())
+            });
+
+            let char_count =
+                renderer.find_char_count_under_width(&title, font_size, tab_width as f32);
+
+            let glyph_instances = WindowState::get_char_instances(
+                adj_position,
+                &self.device,
+                renderer,
+                font_size,
+                [0.0, 0.0, 0.0, 1.0],
+                title[..char_count].to_string(),
+            );
+
+            for (key, instances) in glyph_instances {
+                let glyph = renderer.get_from_char(key.0, key.1, &self.device).unwrap();
+
+                let instance_buffer =
+                    self.device
+                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                            label: Some("Glyph Instance Buffer"),
+                            contents: bytemuck::cast_slice(&instances),
+                            usage: wgpu::BufferUsages::VERTEX,
+                        });
+
+                render_pass.set_pipeline(&self.glyph_stencil_render_pipeline);
+                render_pass.set_vertex_buffer(0, glyph.fill_vertex_buffer.slice(..));
+                render_pass.set_vertex_buffer(1, instance_buffer.slice(..));
+                render_pass.draw(0..glyph.fill_vertex_count, 0..instances.len() as u32);
+
+                render_pass.set_pipeline(&self.glyph_fill_render_pipeline);
+                render_pass.set_stencil_reference(0);
+
+                render_pass.set_vertex_buffer(0, glyph.fill_vertex_buffer.slice(..));
+                render_pass.set_vertex_buffer(1, instance_buffer.slice(..));
+                render_pass.draw(0..glyph.fill_vertex_count, 0..instances.len() as u32);
+            }
+
+            pen_x += tab_width + 10.0;
+        }
     }
 
     /// Renders a layout box and its children recursively
@@ -206,83 +348,46 @@ impl WindowState {
                                 return;
                             }
 
-                            let layout = self.layout.as_mut().unwrap();
+                            let renderer = {
+                                let layout = self.layout.as_mut().unwrap();
 
-                            let renderer = if let Some(r) = layout
-                                ._renderers
-                                .get_mut(&RendererIdentifier {
-                                    font_family: family
-                                        .entries
-                                        .first()
-                                        .map(|f| f.value())
-                                        .unwrap_or(DEFAULT_FONT_FAMILY.to_string()),
-                                    font_weight,
-                                    italic,
-                                })
-                                .map_or(None, |r| r.as_mut())
-                            {
-                                r
-                            } else {
-                                layout
-                                    .get_renderer_mut(
-                                        family
+                                if let Some(r) = layout
+                                    ._renderers
+                                    .get_mut(&RendererIdentifier {
+                                        font_family: family
                                             .entries
                                             .first()
                                             .map(|f| f.value())
                                             .unwrap_or(DEFAULT_FONT_FAMILY.to_string()),
-                                    )
-                                    .expect("No renderer found for font family")
+                                        font_weight,
+                                        italic,
+                                    })
+                                    .map_or(None, |r| r.as_mut())
+                                {
+                                    r
+                                } else {
+                                    layout
+                                        .get_renderer_mut(
+                                            family
+                                                .entries
+                                                .first()
+                                                .map(|f| f.value())
+                                                .unwrap_or(DEFAULT_FONT_FAMILY.to_string()),
+                                        )
+                                        .expect("No renderer found for font family")
+                                }
                             };
-
-                            let mut glyph_instances: HashMap<(char, u32), Vec<GlyphInstance>> =
-                                HashMap::new();
-
-                            let mut pen_x = adj_position.0 as f32;
-                            let pen_y = adj_position.1 as f32
-                                + renderer.font.ascent().unwrap() as f32
-                                    * (style.font.resolved_font_size().unwrap_or(16.0) as f32
-                                        / renderer.font.units_per_em() as f32);
 
                             let font_size = style.font.resolved_font_size().unwrap_or(16.0) as f32;
 
-                            for ch in text_content.chars() {
-                                let glyph_mesh =
-                                    renderer.get_from_char(ch, font_size as u32, &self.device);
-                                // .cloned();
-
-                                if let Some(glyph) = glyph_mesh {
-                                    glyph_instances
-                                        .entry((ch, font_size as u32))
-                                        .or_default()
-                                        .push(GlyphInstance {
-                                            offset: [pen_x, pen_y],
-                                            color: style.color.used(),
-                                        });
-
-                                    pen_x += glyph.advance_width;
-                                } else {
-                                    pen_x += renderer
-                                        .font
-                                        .advance_width(
-                                            renderer.font.cmap_lookup(ch as u32).unwrap_or_else(
-                                                || {
-                                                    renderer
-                                                        .font
-                                                        .advance_width(
-                                                            renderer
-                                                                .font
-                                                                .last_glyph_index()
-                                                                .unwrap(),
-                                                        )
-                                                        .unwrap_or(0)
-                                                },
-                                            ),
-                                        )
-                                        .unwrap_or(0)
-                                        as f32
-                                        * (font_size / renderer.font.units_per_em() as f32);
-                                }
-                            }
+                            let glyph_instances = WindowState::get_char_instances(
+                                adj_position,
+                                &self.device,
+                                renderer,
+                                font_size,
+                                style.color.used(),
+                                text_content,
+                            );
 
                             for (key, instances) in glyph_instances {
                                 let glyph =
@@ -787,13 +892,13 @@ impl WindowState {
                     depth_compare: wgpu::CompareFunction::Less,
                     stencil: wgpu::StencilState {
                         front: wgpu::StencilFaceState {
-                            compare: wgpu::CompareFunction::NotEqual,
+                            compare: wgpu::CompareFunction::Less,
                             pass_op: wgpu::StencilOperation::Keep,
                             fail_op: wgpu::StencilOperation::Keep,
                             depth_fail_op: wgpu::StencilOperation::Keep,
                         },
                         back: wgpu::StencilFaceState {
-                            compare: wgpu::CompareFunction::NotEqual,
+                            compare: wgpu::CompareFunction::Less,
                             pass_op: wgpu::StencilOperation::Keep,
                             fail_op: wgpu::StencilOperation::Keep,
                             depth_fail_op: wgpu::StencilOperation::Keep,
@@ -889,18 +994,7 @@ impl WindowState {
                     entry_point: Some("fs_main"),
                     targets: &[Some(wgpu::ColorTargetState {
                         format: config.format,
-                        blend: Some(wgpu::BlendState {
-                            color: wgpu::BlendComponent {
-                                src_factor: wgpu::BlendFactor::SrcAlpha,
-                                dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
-                                operation: wgpu::BlendOperation::Add,
-                            },
-                            alpha: wgpu::BlendComponent {
-                                src_factor: wgpu::BlendFactor::One,
-                                dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
-                                operation: wgpu::BlendOperation::Add,
-                            },
-                        }),
+                        blend: None,
                         write_mask: wgpu::ColorWrites::ALL,
                     })],
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
@@ -921,13 +1015,13 @@ impl WindowState {
                     stencil: wgpu::StencilState {
                         front: wgpu::StencilFaceState {
                             compare: wgpu::CompareFunction::Always,
-                            pass_op: wgpu::StencilOperation::Replace,
+                            pass_op: wgpu::StencilOperation::Keep,
                             fail_op: wgpu::StencilOperation::Keep,
                             depth_fail_op: wgpu::StencilOperation::Keep,
                         },
                         back: wgpu::StencilFaceState {
                             compare: wgpu::CompareFunction::Always,
-                            pass_op: wgpu::StencilOperation::Replace,
+                            pass_op: wgpu::StencilOperation::Keep,
                             fail_op: wgpu::StencilOperation::Keep,
                             depth_fail_op: wgpu::StencilOperation::Keep,
                         },
