@@ -6,6 +6,7 @@ use winit::window::Window;
 use crate::{
     css::{
         r#box::{Box, BoxType},
+        colors::functions::from_raw_rgb,
         layout::Layout,
         properties::FontStyle,
     },
@@ -50,9 +51,17 @@ impl TabData {
     }
 }
 
-const TAB_BAR_COLOR: [f32; 4] = [0.118, 0.122, 0.149, 1.0];
-const TAB_COLOR: [f32; 4] = [0.169, 0.176, 0.227, 1.0];
-const ACTIVE_TAB_COLOR: [f32; 4] = [0.298, 0.553, 1.0, 1.0];
+// Catppuccin Mocha: Crust #11111B
+const TAB_BAR_COLOR: [f32; 4] = from_raw_rgb(17, 17, 27, 1.0);
+
+// Catppuccin Mocha: Mantle #181825
+const TAB_COLOR: [f32; 4] = from_raw_rgb(24, 24, 37, 1.0);
+
+// Catppuccin Mocha: Surface 2 #585b70 - modified to be more blue (112 -> 200)
+const ACTIVE_TAB_COLOR: [f32; 4] = from_raw_rgb(88, 91, 200, 1.0);
+
+// Catppuccin Mocha: Text #CDD6F4
+const TAB_TEXT_COLOR: [f32; 4] = from_raw_rgb(205, 214, 244, 1.0);
 
 /// WindowState
 /// Holds all data about the WGPU state, along with the window
@@ -222,7 +231,7 @@ impl WindowState {
                 &self.device,
                 renderer,
                 font_size,
-                [1.0, 1.0, 1.0, 1.0],
+                TAB_TEXT_COLOR,
                 title[..char_count].to_string(),
             );
 
