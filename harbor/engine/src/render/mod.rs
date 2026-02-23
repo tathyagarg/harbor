@@ -360,6 +360,14 @@ impl ApplicationHandler<AppEvent> for App {
                 let state = self.state.as_mut().unwrap();
                 let agent = self.agent.as_ref().unwrap();
 
+                if state.tab_datas[state.active_tab].url != url {
+                    state.tab_datas[state.active_tab].url = url.clone();
+                    state.tab_datas[state.active_tab].scroll_x = 0.0;
+                    state.tab_datas[state.active_tab].scroll_y = 0.0;
+                    state.tab_datas[state.active_tab].document = None;
+                    state.tab_datas[state.active_tab].layout = None;
+                }
+
                 self.document = Some(
                     state.tab_datas[state.active_tab]
                         .document
@@ -397,11 +405,6 @@ impl ApplicationHandler<AppEvent> for App {
                     .borrow()
                     ._content_height;
                 state.layout = Some(layout.borrow().clone());
-
-                if state.tab_datas[state.active_tab].url != url {
-                    state.tab_datas[state.active_tab].scroll_x = 0.0;
-                    state.tab_datas[state.active_tab].scroll_y = 0.0;
-                }
             }
         }
     }

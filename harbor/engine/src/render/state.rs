@@ -233,7 +233,7 @@ impl WindowState {
                 renderer,
                 font_size,
                 TAB_TEXT_COLOR,
-                title[..char_count].to_string(),
+                title.chars().take(char_count).collect(),
             );
 
             for (key, instances) in glyph_instances {
