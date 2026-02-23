@@ -245,8 +245,8 @@ impl ApplicationHandler<AppEvent> for App {
                     if let Some(root) = layout.root_box.as_ref() {
                         let elems = CssBox::get_elements_under(
                             root,
-                            state.cursor_position.0,
-                            state.cursor_position.1,
+                            state.cursor_position.0 - tabs_bar_offset.0,
+                            state.cursor_position.1 - tabs_bar_offset.1,
                             -tab_data.scroll_x,
                             -tab_data.scroll_y,
                         );
@@ -283,13 +283,6 @@ impl ApplicationHandler<AppEvent> for App {
                     MouseScrollDelta::LineDelta(x, y) => (x as f64 * 20.0, y as f64 * 20.0),
                     MouseScrollDelta::PixelDelta(pos) => (pos.x, pos.y),
                 };
-
-                // println!(
-                //     "Scroll X: {}, vw: {}, ww: {}",
-                //     state.scroll_x,
-                //     // state.viewport_width,
-                //     state.window.inner_size().width
-                // );
 
                 let tab_data = state.tab_datas.get_mut(state.active_tab).unwrap();
 
