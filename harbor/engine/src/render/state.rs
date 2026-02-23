@@ -58,6 +58,7 @@ const TAB_BAR_COLOR: [f32; 4] = from_raw_rgb(17, 17, 27, 1.0);
 const TAB_COLOR: [f32; 4] = from_raw_rgb(24, 24, 37, 1.0);
 
 // Catppuccin Mocha: Surface 2 #585b70 - modified to be more blue (112 -> 200)
+// Actual: #585BC8
 const ACTIVE_TAB_COLOR: [f32; 4] = from_raw_rgb(88, 91, 200, 1.0);
 
 // Catppuccin Mocha: Text #CDD6F4
@@ -186,7 +187,7 @@ impl WindowState {
         let mut pen_x = tabs_bar_offset.0 + padding;
         let font_size = tabs_bar_offset.1 as f32 * 0.5;
 
-        let tab_width = self.config.width as f64 / 4.0 - (2.0 * padding);
+        let tab_width = self.config.width as f64 / 4.0 - padding;
 
         for (i, tab) in self.tab_datas.iter().enumerate() {
             render_pass.set_stencil_reference(0);
@@ -259,7 +260,7 @@ impl WindowState {
                 render_pass.draw(0..glyph.fill_vertex_count, 0..instances.len() as u32);
             }
 
-            pen_x += tab_width + 10.0;
+            pen_x += tab_width + padding;
         }
     }
 

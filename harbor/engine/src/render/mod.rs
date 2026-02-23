@@ -16,6 +16,7 @@ use crate::css::colors::UsedColor;
 use crate::css::layout::Layout;
 use crate::globals::{
     INITIAL_WINDOW_HEIGHT, INITIAL_WINDOW_WIDTH, MINIMUM_WINDOW_HEIGHT, MINIMUM_WINDOW_WIDTH,
+    TABS_BAR_OFFSET,
 };
 use crate::html5::dom::Document;
 use crate::render::state::{TabData, WindowState};
@@ -82,6 +83,7 @@ pub struct WindowOptions {
 
 pub struct CallbackData {
     pub link_callback: Box<dyn Fn(&str)>,
+    pub open_tab: Box<dyn Fn(&TabData)>,
 }
 
 pub struct App {
@@ -219,29 +221,51 @@ impl ApplicationHandler<AppEvent> for App {
                 let layout = state.layout.as_ref().unwrap();
                 let tab_data = state.tab_datas.get(state.active_tab).unwrap();
 
-                if let Some(root) = layout.root_box.as_ref() {
-                    let elems = CssBox::get_elements_under(
-                        root,
-                        state.cursor_position.0,
-                        state.cursor_position.1,
-                        -tab_data.scroll_x,
-                        -tab_data.scroll_y,
-                    );
+                let tabs_bar_offset =
+                    TABS_BAR_OFFSET(state.config.width as f64, state.config.height as f64);
 
-                    for (i, child) in elems.iter().enumerate() {
-                        let mut child_borrow = child.borrow_mut();
+                if state.cursor_position.1 < tabs_bar_offset.1 {
+                    if elem_state == ElementState::Pressed {
+                        let selected_tab_index = (state.cursor_position.0
+                            / (state.config.width as f64 / 4.0))
+                            .floor() as usize;
 
-                        match elem_state {
-                            ElementState::Pressed => {
-                                child_borrow.trigger_click(&elems[..i]);
-                            }
-                            ElementState::Released => {
-                                child_borrow.trigger_release(&elems[..i]);
+                        if selected_tab_index > state.tab_datas.len() {
+                            return;
+                        }
 
-                                if child_borrow.local_name == "a" {
-                                    if let Some(href) = child_borrow.get_attribute("href") {
-                                        if let Some(callbacks) = &self.callbacks {
-                                            (callbacks.link_callback)(href);
+                        state.active_tab = selected_tab_index;
+
+                        if let Some(callbacks) = &self.callbacks {
+                            let tab_data = &state.tab_datas[state.active_tab];
+                            (callbacks.open_tab)(tab_data);
+                        }
+                    }
+                } else {
+                    if let Some(root) = layout.root_box.as_ref() {
+                        let elems = CssBox::get_elements_under(
+                            root,
+                            state.cursor_position.0,
+                            state.cursor_position.1,
+                            -tab_data.scroll_x,
+                            -tab_data.scroll_y,
+                        );
+
+                        for (i, child) in elems.iter().enumerate() {
+                            let mut child_borrow = child.borrow_mut();
+
+                            match elem_state {
+                                ElementState::Pressed => {
+                                    child_borrow.trigger_click(&elems[..i]);
+                                }
+                                ElementState::Released => {
+                                    child_borrow.trigger_release(&elems[..i]);
+
+                                    if child_borrow.local_name == "a" {
+                                        if let Some(href) = child_borrow.get_attribute("href") {
+                                            if let Some(callbacks) = &self.callbacks {
+                                                (callbacks.link_callback)(href);
+                                            }
                                         }
                                     }
                                 }
@@ -397,13 +421,17 @@ pub enum AppEvent {
 impl App {
     pub fn run(&mut self) {
         let event_loop = EventLoop::<AppEvent>::with_user_event().build().unwrap();
-        let proxy = event_loop.create_proxy();
+        let link_proxy = event_loop.create_proxy();
+        let open_tab_proxy = event_loop.create_proxy();
 
         event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
 
         self.callbacks = Some(CallbackData {
             link_callback: Box::new(move |url: &str| {
-                let _ = proxy.send_event(AppEvent::OpenUrl(url.to_string()));
+                let _ = link_proxy.send_event(AppEvent::OpenUrl(url.to_string()));
+            }),
+            open_tab: Box::new(move |tab_data: &TabData| {
+                let _ = open_tab_proxy.send_event(AppEvent::OpenUrl(tab_data.url.clone()));
             }),
         });
 
