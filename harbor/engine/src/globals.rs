@@ -7,6 +7,10 @@ use std::sync::{Arc, LazyLock};
 pub const FRAMES_IN_FLIGHT: usize = 3;
 
 pub const DEFAULT_FONT_FAMILY: &str = "sans-serif";
+pub const DEFAULT_FONT_WEIGHT: u16 = 400;
+pub const DEFAULT_FONT_STYLE_ITALIC: bool = false;
+pub const DEFAULT_FONT_SIZE: f64 = 16.0;
+pub const DEFAULT_LINE_HEIGHT: f64 = 1.2;
 
 pub const INITIAL_WINDOW_WIDTH: u32 = 800;
 pub const INITIAL_WINDOW_HEIGHT: u32 = 600;

@@ -8,6 +8,7 @@ use crate::{
         parser::{ComponentValue, Function},
         tokenize::{CSSToken, Dimension, NumberType, Percentage},
     },
+    globals::DEFAULT_FONT_SIZE,
     html5::dom::Element,
     infra::InputStream,
 };
@@ -436,7 +437,7 @@ impl LengthPercentage {
                     let parent_font_size = parents
                         .last()
                         .and_then(|parent| parent.borrow().style().font.resolved_font_size())
-                        .unwrap_or(16.0);
+                        .unwrap_or(DEFAULT_FONT_SIZE);
 
                     dim.value as f64 * parent_font_size
                 }
@@ -444,7 +445,7 @@ impl LengthPercentage {
                     let root_font_size = parents
                         .first()
                         .and_then(|root| root.borrow().style().font.resolved_font_size())
-                        .unwrap_or(16.0);
+                        .unwrap_or(DEFAULT_FONT_SIZE);
 
                     dim.value as f64 * root_font_size
                 }
@@ -452,7 +453,7 @@ impl LengthPercentage {
             },
             LengthPercentage::Percentage(perc) => {
                 // For now, assume parent font size is 16px
-                let parent_font_size = 16.0;
+                let parent_font_size = DEFAULT_FONT_SIZE;
                 (*perc as f64 / 100.0) * parent_font_size
             }
         }
@@ -468,14 +469,17 @@ impl LengthPercentage {
             LengthPercentage::Length(dim) => match dim.unit.as_str() {
                 "px" => dim.value as f64,
                 "em" => {
-                    let current_font_size = current.font.resolved_font_size().unwrap_or(16.0);
+                    let current_font_size = current
+                        .font
+                        .resolved_font_size()
+                        .unwrap_or(DEFAULT_FONT_SIZE);
                     dim.value as f64 * current_font_size
                 }
                 "rem" => {
                     let root_font_size = parents
                         .first()
                         .and_then(|root| root.borrow().style().font.resolved_font_size())
-                        .unwrap_or(16.0);
+                        .unwrap_or(DEFAULT_FONT_SIZE);
 
                     dim.value as f64 * root_font_size
                 }
@@ -485,7 +489,7 @@ impl LengthPercentage {
             },
             LengthPercentage::Percentage(perc) => {
                 // For now, assume parent font size is 16px
-                let parent_font_size = 16.0;
+                let parent_font_size = DEFAULT_FONT_SIZE;
                 (*perc as f64 / 100.0) * parent_font_size
             }
         }
@@ -1035,14 +1039,14 @@ impl CSSParseable for Font {
 impl Resolvable<(f64, u32)> for Font {
     fn resolved(&self) -> (f64, u32) {
         (
-            self.resolved_font_size().unwrap_or(16.0),
+            self.resolved_font_size().unwrap_or(DEFAULT_FONT_SIZE),
             self.resolved_font_weight().unwrap_or(400),
         )
     }
 
     fn resolve(&mut self, parents: &Vec<Rc<RefCell<Element>>>) -> (f64, u32) {
         (
-            self.resolve_font_size(parents).unwrap_or(16.0),
+            self.resolve_font_size(parents).unwrap_or(DEFAULT_FONT_SIZE),
             self.resolve_font_weight(parents).unwrap_or(400),
         )
     }
@@ -1056,7 +1060,7 @@ impl Resolvable<(f64, u32)> for Font {
         (
             match self {
                 Font::Constructed(cf) => cf.size.resolve_with_curr(parents, current, viewport_size),
-                Font::SystemFont(_) => 16.0,
+                Font::SystemFont(_) => DEFAULT_FONT_SIZE,
             },
             match self {
                 Font::Constructed(cf) => {
@@ -1134,7 +1138,7 @@ impl CSSParseable for ConstructedFont {
 impl Resolvable<(f64, u32)> for ConstructedFont {
     fn resolved(&self) -> (f64, u32) {
         (
-            self.resolved_font_size().unwrap_or(16.0),
+            self.resolved_font_size().unwrap_or(DEFAULT_FONT_SIZE),
             self.resolved_font_weight().unwrap_or(400),
         )
     }
@@ -1544,7 +1548,7 @@ impl CSSParseable for FontSize {
 
 impl Resolvable<f64> for FontSize {
     fn resolved(&self) -> f64 {
-        self._resolved_size.unwrap_or(16.0)
+        self._resolved_size.unwrap_or(DEFAULT_FONT_SIZE)
     }
 
     fn resolve(&mut self, parents: &Vec<Rc<RefCell<Element>>>) -> f64 {
@@ -1556,7 +1560,7 @@ impl Resolvable<f64> for FontSize {
                         let parent_font_size = parents
                             .last()
                             .and_then(|parent| parent.borrow().style().font.resolved_font_size())
-                            .unwrap_or(16.0);
+                            .unwrap_or(DEFAULT_FONT_SIZE);
 
                         dim.value as f64 * parent_font_size
                     }
@@ -1564,7 +1568,7 @@ impl Resolvable<f64> for FontSize {
                         let root_font_size = parents
                             .first()
                             .and_then(|root| root.borrow().style().font.resolved_font_size())
-                            .unwrap_or(16.0);
+                            .unwrap_or(DEFAULT_FONT_SIZE);
 
                         dim.value as f64 * root_font_size
                     }
@@ -1574,7 +1578,7 @@ impl Resolvable<f64> for FontSize {
                     let parent_font_size = parents
                         .last()
                         .and_then(|parent| parent.borrow().style().font.resolved_font_size())
-                        .unwrap_or(16.0);
+                        .unwrap_or(DEFAULT_FONT_SIZE);
                     (*perc as f64 / 100.0) * parent_font_size
                 }
             },
@@ -1582,7 +1586,7 @@ impl Resolvable<f64> for FontSize {
                 let parent_font_size = parents
                     .last()
                     .and_then(|parent| parent.borrow().style().font.resolved_font_size())
-                    .unwrap_or(16.0);
+                    .unwrap_or(DEFAULT_FONT_SIZE);
 
                 parent_font_size * 1.2
             }
@@ -1590,7 +1594,7 @@ impl Resolvable<f64> for FontSize {
                 let parent_font_size = parents
                     .last()
                     .and_then(|parent| parent.borrow().style().font.resolved_font_size())
-                    .unwrap_or(16.0);
+                    .unwrap_or(DEFAULT_FONT_SIZE);
 
                 parent_font_size * 0.833
             }
@@ -1689,7 +1693,7 @@ impl CSSParseable for LineHeight {
 
 impl Resolvable<f64> for LineHeight {
     fn resolved(&self) -> f64 {
-        self._resolved_line_height.unwrap_or(16.0)
+        self._resolved_line_height.unwrap_or(DEFAULT_FONT_SIZE)
     }
 
     fn resolve(&mut self, parents: &Vec<Rc<RefCell<Element>>>) -> f64 {
@@ -1698,14 +1702,14 @@ impl Resolvable<f64> for LineHeight {
                 let font_size = parents
                     .last()
                     .and_then(|parent| parent.borrow().style().font.resolved_font_size())
-                    .unwrap_or(16.0);
+                    .unwrap_or(DEFAULT_FONT_SIZE);
                 font_size * 1.2
             }
             LineHeightKind::Number(n) => {
                 let font_size = parents
                     .last()
                     .and_then(|parent| parent.borrow().style().font.resolved_font_size())
-                    .unwrap_or(16.0);
+                    .unwrap_or(DEFAULT_FONT_SIZE);
                 font_size * n
             }
             LineHeightKind::LengthPercentage(lp) => match lp {
@@ -1717,7 +1721,7 @@ impl Resolvable<f64> for LineHeight {
                     let font_size = parents
                         .last()
                         .and_then(|parent| parent.borrow().style().font.resolved_font_size())
-                        .unwrap_or(16.0);
+                        .unwrap_or(DEFAULT_FONT_SIZE);
                     (*perc as f64 / 100.0) * font_size
                 }
             },
@@ -1735,11 +1739,17 @@ impl Resolvable<f64> for LineHeight {
     ) -> f64 {
         let res = match &self.kind {
             LineHeightKind::Normal => {
-                let font_size = current.font.resolved_font_size().unwrap_or(16.0);
+                let font_size = current
+                    .font
+                    .resolved_font_size()
+                    .unwrap_or(DEFAULT_FONT_SIZE);
                 font_size * 1.2
             }
             LineHeightKind::Number(n) => {
-                let font_size = current.font.resolved_font_size().unwrap_or(16.0);
+                let font_size = current
+                    .font
+                    .resolved_font_size()
+                    .unwrap_or(DEFAULT_FONT_SIZE);
                 font_size * n
             }
             LineHeightKind::LengthPercentage(lp) => {
@@ -1978,7 +1988,7 @@ impl Resolvable<f64> for MarginValue {
                         let parent_font_size = parents
                             .last()
                             .and_then(|parent| parent.borrow().style().font.resolved_font_size())
-                            .unwrap_or(16.0);
+                            .unwrap_or(DEFAULT_FONT_SIZE);
 
                         dim.value as f64 * parent_font_size
                     }
@@ -1986,7 +1996,7 @@ impl Resolvable<f64> for MarginValue {
                         let root_font_size = parents
                             .first()
                             .and_then(|root| root.borrow().style().font.resolved_font_size())
-                            .unwrap_or(16.0);
+                            .unwrap_or(DEFAULT_FONT_SIZE);
 
                         dim.value as f64 * root_font_size
                     }
@@ -2014,30 +2024,6 @@ impl Resolvable<f64> for MarginValue {
                 lp.resolve_with_curr(parents, style, viewport_size)
             }
             MarginValueKind::Auto => 0.0,
-            //  match lp {
-            //
-            //      LengthPercentage::Length(dim) => match dim.unit.as_str() {
-            //          "px" => dim.value as f64,
-            //          "em" => {
-            //              let parent_font_size = style.font.resolved_font_size().unwrap_or(16.0);
-
-            //              dim.value as f64 * parent_font_size
-            //          }
-            //          "rem" => {
-            //              let root_font_size = parents
-            //                  .first()
-            //                  .and_then(|root| root.borrow().style().font.resolved_font_size())
-            //                  .unwrap_or(16.0);
-
-            //              dim.value as f64 * root_font_size
-            //          }
-            //          _ => todo!("Handle other length units"),
-            //      },
-            //      LengthPercentage::Percentage(_) => {
-            //          panic!("Idk how to resolve percentage margins yet")
-            //      }
-            //  },
-            //  MarginValueKind::Auto => 0.0,
         };
 
         self._resolved = Some(res);

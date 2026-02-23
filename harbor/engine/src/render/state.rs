@@ -10,7 +10,10 @@ use crate::{
         layout::Layout,
         properties::FontStyle,
     },
-    globals::{DEFAULT_FONT_FAMILY, TABS_BAR_OFFSET},
+    globals::{
+        DEFAULT_FONT_FAMILY, DEFAULT_FONT_SIZE, DEFAULT_FONT_STYLE_ITALIC, DEFAULT_FONT_WEIGHT,
+        TABS_BAR_OFFSET,
+    },
     html5::dom::{Document, Element, NodeKind},
     render::{
         Globals, RendererIdentifier, WindowOptions, fill_descriptor,
@@ -169,16 +172,16 @@ impl WindowState {
             if let Some(r) = layout
                 ._renderers
                 .get_mut(&RendererIdentifier {
-                    font_family: DEFAULT_FONT_FAMILY.to_string(),
-                    font_weight: 400,
-                    italic: false,
+                    font_family: DEFAULT_FONT_FAMILY.to_string().to_lowercase(),
+                    font_weight: DEFAULT_FONT_WEIGHT,
+                    italic: DEFAULT_FONT_STYLE_ITALIC,
                 })
                 .map_or(None, |r| r.as_mut())
             {
                 r
             } else {
                 layout
-                    .get_renderer_mut(DEFAULT_FONT_FAMILY.to_string())
+                    .get_renderer_mut(DEFAULT_FONT_FAMILY.to_string().to_lowercase())
                     .expect("No renderer found for font family")
             }
         };
@@ -406,7 +409,8 @@ impl WindowState {
                                 }
                             };
 
-                            let font_size = style.font.resolved_font_size().unwrap_or(16.0) as f32;
+                            let font_size =
+                                style.font.resolved_font_size().unwrap_or(DEFAULT_FONT_SIZE) as f32;
 
                             let glyph_instances = WindowState::get_char_instances(
                                 adj_position,

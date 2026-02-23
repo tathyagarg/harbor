@@ -13,6 +13,7 @@ use crate::{
             Display, FontStyle, Position, PositioningValueKind, Resolvable, WidthValueKind,
         },
     },
+    globals::{DEFAULT_FONT_SIZE, DEFAULT_LINE_HEIGHT},
     html5::dom::{Document, Element, NodeKind},
     render::{RendererIdentifier, text::TextRenderer},
 };
@@ -295,17 +296,20 @@ impl Box {
             }
         }
 
-        16.0
+        DEFAULT_FONT_SIZE
     }
 
     pub fn get_line_height(&self) -> f64 {
         if let Some(node_rc) = &self.associated_node {
             if let Some(style) = node_rc.borrow().style() {
-                return style.font.resolved_line_height().unwrap_or(19.2);
+                return style
+                    .font
+                    .resolved_line_height()
+                    .unwrap_or(DEFAULT_FONT_SIZE * DEFAULT_LINE_HEIGHT);
             }
         }
 
-        19.2
+        DEFAULT_FONT_SIZE * DEFAULT_LINE_HEIGHT
     }
 
     pub fn build_doc_box_tree(
@@ -824,8 +828,8 @@ impl Box {
                 //     })
                 //     .font;
 
-                let scale =
-                    style.font.resolved_font_size().unwrap_or(16.0) / font.units_per_em() as f64;
+                let scale = style.font.resolved_font_size().unwrap_or(DEFAULT_FONT_SIZE)
+                    / font.units_per_em() as f64;
 
                 let mut new_data = String::new();
 
@@ -878,9 +882,12 @@ impl Box {
 
                 text_node_rc.borrow_mut().set_data(&new_data);
 
-                self._content_height = self
-                    ._content_height
-                    .max(style.font.resolved_line_height().unwrap_or(19.2));
+                self._content_height = self._content_height.max(
+                    style
+                        .font
+                        .resolved_line_height()
+                        .unwrap_or(DEFAULT_FONT_SIZE * DEFAULT_LINE_HEIGHT),
+                );
 
                 self._content_width = self._content_width.max(pen_x);
             }
@@ -892,7 +899,7 @@ impl Box {
                             .style()
                             .font
                             .resolved_line_height()
-                            .unwrap_or(19.2),
+                            .unwrap_or(DEFAULT_FONT_SIZE * DEFAULT_LINE_HEIGHT),
                     );
                     return (pen_x, self._content_height, true);
                 }

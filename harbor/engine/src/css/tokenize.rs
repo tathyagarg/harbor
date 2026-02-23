@@ -2,6 +2,7 @@ use std::{cell::RefCell, rc::Weak};
 
 use crate::{
     css::r#box::Box,
+    globals::DEFAULT_FONT_SIZE,
     infra::{
         InputStream, char_is_ident, char_is_non_printable, char_is_whitespace, is_valid_escape,
         would_start_ident,
@@ -55,7 +56,7 @@ impl Dimension {
                     }
                 }
 
-                self.value * 16.0
+                self.value * DEFAULT_FONT_SIZE
             }
             "rem" => {
                 if let Some(root) = parents.first() {
@@ -65,7 +66,7 @@ impl Dimension {
                     }
                 }
 
-                self.value * 16.0
+                self.value * DEFAULT_FONT_SIZE
             }
             _ => self.value,
         }
