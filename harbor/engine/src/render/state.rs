@@ -381,8 +381,10 @@ impl WindowState {
                                         font_family: family
                                             .entries
                                             .first()
-                                            .map(|f| f.value())
-                                            .unwrap_or(DEFAULT_FONT_FAMILY.to_string()),
+                                            .map(|f| f.value().to_lowercase())
+                                            .unwrap_or(
+                                                DEFAULT_FONT_FAMILY.to_string().to_lowercase(),
+                                            ),
                                         font_weight,
                                         italic,
                                     })
@@ -395,8 +397,10 @@ impl WindowState {
                                             family
                                                 .entries
                                                 .first()
-                                                .map(|f| f.value())
-                                                .unwrap_or(DEFAULT_FONT_FAMILY.to_string()),
+                                                .map(|f| f.value().to_lowercase())
+                                                .unwrap_or(
+                                                    DEFAULT_FONT_FAMILY.to_string().to_lowercase(),
+                                                ),
                                         )
                                         .expect("No renderer found for font family")
                                 }
