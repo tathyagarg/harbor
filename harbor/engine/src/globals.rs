@@ -44,26 +44,26 @@ pub static FONTS: LazyLock<HashMap<String, Arc<TTCData>>> = LazyLock::new(|| {
     // Sans-serif fonts
     map.insert("sans-serif".to_string(), arial.clone());
     map.insert("ui-sans-serif".to_string(), arial.clone());
-    map.insert("Arial".to_string(), arial.clone());
+    map.insert("arial".to_string(), arial.clone());
 
-    map.insert("Verdana".to_string(), verdana);
+    map.insert("verdana".to_string(), verdana);
 
-    map.insert("Tahoma".to_string(), tahoma);
+    map.insert("tahoma".to_string(), tahoma);
 
-    map.insert("Trebuchet MS".to_string(), trebuchet_ms);
+    map.insert("trebuchet ms".to_string(), trebuchet_ms);
 
     // Serif fonts
     map.insert("serif".to_string(), georgia.clone());
     map.insert("ui-serif".to_string(), georgia.clone());
-    map.insert("Georgia".to_string(), georgia);
+    map.insert("georgia".to_string(), georgia);
 
-    map.insert("Garamond".to_string(), garamond);
+    map.insert("garamond".to_string(), garamond);
 
     // Monospace fonts
     map.insert("monospace".to_string(), courier_prime.clone());
     map.insert("ui-monospace".to_string(), courier_prime.clone());
-    map.insert("Courier New".to_string(), courier_prime.clone());
-    map.insert("Courier Prime".to_string(), courier_prime);
+    map.insert("courier new".to_string(), courier_prime.clone());
+    map.insert("courier prime".to_string(), courier_prime);
 
     map.insert("system-ui".to_string(), arial);
 

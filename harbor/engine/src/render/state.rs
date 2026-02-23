@@ -224,8 +224,12 @@ impl WindowState {
                 doc.borrow_mut().title().unwrap_or_else(|| tab.url.clone())
             });
 
-            let char_count =
-                renderer.find_char_count_under_width(&title, font_size, tab_width as f32);
+            let char_count = renderer.find_char_count_under_width(
+                &title,
+                font_size,
+                // subtract padding for right-side padding
+                (tab_width - padding) as f32,
+            );
 
             let glyph_instances = WindowState::get_char_instances(
                 adj_position,

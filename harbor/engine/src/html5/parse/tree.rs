@@ -162,7 +162,7 @@ impl InsertMode {
                     .push(&Rc::new(RefCell::new(NodeKind::Comment(comment))));
             }
             Token::DOCTYPE(doctype) => {
-                if doctype.name.as_ref().unwrap().to_ascii_lowercase() != "html"
+                if doctype.name.as_ref().unwrap().to_lowercase() != "html"
                     || doctype.public_identifier.is_some()
                     || doctype
                         .system_identifier

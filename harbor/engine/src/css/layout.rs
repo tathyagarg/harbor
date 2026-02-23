@@ -61,6 +61,8 @@ impl Layout {
     }
 
     pub fn get_renderer(&self, name: String) -> Option<&TextRenderer> {
+        let name = name.to_lowercase();
+
         for (identifier, renderer_option) in self._renderers.iter() {
             if identifier.font_family == name {
                 if let Some(renderer) = renderer_option {
@@ -73,6 +75,8 @@ impl Layout {
     }
 
     pub fn get_renderer_mut(&mut self, name: String) -> Option<&mut TextRenderer> {
+        let name = name.to_lowercase();
+
         for (identifier, renderer_option) in self._renderers.iter_mut() {
             if identifier.font_family == name {
                 if let Some(renderer) = renderer_option {

@@ -26,7 +26,7 @@ use crate::{
 impl Serializable for ComponentValue {
     fn serialize(&self) -> String {
         match self {
-            ComponentValue::Token(CSSToken::Ident(keyword)) => keyword.to_ascii_lowercase(),
+            ComponentValue::Token(CSSToken::Ident(keyword)) => keyword.to_lowercase(),
             ComponentValue::Token(CSSToken::Dimension(Dimension { value, unit, .. }))
                 if is_angle_unit(unit.as_str()) =>
             {

@@ -44,6 +44,58 @@ impl Agent {
         println!("Agent triggered");
     }
 
+    pub fn fetch_stylesheet(&mut self, url: &str) -> Option<CSSStyleSheet> {
+        let maybe_resolved_url = URL::pure_parse(url.to_string());
+
+        if maybe_resolved_url.is_err() {
+            return None;
+        }
+
+        let raw_url = maybe_resolved_url.as_ref().unwrap();
+        let resolved_url = raw_url.serialize();
+
+        let body = if raw_url.scheme == "http" || raw_url.scheme == "https" {
+            let url_obj = self.http_client.connect_to_url(resolved_url.clone());
+
+            let _response = self.http_client.send_request(Request {
+                method: String::from("GET"),
+                request_target: url_obj.path.serialize(),
+                protocol: Protocol::HTTP1_1,
+                headers: vec![
+                    Header::new(String::from("User-Agent"), String::from("Harbor Browser")),
+                    Header::new(String::from("Host"), url_obj.host.unwrap().serialize()),
+                ],
+                body: None,
+            });
+
+            let response = match _response {
+                Some(resp) => resp,
+                None => return None,
+            };
+
+            match response.body {
+                Some(body) => body,
+                None => return None,
+            }
+        } else if raw_url.scheme == "file" {
+            let path = raw_url.path.serialize().trim_end_matches('/').to_string();
+
+            fs::read_to_string(path).unwrap()
+        } else {
+            return None;
+        };
+
+        let css_content = parse_stylesheet(
+            &mut InputStream::new(&tokenize(&mut InputStream::new(
+                &body.chars().collect::<Vec<char>>()[..],
+            ))),
+            None,
+            None,
+        );
+
+        return Some(css_content);
+    }
+
     pub fn open(&mut self, url: &str) -> Option<Rc<RefCell<Document>>> {
         let maybe_resolved_url = URL::pure_parse(url.to_string());
 
@@ -94,6 +146,24 @@ impl Agent {
             document
                 .borrow_mut()
                 .insert_stylesheet(0, self.ua_stylesheet.clone());
+
+            let links = document.borrow().get_links();
+
+            for link in links {
+                if !link
+                    .borrow()
+                    .rel_list()
+                    .contains(&String::from("stylesheet"))
+                {
+                    continue;
+                }
+
+                if let Some(stylesheet) = self.fetch_stylesheet(&link.borrow().href) {
+                    document
+                        .borrow_mut()
+                        .insert_stylesheet(0, stylesheet.clone());
+                }
+            }
 
             self.cached_pages.insert(resolved_url, Rc::clone(&document));
 

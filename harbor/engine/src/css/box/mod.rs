@@ -798,7 +798,7 @@ impl Box {
                 // get font WITHOUT cloning
                 let font = &renderers
                     .get(&RendererIdentifier {
-                        font_family: family.entries[0].value(),
+                        font_family: family.entries[0].value().to_lowercase(),
                         font_weight: weight,
                         italic: matches!(style.font.style(), FontStyle::Italic),
                     })

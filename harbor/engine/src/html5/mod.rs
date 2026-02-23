@@ -1,4 +1,5 @@
 pub mod dom;
+pub mod elements;
 /// Custom implementation of the HTML5 spec:
 /// https://html.spec.whatwg.org/
 pub mod parse;

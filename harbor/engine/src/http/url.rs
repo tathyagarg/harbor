@@ -74,12 +74,12 @@ fn starts_with_windows_drive_letter(string: &String) -> bool {
 }
 
 fn is_single_dot(segment: &String) -> bool {
-    matches!(segment.to_ascii_lowercase().as_str(), "." | "%2e")
+    matches!(segment.to_lowercase().as_str(), "." | "%2e")
 }
 
 fn is_double_dot(segment: &String) -> bool {
     matches!(
-        segment.to_ascii_lowercase().as_str(),
+        segment.to_lowercase().as_str(),
         ".." | ".%2e" | "%2e." | "%2e%2e"
     )
 }

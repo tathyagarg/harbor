@@ -9,6 +9,7 @@ use crate::css::cssom::{
     DocumentOrShadowRootStyle, StyleSheetList,
 };
 use crate::css::selectors::MatchesElement;
+use crate::html5::elements::link::LinkElement;
 use crate::http::url::URL;
 use crate::infra::Serializable;
 use crate::{
@@ -1133,6 +1134,10 @@ impl Element {
         None
     }
 
+    pub fn get_attribute_def(&self, name: &str) -> &str {
+        self.get_attribute(name).unwrap_or("")
+    }
+
     pub fn namespace_uri(&self) -> Option<&str> {
         self.namespace.as_deref()
     }
@@ -1597,5 +1602,52 @@ impl Document {
         }
 
         None
+    }
+
+    pub fn get_links(&self) -> Vec<Rc<RefCell<LinkElement>>> {
+        let mut links = vec![];
+
+        let head = self
+            .get_elements_by_tag_name("head")
+            .iter()
+            .find_map(|node| {
+                if let NodeKind::Element(element) = node.borrow().deref() {
+                    Some(element.clone())
+                } else {
+                    None
+                }
+            });
+
+        if head.is_none() {
+            return links;
+        }
+
+        for child in head.unwrap().borrow().node().borrow().child_nodes().iter() {
+            if let NodeKind::Element(element) = child.borrow().deref() {
+                if element.borrow().local_name == "link" {
+                    let element_borrow = element.borrow();
+
+                    let link_element = LinkElement {
+                        disabled: element_borrow.get_attribute("disabled").is_some(),
+                        href: element_borrow.get_attribute_def("href").to_string(),
+                        rel: element_borrow.get_attribute_def("rel").to_string(),
+                        _rel_list: element_borrow
+                            .get_attribute_def("rel")
+                            .split_whitespace()
+                            .map(|s| s.to_string())
+                            .collect(),
+                        media: element_borrow.get_attribute_def("media").to_string(),
+                        hreflang: element_borrow.get_attribute_def("hreflang").to_string(),
+                        type_: element_borrow.get_attribute_def("type").to_string(),
+                    };
+
+                    if link_element.verify() {
+                        links.push(Rc::new(RefCell::new(link_element)));
+                    }
+                }
+            }
+        }
+
+        links
     }
 }
