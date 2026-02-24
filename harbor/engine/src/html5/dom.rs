@@ -853,6 +853,24 @@ impl Element {
         }
     }
 
+    pub fn text_content(&self) -> Option<String> {
+        let mut text = String::new();
+
+        for child in self._node.borrow().child_nodes().iter() {
+            match child.borrow().deref() {
+                NodeKind::Text(t) => text.push_str(&t.borrow().data()),
+                NodeKind::Element(e) => {
+                    if let Some(child_text) = e.borrow().text_content() {
+                        text.push_str(&child_text);
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        Some(text)
+    }
+
     pub fn token(&self) -> Option<&Token> {
         self._token.as_ref()
     }

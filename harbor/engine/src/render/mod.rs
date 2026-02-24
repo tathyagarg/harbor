@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::ops::Deref;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -19,6 +20,7 @@ use crate::globals::{
     TAB_WIDTH, TABS_BAR_OFFSET,
 };
 use crate::html5::dom::Document;
+use crate::html5::elements::anchor::AnchorElement;
 use crate::render::state::{TabData, WindowState};
 
 pub mod shapes;
@@ -262,9 +264,12 @@ impl ApplicationHandler<AppEvent> for App {
                                     child_borrow.trigger_release(&elems[..i]);
 
                                     if child_borrow.local_name == "a" {
-                                        if let Some(href) = child_borrow.get_attribute("href") {
+                                        let anchor =
+                                            AnchorElement::from_element(child_borrow.deref());
+
+                                        if let Some(hyperlink_utils) = anchor.hyperlink_utils {
                                             if let Some(callbacks) = &self.callbacks {
-                                                (callbacks.link_callback)(href);
+                                                (callbacks.link_callback)(&hyperlink_utils.href);
                                             }
                                         }
                                     }

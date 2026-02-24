@@ -936,11 +936,29 @@ pub struct URL {
 }
 
 impl URL {
-    fn has_credentials(&self) -> bool {
+    pub fn origin(&self) -> Option<String> {
+        if self.scheme.as_str() == "blob" {
+            // TODO: blob URL origin
+            return None;
+        }
+
+        if self.host.is_none() {
+            return None;
+        }
+
+        let mut output = String::new();
+        output.push_str(&self.serialize());
+
+        let res = output.strip_suffix("/").unwrap_or(&output);
+
+        Some(res.to_string())
+    }
+
+    pub fn has_credentials(&self) -> bool {
         !self.username.is_empty() || !self.password.is_empty()
     }
 
-    fn shorten_path(&mut self) {
+    pub fn shorten_path(&mut self) {
         assert!(!self.path.is_opaque());
 
         if let URLPath::List(path) = &mut self.path {
