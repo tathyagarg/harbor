@@ -16,7 +16,7 @@ use crate::css::colors::UsedColor;
 use crate::css::layout::Layout;
 use crate::globals::{
     INITIAL_WINDOW_HEIGHT, INITIAL_WINDOW_WIDTH, MINIMUM_WINDOW_HEIGHT, MINIMUM_WINDOW_WIDTH,
-    TABS_BAR_OFFSET,
+    TAB_WIDTH, TABS_BAR_OFFSET,
 };
 use crate::html5::dom::Document;
 use crate::render::state::{TabData, WindowState};
@@ -227,8 +227,8 @@ impl ApplicationHandler<AppEvent> for App {
                 if state.cursor_position.1 < tabs_bar_offset.1 {
                     if elem_state == ElementState::Pressed {
                         let selected_tab_index = (state.cursor_position.0
-                            / (state.config.width as f64 / 4.0))
-                            .floor() as usize;
+                            / TAB_WIDTH(state.config.width as f64, state.tab_datas.len()))
+                        .floor() as usize;
 
                         if selected_tab_index > state.tab_datas.len() {
                             return;

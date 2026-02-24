@@ -12,7 +12,7 @@ use crate::{
     },
     globals::{
         DEFAULT_FONT_FAMILY, DEFAULT_FONT_SIZE, DEFAULT_FONT_STYLE_ITALIC, DEFAULT_FONT_WEIGHT,
-        TABS_BAR_OFFSET,
+        TAB_WIDTH, TABS_BAR_OFFSET,
     },
     html5::dom::{Document, Element, NodeKind},
     render::{
@@ -190,7 +190,7 @@ impl WindowState {
         let mut pen_x = tabs_bar_offset.0 + padding;
         let font_size = tabs_bar_offset.1 as f32 * 0.5;
 
-        let tab_width = self.config.width as f64 / 4.0 - padding;
+        let tab_width = TAB_WIDTH(self.config.width as f64, self.tab_datas.len()) - padding;
 
         for (i, tab) in self.tab_datas.iter().enumerate() {
             render_pass.set_stencil_reference(0);
