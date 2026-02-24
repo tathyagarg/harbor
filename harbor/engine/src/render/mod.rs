@@ -152,6 +152,7 @@ impl ApplicationHandler<AppEvent> for App {
 
                 let rc = Rc::new(RefCell::new(layout));
                 state.tab_datas[state.active_tab].layout = Some(rc);
+                state.address_bar_input = tab_data.url.clone();
             }
         }
     }
@@ -344,11 +345,12 @@ impl ApplicationHandler<AppEvent> for App {
                 }
                 (KeyCode::Minus, ElementState::Pressed) => {
                     if let Some(state) = &mut self.state {
-                        state.tab_datas.push(TabData::empty_from(String::from(
-                            "https://flavorless.hackclub.com/",
-                        )));
+                        state.tab_datas.insert(
+                            state.active_tab + 1,
+                            TabData::empty_from(String::from("https://flavorless.hackclub.com/")),
+                        );
 
-                        state.active_tab = state.tab_datas.len() - 1;
+                        state.active_tab += 1;
 
                         if let Some(callbacks) = &self.callbacks {
                             let tab_data = &state.tab_datas[state.active_tab];
@@ -417,6 +419,8 @@ impl ApplicationHandler<AppEvent> for App {
                     .borrow()
                     ._content_height;
                 state.layout = Some(layout.borrow().clone());
+
+                state.address_bar_input = url;
             }
         }
     }

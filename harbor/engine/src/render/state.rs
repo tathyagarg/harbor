@@ -11,8 +11,8 @@ use crate::{
         properties::FontStyle,
     },
     globals::{
-        DEFAULT_FONT_FAMILY, DEFAULT_FONT_SIZE, DEFAULT_FONT_STYLE_ITALIC, DEFAULT_FONT_WEIGHT,
-        TAB_WIDTH, TABS_BAR_OFFSET,
+        ADDRESS_BAR_OFFSET, DEFAULT_FONT_FAMILY, DEFAULT_FONT_SIZE, DEFAULT_FONT_STYLE_ITALIC,
+        DEFAULT_FONT_WEIGHT, TAB_WIDTH, TABS_BAR_OFFSET, TOOLBAR_OFFSET,
     },
     html5::dom::{Document, Element, NodeKind},
     render::{
@@ -67,6 +67,9 @@ const ACTIVE_TAB_COLOR: [f32; 4] = from_raw_rgb(88, 91, 200, 1.0);
 // Catppuccin Mocha: Text #CDD6F4
 const TAB_TEXT_COLOR: [f32; 4] = from_raw_rgb(205, 214, 244, 1.0);
 
+// Catppuccin Mocha: Base #1E1E2E
+const ADDRESS_BAR_COLOR: [f32; 4] = from_raw_rgb(30, 30, 46, 1.0);
+
 /// WindowState
 /// Holds all data about the WGPU state, along with the window
 pub struct WindowState {
@@ -106,8 +109,12 @@ pub struct WindowState {
     pub globals_bind_group: wgpu::BindGroup,
 
     pub tab_buffer: wgpu::Buffer,
+    pub address_buffer: wgpu::Buffer,
 
     pub cursor_position: (f64, f64),
+
+    pub address_bar_active: bool,
+    pub address_bar_input: String,
 }
 
 impl WindowState {
@@ -165,6 +172,7 @@ impl WindowState {
         render_pass.draw(0..6, 0..1);
 
         let tabs_bar_offset = TABS_BAR_OFFSET(self.config.width as f64, self.config.height as f64);
+        let toolbar_offset = TOOLBAR_OFFSET(self.config.width as f64, self.config.height as f64);
 
         let renderer = {
             let layout = self.layout.as_mut().unwrap();
@@ -187,7 +195,7 @@ impl WindowState {
         };
 
         let padding = 10.0;
-        let mut pen_x = tabs_bar_offset.0 + padding;
+        let mut pen_x = toolbar_offset.0 + padding;
         let font_size = tabs_bar_offset.1 as f32 * 0.5;
 
         let tab_width = TAB_WIDTH(self.config.width as f64, self.tab_datas.len()) - padding;
@@ -271,6 +279,77 @@ impl WindowState {
         }
     }
 
+    pub fn render_address_bar(&mut self, render_pass: &mut wgpu::RenderPass) {
+        render_pass.set_stencil_reference(1);
+        render_pass.set_pipeline(&self.tab_bar_render_pipeline);
+
+        render_pass.set_vertex_buffer(0, self.address_buffer.slice(..));
+        render_pass.draw(0..6, 0..1);
+
+        let address_bar_offset =
+            ADDRESS_BAR_OFFSET(self.config.width as f64, self.config.height as f64);
+
+        let tab_bar_offset = TABS_BAR_OFFSET(self.config.width as f64, self.config.height as f64);
+
+        let adj_position = (
+            address_bar_offset.0 + 10.0,
+            tab_bar_offset.1 + address_bar_offset.1 / 4.0,
+        );
+
+        let renderer = {
+            let layout = self.layout.as_mut().unwrap();
+
+            if let Some(r) = layout
+                ._renderers
+                .get_mut(&RendererIdentifier {
+                    font_family: DEFAULT_FONT_FAMILY.to_string().to_lowercase(),
+                    font_weight: DEFAULT_FONT_WEIGHT,
+                    italic: DEFAULT_FONT_STYLE_ITALIC,
+                })
+                .map_or(None, |r| r.as_mut())
+            {
+                r
+            } else {
+                layout
+                    .get_renderer_mut(DEFAULT_FONT_FAMILY.to_string().to_lowercase())
+                    .expect("No renderer found for font family")
+            }
+        };
+
+        let glyph_instances = WindowState::get_char_instances(
+            adj_position,
+            &self.device,
+            renderer,
+            address_bar_offset.1 as f32 * 0.5,
+            TAB_TEXT_COLOR,
+            self.address_bar_input.clone(),
+        );
+
+        for (key, instances) in glyph_instances {
+            let glyph = renderer.get_from_char(key.0, key.1, &self.device).unwrap();
+
+            let instance_buffer =
+                self.device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("Glyph Instance Buffer"),
+                        contents: bytemuck::cast_slice(&instances),
+                        usage: wgpu::BufferUsages::VERTEX,
+                    });
+
+            render_pass.set_pipeline(&self.glyph_stencil_render_pipeline);
+            render_pass.set_vertex_buffer(0, glyph.fill_vertex_buffer.slice(..));
+            render_pass.set_vertex_buffer(1, instance_buffer.slice(..));
+            render_pass.draw(0..glyph.fill_vertex_count, 0..instances.len() as u32);
+
+            render_pass.set_pipeline(&self.glyph_fill_render_pipeline);
+            render_pass.set_stencil_reference(0);
+
+            render_pass.set_vertex_buffer(0, glyph.fill_vertex_buffer.slice(..));
+            render_pass.set_vertex_buffer(1, instance_buffer.slice(..));
+            render_pass.draw(0..glyph.fill_vertex_count, 0..instances.len() as u32);
+        }
+    }
+
     /// Renders a layout box and its children recursively
     /// # Arguments
     /// * `layout_box` - The layout box to render
@@ -305,9 +384,9 @@ impl WindowState {
             layout_box.position().1 + respected_parent.1.1 + layout_box.margin().top(),
         );
 
-        let tabs_offset = TABS_BAR_OFFSET(self.config.width as f64, self.config.height as f64);
+        let toolbar_offset = TOOLBAR_OFFSET(self.config.width as f64, self.config.height as f64);
 
-        if (adj_position.1 + layout_box._content_height < tabs_offset.1)
+        if (adj_position.1 + layout_box._content_height < toolbar_offset.1)
             || (adj_position.1 > self.window.inner_size().height as f64)
         {
             return;
@@ -554,15 +633,16 @@ impl WindowState {
 
             let mut root_box = layout.root_box.as_ref().unwrap().borrow().clone();
             let pos = root_box.position_mut();
-            let tabs_bar_size =
-                TABS_BAR_OFFSET(self.config.width as f64, self.config.height as f64);
+            let toolbar_offset =
+                TOOLBAR_OFFSET(self.config.width as f64, self.config.height as f64);
 
-            *pos.0 = Some(pos.0.unwrap_or(0.0) + tabs_bar_size.0);
-            *pos.1 = Some(pos.1.unwrap_or(0.0) + tabs_bar_size.1);
+            *pos.0 = Some(pos.0.unwrap_or(0.0) + toolbar_offset.0);
+            *pos.1 = Some(pos.1.unwrap_or(0.0) + toolbar_offset.1);
 
             self.render_box(root_box, &mut vec![], &mut _render_pass);
 
             self.render_tabs_bar(&mut _render_pass);
+            self.render_address_bar(&mut _render_pass);
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
@@ -1187,6 +1267,26 @@ impl WindowState {
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         });
 
+        let address_bar_size = (
+            config.width as f64,
+            ADDRESS_BAR_OFFSET(config.width as f64, config.height as f64).1,
+        );
+
+        let address_bar_verts = rectangle_at(
+            0.0,
+            tabs_bar_size.1 as f32,
+            address_bar_size.0 as f32,
+            address_bar_size.1 as f32,
+            ADDRESS_BAR_COLOR,
+        );
+
+        let address_bar_vertex_buffer =
+            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Address Bar Vertex Buffer"),
+                contents: bytemuck::cast_slice(&address_bar_verts),
+                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            });
+
         Self {
             surface,
             window,
@@ -1215,9 +1315,12 @@ impl WindowState {
             window_options,
             prev_hovered_elements: vec![],
             tab_buffer: tabs_vertex_buffer,
+            address_buffer: address_bar_vertex_buffer,
             globals_buffer,
             globals_bind_group,
             cursor_position: (0.0, 0.0),
+            address_bar_active: false,
+            address_bar_input: String::new(),
         }
     }
 

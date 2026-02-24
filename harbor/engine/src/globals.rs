@@ -22,6 +22,19 @@ pub const MINIMUM_WINDOW_HEIGHT: u32 = 300;
 pub const TABS_BAR_OFFSET: fn(f64, f64) -> (f64, f64) =
     |_window_width, window_height| (0.0, (window_height * 0.05).min(50.0));
 
+pub const ADDRESS_BAR_OFFSET: fn(f64, f64) -> (f64, f64) =
+    |_window_width, window_height| (0.0, (window_height * 0.05).min(50.0));
+
+pub const TOOLBAR_OFFSET: fn(f64, f64) -> (f64, f64) = |window_width, window_height| {
+    let tabs_bar_offset = TABS_BAR_OFFSET(window_width, window_height);
+    let address_bar_offset = ADDRESS_BAR_OFFSET(window_width, window_height);
+
+    (
+        tabs_bar_offset.0 + address_bar_offset.0,
+        tabs_bar_offset.1 + address_bar_offset.1,
+    )
+};
+
 pub const TAB_WIDTH: fn(f64, usize) -> f64 =
     |window_width, num_tabs| (window_width / (4.max(num_tabs) as f64));
 
