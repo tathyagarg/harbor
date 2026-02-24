@@ -1,7 +1,7 @@
 use std::{cell::RefCell, collections::HashMap, ops::Deref, rc::Rc, sync::Arc};
 
 use wgpu::util::DeviceExt;
-use winit::window::Window;
+use winit::{event::Modifiers, keyboard::ModifiersState, window::Window};
 
 use crate::{
     css::{
@@ -123,6 +123,8 @@ pub struct WindowState {
 
     pub address_bar_active: bool,
     pub address_bar_input: String,
+
+    pub modifiers: Modifiers,
 }
 
 impl WindowState {
@@ -1412,6 +1414,7 @@ impl WindowState {
             cursor_position: (0.0, 0.0),
             address_bar_active: false,
             address_bar_input: String::new(),
+            modifiers: Modifiers::default(),
         }
     }
 

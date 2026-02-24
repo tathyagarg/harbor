@@ -173,6 +173,7 @@ impl ApplicationHandler<AppEvent> for App {
             WindowEvent::Resized(size) => {
                 state.resize(size.width, size.height);
             }
+            WindowEvent::ModifiersChanged(m) => state.modifiers = m,
             WindowEvent::CursorMoved { position, .. } => {
                 if state.layout.is_none() {
                     return;
@@ -378,53 +379,52 @@ impl ApplicationHandler<AppEvent> for App {
                 if !state.address_bar_active {
                     match (code, key_state) {
                         (KeyCode::Escape, ElementState::Pressed) => event_loop.exit(),
-                        (
-                            KeyCode::Digit0
-                            | KeyCode::Digit1
-                            | KeyCode::Digit2
-                            | KeyCode::Digit3
-                            | KeyCode::Digit4
-                            | KeyCode::Digit5
-                            | KeyCode::Digit6
-                            | KeyCode::Digit7
-                            | KeyCode::Digit8
-                            | KeyCode::Digit9,
-                            ElementState::Pressed,
-                        ) => {
-                            let digit = match code {
-                                KeyCode::Digit0 => 0,
-                                KeyCode::Digit1 => 1,
-                                KeyCode::Digit2 => 2,
-                                KeyCode::Digit3 => 3,
-                                KeyCode::Digit4 => 4,
-                                KeyCode::Digit5 => 5,
-                                KeyCode::Digit6 => 6,
-                                KeyCode::Digit7 => 7,
-                                KeyCode::Digit8 => 8,
-                                KeyCode::Digit9 => 9,
-                                _ => unreachable!(),
-                            };
-
-                            if digit < state.tab_datas.len() {
-                                let tab_data = &state.tab_datas[digit];
-
-                                state.active_tab = digit;
-
-                                if let Some(callbacks) = &self.callbacks {
-                                    (callbacks.link_callback)(&tab_data.url);
+                        (KeyCode::KeyT, ElementState::Pressed) => {
+                            if cfg!(target_os = "macos") {
+                                if !state.modifiers.state().super_key() {
+                                    return;
+                                }
+                            } else {
+                                if !state.modifiers.state().control_key() {
+                                    return;
                                 }
                             }
-                        }
-                        (KeyCode::Minus, ElementState::Pressed) => {
+
                             if let Some(state) = &mut self.state {
                                 state.tab_datas.insert(
                                     state.active_tab + 1,
-                                    TabData::empty_from(String::from(
-                                        "https://flavorless.hackclub.com/",
-                                    )),
+                                    TabData::empty_from(String::from("harbor:new")),
                                 );
 
                                 state.active_tab += 1;
+
+                                if let Some(callbacks) = &self.callbacks {
+                                    let tab_data = &state.tab_datas[state.active_tab];
+                                    (callbacks.open_tab)(tab_data);
+                                }
+                            }
+                        }
+                        (KeyCode::Tab, ElementState::Pressed) => {
+                            if !state.modifiers.state().alt_key() {
+                                return;
+                            }
+
+                            let direction = if state.modifiers.state().shift_key() {
+                                -1
+                            } else {
+                                1
+                            };
+
+                            if key_state == ElementState::Pressed {
+                                let num_tabs = state.tab_datas.len();
+
+                                if num_tabs == 0 {
+                                    return;
+                                }
+
+                                state.active_tab = ((state.active_tab as isize + direction)
+                                    .rem_euclid(num_tabs as isize))
+                                    as usize;
 
                                 if let Some(callbacks) = &self.callbacks {
                                     let tab_data = &state.tab_datas[state.active_tab];
