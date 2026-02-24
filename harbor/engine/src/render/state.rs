@@ -31,6 +31,9 @@ pub struct TabData {
 
     pub document: Option<Rc<RefCell<Document>>>,
     pub layout: Option<Rc<RefCell<Layout>>>,
+
+    pub prev_urls: Vec<String>,
+    pub next_urls: Vec<String>,
 }
 
 impl Default for TabData {
@@ -41,6 +44,8 @@ impl Default for TabData {
             scroll_y: 0.0,
             document: None,
             layout: None,
+            prev_urls: vec![],
+            next_urls: vec![],
         }
     }
 }
@@ -351,7 +356,75 @@ impl WindowState {
             self.address_bar_input.clone(),
         );
 
-        for (key, instances) in glyph_instances {
+        let padding = 10.0;
+        let w = (address_bar_address_offset.0 - 4.0 * padding) / 3.0;
+
+        let back_position = (padding, adj_position.1);
+        let refresh_position = (w + 2.0 * padding, adj_position.1);
+        let front_position = (2.0 * w + 3.0 * padding, adj_position.1);
+
+        let glyph_instances_back = WindowState::get_char_instances(
+            back_position,
+            &self.device,
+            renderer,
+            address_bar_offset.1 as f32 * 0.5,
+            TAB_TEXT_COLOR,
+            String::from("←"),
+        );
+
+        let glyph_instances_refresh = WindowState::get_char_instances(
+            refresh_position,
+            &self.device,
+            renderer,
+            address_bar_offset.1 as f32 * 0.5,
+            TAB_TEXT_COLOR,
+            String::from("R"),
+        );
+
+        let glyph_instances_front = WindowState::get_char_instances(
+            front_position,
+            &self.device,
+            renderer,
+            address_bar_offset.1 as f32 * 0.5,
+            TAB_TEXT_COLOR,
+            String::from("→"),
+        );
+
+        for (key, instances) in glyph_instances
+            .iter()
+            .chain(glyph_instances_back.iter())
+            .chain(glyph_instances_refresh.iter())
+            .chain(glyph_instances_front.iter())
+        {
+            let glyph = renderer.get_from_char(key.0, key.1, &self.device).unwrap();
+
+            let instance_buffer =
+                self.device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("Glyph Instance Buffer"),
+                        contents: bytemuck::cast_slice(&instances),
+                        usage: wgpu::BufferUsages::VERTEX,
+                    });
+
+            render_pass.set_pipeline(&self.glyph_stencil_render_pipeline);
+            render_pass.set_vertex_buffer(0, glyph.fill_vertex_buffer.slice(..));
+            render_pass.set_vertex_buffer(1, instance_buffer.slice(..));
+            render_pass.draw(0..glyph.fill_vertex_count, 0..instances.len() as u32);
+
+            render_pass.set_pipeline(&self.glyph_fill_render_pipeline);
+            render_pass.set_stencil_reference(0);
+
+            render_pass.set_vertex_buffer(0, glyph.fill_vertex_buffer.slice(..));
+            render_pass.set_vertex_buffer(1, instance_buffer.slice(..));
+            render_pass.draw(0..glyph.fill_vertex_count, 0..instances.len() as u32);
+        }
+
+        let merged = glyph_instances_back
+            .into_iter()
+            .chain(glyph_instances_refresh)
+            .chain(glyph_instances_front);
+
+        for (key, instances) in merged {
             let glyph = renderer.get_from_char(key.0, key.1, &self.device).unwrap();
 
             let instance_buffer =

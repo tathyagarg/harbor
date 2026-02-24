@@ -261,6 +261,50 @@ impl ApplicationHandler<AppEvent> for App {
                             state.address_bar_active = true;
                         }
                     } else {
+                        if elem_state == ElementState::Pressed {
+                            let item_pressed = (state.cursor_position.0
+                                / (address_bar_address_offset.0 / 3.0))
+                                .floor() as usize;
+
+                            let tab_data = state.tab_datas.get_mut(state.active_tab).unwrap();
+
+                            match item_pressed {
+                                0 => {
+                                    let prev_url = tab_data.prev_urls.pop();
+                                    if prev_url.is_none() {
+                                        return;
+                                    }
+
+                                    let prev_url = prev_url.unwrap();
+                                    let curr_url = tab_data.url.clone();
+
+                                    tab_data.next_urls.push(curr_url);
+
+                                    if let Some(callbacks) = &self.callbacks {
+                                        (callbacks.link_callback)(&prev_url);
+                                    }
+                                }
+                                1 => {
+                                    println!("Refresh button pressed");
+                                }
+                                2 => {
+                                    let next_url = tab_data.next_urls.pop();
+                                    if next_url.is_none() {
+                                        return;
+                                    }
+
+                                    let next_url = next_url.unwrap();
+                                    let curr_url = tab_data.url.clone();
+
+                                    tab_data.prev_urls.push(curr_url);
+
+                                    if let Some(callbacks) = &self.callbacks {
+                                        (callbacks.link_callback)(&next_url);
+                                    }
+                                }
+                                _ => unreachable!(),
+                            }
+                        }
                     }
                 } else {
                     if let Some(root) = layout.root_box.as_ref() {
@@ -429,42 +473,38 @@ impl ApplicationHandler<AppEvent> for App {
                 let state = self.state.as_mut().unwrap();
                 let agent = self.agent.as_ref().unwrap();
 
-                if state.tab_datas[state.active_tab].url != url {
-                    state.tab_datas[state.active_tab].url = url.clone();
-                    state.tab_datas[state.active_tab].scroll_x = 0.0;
-                    state.tab_datas[state.active_tab].scroll_y = 0.0;
-                    state.tab_datas[state.active_tab].document = None;
-                    state.tab_datas[state.active_tab].layout = None;
+                let tab_data = state.tab_datas.get_mut(state.active_tab).unwrap();
+
+                if tab_data.url != url {
+                    tab_data.prev_urls.push(tab_data.url.clone());
+
+                    tab_data.url = url.clone();
+                    tab_data.scroll_x = 0.0;
+                    tab_data.scroll_y = 0.0;
+                    tab_data.document = None;
+                    tab_data.layout = None;
                 }
 
-                self.document = Some(
-                    state.tab_datas[state.active_tab]
-                        .document
-                        .clone()
-                        .unwrap_or_else(|| {
-                            let doc = agent.borrow_mut().open(&url).unwrap();
-                            state.tab_datas[state.active_tab].document = Some(Rc::clone(&doc));
-                            doc
-                        }),
-                );
+                self.document = Some(tab_data.document.clone().unwrap_or_else(|| {
+                    let doc = agent.borrow_mut().open(&url).unwrap();
+                    tab_data.document = Some(Rc::clone(&doc));
+                    doc
+                }));
 
-                let layout = state.tab_datas[state.active_tab]
-                    .layout
-                    .clone()
-                    .unwrap_or_else(|| {
-                        let layout = Layout::make_layout(
-                            self.document.as_ref().unwrap().clone(),
-                            (
-                                state.window.inner_size().width as f64,
-                                state.window.inner_size().height as f64,
-                            ),
-                        );
+                let layout = tab_data.layout.clone().unwrap_or_else(|| {
+                    let layout = Layout::make_layout(
+                        self.document.as_ref().unwrap().clone(),
+                        (
+                            state.window.inner_size().width as f64,
+                            state.window.inner_size().height as f64,
+                        ),
+                    );
 
-                        let rc = Rc::new(RefCell::new(layout));
+                    let rc = Rc::new(RefCell::new(layout));
 
-                        state.tab_datas[state.active_tab].layout = Some(rc.clone());
-                        rc
-                    });
+                    tab_data.layout = Some(rc.clone());
+                    rc
+                });
 
                 state.viewport_height = layout
                     .borrow()
