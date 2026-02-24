@@ -25,6 +25,9 @@ pub const TABS_BAR_OFFSET: fn(f64, f64) -> (f64, f64) =
 pub const ADDRESS_BAR_OFFSET: fn(f64, f64) -> (f64, f64) =
     |_window_width, window_height| (0.0, (window_height * 0.05).min(50.0));
 
+pub const ADDRESS_BAR_ADDRESS_OFFSET: fn(f64, f64) -> (f64, f64) =
+    |window_width, _window_height| (window_width * 0.1, 0.0);
+
 pub const TOOLBAR_OFFSET: fn(f64, f64) -> (f64, f64) = |window_width, window_height| {
     let tabs_bar_offset = TABS_BAR_OFFSET(window_width, window_height);
     let address_bar_offset = ADDRESS_BAR_OFFSET(window_width, window_height);

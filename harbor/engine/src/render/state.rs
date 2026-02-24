@@ -11,8 +11,8 @@ use crate::{
         properties::FontStyle,
     },
     globals::{
-        ADDRESS_BAR_OFFSET, DEFAULT_FONT_FAMILY, DEFAULT_FONT_SIZE, DEFAULT_FONT_STYLE_ITALIC,
-        DEFAULT_FONT_WEIGHT, TAB_WIDTH, TABS_BAR_OFFSET, TOOLBAR_OFFSET,
+        ADDRESS_BAR_ADDRESS_OFFSET, ADDRESS_BAR_OFFSET, DEFAULT_FONT_FAMILY, DEFAULT_FONT_SIZE,
+        DEFAULT_FONT_STYLE_ITALIC, DEFAULT_FONT_WEIGHT, TAB_WIDTH, TABS_BAR_OFFSET, TOOLBAR_OFFSET,
     },
     html5::dom::{Document, Element, NodeKind},
     render::{
@@ -289,6 +289,8 @@ impl WindowState {
         let tabs_bar_offset = TABS_BAR_OFFSET(self.config.width as f64, self.config.height as f64);
         let address_bar_offset =
             ADDRESS_BAR_OFFSET(self.config.width as f64, self.config.height as f64);
+        let address_bar_address_offset =
+            ADDRESS_BAR_ADDRESS_OFFSET(self.config.width as f64, self.config.height as f64);
 
         let color = if self.address_bar_active {
             ACTIVE_ADDRESS_BAR_COLOR
@@ -316,7 +318,7 @@ impl WindowState {
         render_pass.draw(0..verts.len() as u32, 0..1);
 
         let adj_position = (
-            address_bar_offset.0 + 10.0,
+            address_bar_offset.0 + address_bar_address_offset.0,
             tabs_bar_offset.1 + address_bar_offset.1 / 4.0,
         );
 

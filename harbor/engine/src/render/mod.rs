@@ -16,8 +16,8 @@ use crate::css::r#box::Box as CssBox;
 use crate::css::colors::UsedColor;
 use crate::css::layout::Layout;
 use crate::globals::{
-    ADDRESS_BAR_OFFSET, INITIAL_WINDOW_HEIGHT, INITIAL_WINDOW_WIDTH, MINIMUM_WINDOW_HEIGHT,
-    MINIMUM_WINDOW_WIDTH, TAB_WIDTH, TABS_BAR_OFFSET, TOOLBAR_OFFSET,
+    ADDRESS_BAR_ADDRESS_OFFSET, ADDRESS_BAR_OFFSET, INITIAL_WINDOW_HEIGHT, INITIAL_WINDOW_WIDTH,
+    MINIMUM_WINDOW_HEIGHT, MINIMUM_WINDOW_WIDTH, TAB_WIDTH, TABS_BAR_OFFSET, TOOLBAR_OFFSET,
 };
 use crate::html5::dom::Document;
 use crate::html5::elements::anchor::AnchorElement;
@@ -230,6 +230,11 @@ impl ApplicationHandler<AppEvent> for App {
                 let address_bar_offset =
                     ADDRESS_BAR_OFFSET(state.config.width as f64, state.config.height as f64);
 
+                let address_bar_address_offset = ADDRESS_BAR_ADDRESS_OFFSET(
+                    state.config.width as f64,
+                    state.config.height as f64,
+                );
+
                 let toolbar_offset =
                     TOOLBAR_OFFSET(state.config.width as f64, state.config.height as f64);
 
@@ -251,8 +256,11 @@ impl ApplicationHandler<AppEvent> for App {
                         }
                     }
                 } else if state.cursor_position.1 < tabs_bar_offset.1 + address_bar_offset.1 {
-                    if elem_state == ElementState::Pressed {
-                        state.address_bar_active = true;
+                    if state.cursor_position.0 > address_bar_address_offset.0 {
+                        if elem_state == ElementState::Pressed {
+                            state.address_bar_active = true;
+                        }
+                    } else {
                     }
                 } else {
                     if let Some(root) = layout.root_box.as_ref() {
