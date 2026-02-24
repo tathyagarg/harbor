@@ -1040,8 +1040,6 @@ impl URL {
 
         input = input.replace("\t", "").replace("\n", "");
 
-        println!("inp: {}", input);
-
         let mut state = state_override.clone().unwrap_or(ParseURLState::SchemeStart);
         let mut buffer = String::new();
         let mut at_sign_seen = false;

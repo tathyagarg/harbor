@@ -170,7 +170,8 @@ fn main() {
         agent: Some(Rc::clone(&ua)),
         callbacks: None,
         initial_url: Some(
-            "file:///Users/tathyagarg/programming/harbor/assets/html/custom006.html".to_string(),
+            "file:///Users/tathyagarg/programming/harbor/assets/html/position-demo.html"
+                .to_string(),
         ),
     };
 

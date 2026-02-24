@@ -97,6 +97,26 @@ impl Agent {
     }
 
     pub fn open(&mut self, url: &str) -> Option<Rc<RefCell<Document>>> {
+        if url.starts_with("harbor:") {
+            let path = url.trim_start_matches("harbor:").to_string();
+
+            match path.as_str() {
+                "new" => {
+                    let html_content = fs::read_to_string("res/pages/tab.html").unwrap();
+                    let mut stream =
+                        InputStream::new(&html_content.chars().collect::<Vec<char>>()[..]);
+
+                    let document = Parser::parse_stream(&mut stream);
+                    document
+                        .borrow_mut()
+                        .insert_stylesheet(0, self.ua_stylesheet.clone());
+
+                    return Some(document);
+                }
+                _ => return None,
+            }
+        }
+
         let maybe_resolved_url = URL::pure_parse(url.to_string());
 
         if maybe_resolved_url.is_err() {

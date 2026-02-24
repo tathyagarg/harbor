@@ -424,20 +424,12 @@ impl WindowState {
         if bg_color[3] > 0.0 {
             render_pass.set_pipeline(&self.fill_render_pipeline);
 
-            let window_size = self.window.inner_size();
-
-            // let x_pos = (adj_position.0 as f32 / window_size.width as f32) * 2.0 - 1.0;
-            // let y_pos = 1.0 - (adj_position.1 as f32 / window_size.height as f32) * 2.0;
-
             let (x_pos, y_pos) = adj_position;
 
             let pixel_w = layout_box.content_edges().horizontal() as f32;
             let pixel_h = layout_box.content_edges().vertical() as f32;
 
-            let width = (pixel_w / window_size.width as f32) * 2.0;
-            let height = (pixel_h / window_size.height as f32) * 2.0;
-
-            let verts = rectangle_at(x_pos as f32, y_pos as f32, width, height, bg_color);
+            let verts = rectangle_at(x_pos as f32, y_pos as f32, pixel_w, pixel_h, bg_color);
 
             let bg_vertex_buffer =
                 self.device
