@@ -51,9 +51,9 @@ impl Default for TabData {
 }
 
 impl TabData {
-    pub fn empty_from(url: String) -> Self {
+    pub fn empty_from(url: &str) -> Self {
         Self {
-            url,
+            url: url.to_string(),
             ..Default::default()
         }
     }
@@ -1391,7 +1391,7 @@ impl WindowState {
             stencil_view,
             layout: None,
             tab_datas: if let Some(url) = url {
-                vec![TabData::empty_from(url)]
+                vec![TabData::empty_from(&url)]
             } else {
                 vec![]
             },

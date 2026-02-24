@@ -17,7 +17,8 @@ use crate::css::colors::UsedColor;
 use crate::css::layout::Layout;
 use crate::globals::{
     ADDRESS_BAR_ADDRESS_OFFSET, ADDRESS_BAR_OFFSET, INITIAL_WINDOW_HEIGHT, INITIAL_WINDOW_WIDTH,
-    MINIMUM_WINDOW_HEIGHT, MINIMUM_WINDOW_WIDTH, TAB_WIDTH, TABS_BAR_OFFSET, TOOLBAR_OFFSET,
+    MINIMUM_WINDOW_HEIGHT, MINIMUM_WINDOW_WIDTH, NEW_TAB_URL, TAB_WIDTH, TABS_BAR_OFFSET,
+    TOOLBAR_OFFSET,
 };
 use crate::html5::dom::Document;
 use crate::html5::elements::anchor::AnchorElement;
@@ -97,8 +98,18 @@ pub struct App {
     pub document: Option<Rc<RefCell<Document>>>,
 
     pub callbacks: Option<CallbackData>,
+}
 
-    pub initial_url: Option<String>,
+impl App {
+    pub fn new(window_options: WindowOptions, agent: Option<Rc<RefCell<Agent>>>) -> Self {
+        Self {
+            window_options,
+            state: None,
+            agent,
+            document: None,
+            callbacks: None,
+        }
+    }
 }
 
 impl ApplicationHandler<AppEvent> for App {
@@ -127,7 +138,7 @@ impl ApplicationHandler<AppEvent> for App {
         self.state = Some(pollster::block_on(WindowState::new(
             window,
             self.window_options.clone(),
-            self.initial_url.clone(),
+            Some(NEW_TAB_URL.to_string()),
         )));
 
         if let Some(agent) = &self.agent {
@@ -391,10 +402,9 @@ impl ApplicationHandler<AppEvent> for App {
                             }
 
                             if let Some(state) = &mut self.state {
-                                state.tab_datas.insert(
-                                    state.active_tab + 1,
-                                    TabData::empty_from(String::from("harbor:new")),
-                                );
+                                state
+                                    .tab_datas
+                                    .insert(state.active_tab + 1, TabData::empty_from(NEW_TAB_URL));
 
                                 state.active_tab += 1;
 
@@ -403,6 +413,9 @@ impl ApplicationHandler<AppEvent> for App {
                                     (callbacks.open_tab)(tab_data);
                                 }
                             }
+                        }
+                        (KeyCode::Slash, ElementState::Pressed) => {
+                            state.address_bar_active = true;
                         }
                         (KeyCode::Tab, ElementState::Pressed) => {
                             if !state.modifiers.state().alt_key() {

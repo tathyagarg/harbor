@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use harbor::js::PunctuatorKind;
 
-use crate::{agent::Agent, render::App};
+use crate::{agent::Agent, globals::NEW_TAB_URL, render::App};
 
 pub mod agent;
 pub mod css;
@@ -155,22 +155,18 @@ fn main() {
     // js::JsRuntime::new();
 
     let ua = Agent::new();
-    let mut app = App {
-        window_options: render::WindowOptions {
+    let mut app = App::new(
+        render::WindowOptions {
             use_transparent: true,
             background_color: wgpu::Color {
                 r: 1.0,
                 g: 1.0,
                 b: 1.0,
-                a: 0.0,
+                a: 1.0,
             },
         },
-        state: None,
-        document: None,
-        agent: Some(Rc::clone(&ua)),
-        callbacks: None,
-        initial_url: Some("harbor:new".to_string()),
-    };
+        Some(Rc::clone(&ua)),
+    );
 
     app.run();
 
