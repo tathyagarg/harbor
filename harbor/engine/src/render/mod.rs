@@ -347,6 +347,13 @@ impl ApplicationHandler<AppEvent> for App {
                         state.tab_datas.push(TabData::empty_from(String::from(
                             "https://flavorless.hackclub.com/",
                         )));
+
+                        state.active_tab = state.tab_datas.len() - 1;
+
+                        if let Some(callbacks) = &self.callbacks {
+                            let tab_data = &state.tab_datas[state.active_tab];
+                            (callbacks.open_tab)(tab_data);
+                        }
                     }
                 }
                 _ => {}
