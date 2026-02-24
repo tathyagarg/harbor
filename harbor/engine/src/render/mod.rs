@@ -285,7 +285,14 @@ impl ApplicationHandler<AppEvent> for App {
                                     }
                                 }
                                 1 => {
-                                    println!("Refresh button pressed");
+                                    tab_data.document = None;
+                                    tab_data.layout = None;
+                                    tab_data.scroll_x = 0.0;
+                                    tab_data.scroll_y = 0.0;
+
+                                    if let Some(callbacks) = &self.callbacks {
+                                        (callbacks.open_tab)(tab_data);
+                                    }
                                 }
                                 2 => {
                                     let next_url = tab_data.next_urls.pop();
