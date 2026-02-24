@@ -70,6 +70,9 @@ const TAB_TEXT_COLOR: [f32; 4] = from_raw_rgb(205, 214, 244, 1.0);
 // Catppuccin Mocha: Base #1E1E2E
 const ADDRESS_BAR_COLOR: [f32; 4] = from_raw_rgb(30, 30, 46, 1.0);
 
+// Catppuccin Mocha: Surface 0 #313244
+const ACTIVE_ADDRESS_BAR_COLOR: [f32; 4] = from_raw_rgb(49, 50, 68, 1.0);
+
 /// WindowState
 /// Holds all data about the WGPU state, along with the window
 pub struct WindowState {
@@ -283,17 +286,38 @@ impl WindowState {
         render_pass.set_stencil_reference(1);
         render_pass.set_pipeline(&self.tab_bar_render_pipeline);
 
-        render_pass.set_vertex_buffer(0, self.address_buffer.slice(..));
-        render_pass.draw(0..6, 0..1);
-
+        let tabs_bar_offset = TABS_BAR_OFFSET(self.config.width as f64, self.config.height as f64);
         let address_bar_offset =
             ADDRESS_BAR_OFFSET(self.config.width as f64, self.config.height as f64);
 
-        let tab_bar_offset = TABS_BAR_OFFSET(self.config.width as f64, self.config.height as f64);
+        let color = if self.address_bar_active {
+            ACTIVE_ADDRESS_BAR_COLOR
+        } else {
+            ADDRESS_BAR_COLOR
+        };
+
+        let verts = rectangle_at(
+            0.0,
+            tabs_bar_offset.1 as f32,
+            self.config.width as f32,
+            address_bar_offset.1 as f32,
+            color,
+        );
+
+        let bg_vertex_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Address Bar Vertex Buffer"),
+                contents: bytemuck::cast_slice(&verts),
+                usage: wgpu::BufferUsages::VERTEX,
+            });
+
+        render_pass.set_vertex_buffer(0, bg_vertex_buffer.slice(..));
+        render_pass.draw(0..verts.len() as u32, 0..1);
 
         let adj_position = (
             address_bar_offset.0 + 10.0,
-            tab_bar_offset.1 + address_bar_offset.1 / 4.0,
+            tabs_bar_offset.1 + address_bar_offset.1 / 4.0,
         );
 
         let renderer = {

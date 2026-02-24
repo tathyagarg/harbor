@@ -6,7 +6,7 @@ use std::sync::Arc;
 use winit::application::ApplicationHandler;
 use winit::event::{ElementState, KeyEvent, MouseButton, MouseScrollDelta, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, EventLoop};
-use winit::keyboard::{KeyCode, PhysicalKey};
+use winit::keyboard::{Key, KeyCode, NamedKey, PhysicalKey};
 use winit::window::{Window, WindowId};
 
 use wgpu::{self};
@@ -16,8 +16,8 @@ use crate::css::r#box::Box as CssBox;
 use crate::css::colors::UsedColor;
 use crate::css::layout::Layout;
 use crate::globals::{
-    INITIAL_WINDOW_HEIGHT, INITIAL_WINDOW_WIDTH, MINIMUM_WINDOW_HEIGHT, MINIMUM_WINDOW_WIDTH,
-    TAB_WIDTH, TABS_BAR_OFFSET,
+    ADDRESS_BAR_OFFSET, INITIAL_WINDOW_HEIGHT, INITIAL_WINDOW_WIDTH, MINIMUM_WINDOW_HEIGHT,
+    MINIMUM_WINDOW_WIDTH, TAB_WIDTH, TABS_BAR_OFFSET,
 };
 use crate::html5::dom::Document;
 use crate::html5::elements::anchor::AnchorElement;
@@ -227,6 +227,9 @@ impl ApplicationHandler<AppEvent> for App {
                 let tabs_bar_offset =
                     TABS_BAR_OFFSET(state.config.width as f64, state.config.height as f64);
 
+                let address_bar_offset =
+                    ADDRESS_BAR_OFFSET(state.config.width as f64, state.config.height as f64);
+
                 if state.cursor_position.1 < tabs_bar_offset.1 {
                     if elem_state == ElementState::Pressed {
                         let selected_tab_index = (state.cursor_position.0
@@ -243,6 +246,10 @@ impl ApplicationHandler<AppEvent> for App {
                             let tab_data = &state.tab_datas[state.active_tab];
                             (callbacks.open_tab)(tab_data);
                         }
+                    }
+                } else if state.cursor_position.1 < tabs_bar_offset.1 + address_bar_offset.1 {
+                    if elem_state == ElementState::Pressed {
+                        state.address_bar_active = true;
                     }
                 } else {
                     if let Some(root) = layout.root_box.as_ref() {
@@ -301,65 +308,102 @@ impl ApplicationHandler<AppEvent> for App {
                     KeyEvent {
                         physical_key: PhysicalKey::Code(code),
                         state: key_state,
+                        logical_key,
                         ..
                     },
                 ..
-            } => match (code, key_state) {
-                (KeyCode::Escape, ElementState::Pressed) => event_loop.exit(),
-                (
-                    KeyCode::Digit0
-                    | KeyCode::Digit1
-                    | KeyCode::Digit2
-                    | KeyCode::Digit3
-                    | KeyCode::Digit4
-                    | KeyCode::Digit5
-                    | KeyCode::Digit6
-                    | KeyCode::Digit7
-                    | KeyCode::Digit8
-                    | KeyCode::Digit9,
-                    ElementState::Pressed,
-                ) => {
-                    let digit = match code {
-                        KeyCode::Digit0 => 0,
-                        KeyCode::Digit1 => 1,
-                        KeyCode::Digit2 => 2,
-                        KeyCode::Digit3 => 3,
-                        KeyCode::Digit4 => 4,
-                        KeyCode::Digit5 => 5,
-                        KeyCode::Digit6 => 6,
-                        KeyCode::Digit7 => 7,
-                        KeyCode::Digit8 => 8,
-                        KeyCode::Digit9 => 9,
-                        _ => unreachable!(),
-                    };
+            } => {
+                if !state.address_bar_active {
+                    match (code, key_state) {
+                        (KeyCode::Escape, ElementState::Pressed) => event_loop.exit(),
+                        (
+                            KeyCode::Digit0
+                            | KeyCode::Digit1
+                            | KeyCode::Digit2
+                            | KeyCode::Digit3
+                            | KeyCode::Digit4
+                            | KeyCode::Digit5
+                            | KeyCode::Digit6
+                            | KeyCode::Digit7
+                            | KeyCode::Digit8
+                            | KeyCode::Digit9,
+                            ElementState::Pressed,
+                        ) => {
+                            let digit = match code {
+                                KeyCode::Digit0 => 0,
+                                KeyCode::Digit1 => 1,
+                                KeyCode::Digit2 => 2,
+                                KeyCode::Digit3 => 3,
+                                KeyCode::Digit4 => 4,
+                                KeyCode::Digit5 => 5,
+                                KeyCode::Digit6 => 6,
+                                KeyCode::Digit7 => 7,
+                                KeyCode::Digit8 => 8,
+                                KeyCode::Digit9 => 9,
+                                _ => unreachable!(),
+                            };
 
-                    if digit < state.tab_datas.len() {
-                        let tab_data = &state.tab_datas[digit];
+                            if digit < state.tab_datas.len() {
+                                let tab_data = &state.tab_datas[digit];
 
-                        state.active_tab = digit;
+                                state.active_tab = digit;
 
-                        if let Some(callbacks) = &self.callbacks {
-                            (callbacks.link_callback)(&tab_data.url);
+                                if let Some(callbacks) = &self.callbacks {
+                                    (callbacks.link_callback)(&tab_data.url);
+                                }
+                            }
                         }
+                        (KeyCode::Minus, ElementState::Pressed) => {
+                            if let Some(state) = &mut self.state {
+                                state.tab_datas.insert(
+                                    state.active_tab + 1,
+                                    TabData::empty_from(String::from(
+                                        "https://flavorless.hackclub.com/",
+                                    )),
+                                );
+
+                                state.active_tab += 1;
+
+                                if let Some(callbacks) = &self.callbacks {
+                                    let tab_data = &state.tab_datas[state.active_tab];
+                                    (callbacks.open_tab)(tab_data);
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                } else {
+                    match (code, key_state) {
+                        (KeyCode::Escape, ElementState::Pressed) => {
+                            state.address_bar_active = false;
+                        }
+                        (KeyCode::Enter, ElementState::Pressed) => {
+                            let url = state.address_bar_input.clone();
+                            state.address_bar_active = false;
+
+                            if let Some(callbacks) = &self.callbacks {
+                                (callbacks.link_callback)(&url);
+                            }
+                        }
+                        (KeyCode::Backspace, ElementState::Pressed) => {
+                            state.address_bar_input.pop();
+                        }
+                        _ => match logical_key {
+                            Key::Character(c) => {
+                                if key_state == ElementState::Pressed {
+                                    state.address_bar_input.push_str(&c);
+                                }
+                            }
+                            Key::Named(NamedKey::Space) => {
+                                if key_state == ElementState::Pressed {
+                                    state.address_bar_input.push(' ');
+                                }
+                            }
+                            _ => {}
+                        },
                     }
                 }
-                (KeyCode::Minus, ElementState::Pressed) => {
-                    if let Some(state) = &mut self.state {
-                        state.tab_datas.insert(
-                            state.active_tab + 1,
-                            TabData::empty_from(String::from("https://flavorless.hackclub.com/")),
-                        );
-
-                        state.active_tab += 1;
-
-                        if let Some(callbacks) = &self.callbacks {
-                            let tab_data = &state.tab_datas[state.active_tab];
-                            (callbacks.open_tab)(tab_data);
-                        }
-                    }
-                }
-                _ => {}
-            },
+            }
             _ => {}
         }
     }
