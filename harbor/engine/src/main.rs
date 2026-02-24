@@ -169,10 +169,7 @@ fn main() {
         document: None,
         agent: Some(Rc::clone(&ua)),
         callbacks: None,
-        initial_url: Some(
-            "file:///Users/tathyagarg/programming/harbor/assets/html/position-demo.html"
-                .to_string(),
-        ),
+        initial_url: Some("harbor:new".to_string()),
     };
 
     app.run();

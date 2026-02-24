@@ -1598,19 +1598,7 @@ impl Document {
         for child in head.unwrap().borrow().node().borrow().child_nodes().iter() {
             if let NodeKind::Element(element) = child.borrow().deref() {
                 if element.borrow().local_name == "title" {
-                    let res = element
-                        .borrow()
-                        ._node
-                        .borrow()
-                        .child_nodes()
-                        .iter()
-                        .find_map(|child| {
-                            if let NodeKind::Text(text) = child.borrow().deref() {
-                                Some(text.borrow().data().to_string())
-                            } else {
-                                None
-                            }
-                        });
+                    let res = element.borrow().text_content();
 
                     self._title = res.clone();
 
