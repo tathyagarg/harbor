@@ -12,11 +12,11 @@ use crate::{
         colors::{Color, is_color},
         parser::{AtRule, ComponentValue, parse_css_declaration_block},
         properties::{
-            Background, Bottom, Display, Font, Left, Margin, Position, Right, Top, WidthValue,
+            Background, Bottom, Display, Font, Left, Margin, Position, Resolvable, Right, Top,
+            WidthValue,
         },
         selectors::SelectorList,
         tokenize::{CSSToken, Dimension},
-        values::angles::{is_angle_unit, to_canonical_angle},
     },
     html5::dom::{Document, Element},
     http::url::URL,
@@ -27,15 +27,16 @@ impl Serializable for ComponentValue {
     fn serialize(&self) -> String {
         match self {
             ComponentValue::Token(CSSToken::Ident(keyword)) => keyword.to_lowercase(),
-            ComponentValue::Token(CSSToken::Dimension(Dimension { value, unit, .. }))
-                if is_angle_unit(unit.as_str()) =>
-            {
-                let deg_value = to_canonical_angle(*value, unit);
-                format!("{}deg", deg_value.unwrap_or(*value))
+            ComponentValue::Token(CSSToken::Dimension(Dimension { value, unit, .. })) => {
+                format!("{}{}", value, unit)
             }
             comp if is_color(comp) => comp.serialize(),
+            ComponentValue::Token(CSSToken::Number { value, number_type }) => {
+                format!("{} ({:?})", value, number_type)
+            }
             // ComponentValue::Function(Function(name, args)) if is_color_function(name)
-            _ => todo!(),
+            ComponentValue::Token(CSSToken::Whitespace) => " ".to_string(),
+            e => todo!("Serialize component value: {:?}", e),
         }
     }
 }
@@ -69,6 +70,94 @@ impl CSSDeclaration {
             value,
             important: false,
             case_sensitive: false,
+        }
+    }
+
+    pub fn is_shorthand_prop_name(name: String) -> bool {
+        return matches!(
+            name.as_str(),
+            "background"
+                | "border"
+                | "border-block"
+                | "border-block-end"
+                | "border-block-start"
+                | "border-bottom"
+                | "border-color"
+                | "border-image"
+                | "border-inline"
+                | "border-inline-end"
+                | "border-inline-start"
+                | "border-left"
+                | "border-radius"
+                | "border-right"
+                | "border-style"
+                | "border-top"
+                | "border-width"
+                | "font"
+                | "list-style"
+                | "margin"
+                | "padding"
+        );
+    }
+
+    pub fn shorthand_to_longhand_props(&self) -> Vec<CSSDeclaration> {
+        if !CSSDeclaration::is_shorthand_prop_name(self.property_name.clone()) {
+            return vec![self.clone()];
+        }
+
+        match self.property_name.as_str() {
+            "margin" => {
+                let actual_tokens = self
+                    .value
+                    .iter()
+                    .filter(|cv| !matches!(cv, ComponentValue::Token(CSSToken::Whitespace)))
+                    .cloned()
+                    .collect::<Vec<ComponentValue>>();
+
+                let (top, right, bottom, left) = match actual_tokens.len() {
+                    1 => (
+                        actual_tokens[0].clone(),
+                        actual_tokens[0].clone(),
+                        actual_tokens[0].clone(),
+                        actual_tokens[0].clone(),
+                    ),
+                    2 => (
+                        actual_tokens[0].clone(),
+                        actual_tokens[1].clone(),
+                        actual_tokens[0].clone(),
+                        actual_tokens[1].clone(),
+                    ),
+                    3 => (
+                        actual_tokens[0].clone(),
+                        actual_tokens[1].clone(),
+                        actual_tokens[2].clone(),
+                        actual_tokens[1].clone(),
+                    ),
+                    4 => (
+                        actual_tokens[0].clone(),
+                        actual_tokens[1].clone(),
+                        actual_tokens[2].clone(),
+                        actual_tokens[3].clone(),
+                    ),
+                    _ => return vec![self.clone()],
+                };
+
+                println!(
+                    "Expanding 'margin' shorthand into longhand properties: top={}, right={}, bottom={}, left={}",
+                    top.serialize(),
+                    right.serialize(),
+                    bottom.serialize(),
+                    left.serialize()
+                );
+
+                vec![
+                    CSSDeclaration::new("margin-top".to_string(), vec![top]),
+                    CSSDeclaration::new("margin-right".to_string(), vec![right]),
+                    CSSDeclaration::new("margin-bottom".to_string(), vec![bottom]),
+                    CSSDeclaration::new("margin-left".to_string(), vec![left]),
+                ]
+            }
+            _ => todo!("Expand shorthand property into longhand properties"),
         }
     }
 }
@@ -719,6 +808,28 @@ impl ComputedStyle {
             font: self.font.clone(),
             ..Default::default()
         }
+    }
+
+    pub fn resolve_again(
+        &mut self,
+        parents: Option<&Vec<Rc<RefCell<Element>>>>,
+        viewport_size: (f64, f64),
+    ) {
+        let style = self.clone();
+
+        self.width
+            .resolve_with_curr(parents.unwrap_or(&vec![]), &style, viewport_size);
+        self.top
+            .resolve_with_curr(parents.unwrap_or(&vec![]), &style, viewport_size);
+        self.right
+            .resolve_with_curr(parents.unwrap_or(&vec![]), &style, viewport_size);
+        self.bottom
+            .resolve_with_curr(parents.unwrap_or(&vec![]), &style, viewport_size);
+        self.left
+            .resolve_with_curr(parents.unwrap_or(&vec![]), &style, viewport_size);
+
+        self.margin
+            .resolve_with_curr(parents.unwrap_or(&vec![]), &style, viewport_size);
     }
 }
 

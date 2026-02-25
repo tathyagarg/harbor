@@ -11,4 +11,4 @@ a {
     color: #89b4fa;
 }
 
-h1, h2, p, ul { margin-left: 2rem; }
+h1, h2, p, ul { margin-left: 2rem !important; }

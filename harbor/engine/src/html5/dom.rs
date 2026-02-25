@@ -1041,20 +1041,17 @@ impl Element {
                             .downcast_ref::<CSSRuleNode<CSSStyleRuleData>>()
                             .unwrap();
 
-                        for selector in style_rule.selectors() {
-                            if selector.matches(self, parents) {
-                                for declaration in style_rule.declarations() {
+                        for selector in style_rule
+                            .selectors()
+                            .iter()
+                            .filter(|s| s.matches(self, parents))
+                        {
+                            for declaration in style_rule.declarations() {
+                                for expanded in declaration.shorthand_to_longhand_props() {
                                     declarations_to_use
-                                        .entry(declaration.property_name.clone())
+                                        .entry(expanded.property_name.clone())
                                         .or_insert_with(Vec::new)
-                                        .push((selector.clone(), declaration.clone()));
-
-                                    // handle_declaration(
-                                    //     declaration,
-                                    //     self.style_mut(),
-                                    //     parents,
-                                    //     viewport_size,
-                                    // );
+                                        .push((selector.clone(), expanded.clone()));
                                 }
                             }
                         }
@@ -1088,8 +1085,13 @@ impl Element {
                 })
                 .unwrap();
 
+            if self.local_name == "h1" {
+                println!("Decl: {:?}", declaration);
+            }
             handle_declaration(declaration, self.style_mut(), parents, viewport_size);
         }
+
+        self.style_mut().resolve_again(parents, viewport_size);
 
         let mut new_parents = match parents {
             Some(p) => p.clone(),
