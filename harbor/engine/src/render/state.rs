@@ -1,7 +1,7 @@
 use std::{cell::RefCell, collections::HashMap, ops::Deref, rc::Rc, sync::Arc};
 
 use wgpu::util::DeviceExt;
-use winit::{event::Modifiers, keyboard::ModifiersState, window::Window};
+use winit::{event::Modifiers, window::Window};
 
 use crate::{
     css::{

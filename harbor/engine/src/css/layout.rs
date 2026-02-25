@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 use crate::render::RendererIdentifier;
 
-use crate::globals::{DEFAULT_FONT_FAMILY, DEFAULT_FONT_STYLE_ITALIC, DEFAULT_FONT_WEIGHT, FONTS};
+use crate::globals::FONTS;
 
 use crate::css::r#box::Box as CssBox;
 use crate::html5::dom::Document;
