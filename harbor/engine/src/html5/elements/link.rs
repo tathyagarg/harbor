@@ -14,6 +14,7 @@ const VALID_RELS: [&str; 13] = [
     "stylesheet",
 ];
 
+#[derive(Debug)]
 pub struct LinkElement {
     pub disabled: bool,
     pub href: String,

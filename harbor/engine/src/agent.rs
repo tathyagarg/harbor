@@ -5,8 +5,15 @@ use std::rc::Rc;
 
 use crate::{
     css::{cssom::CSSStyleSheet, parser::parse_stylesheet, tokenize::tokenize},
+    globals::{
+        ERROR, ERROR_PAGE_PATH, NEW_TAB, NEW_TAB_PAGE_PATH, NO_CONNECTION, NO_CONNECTION_PAGE_PATH,
+        NO_CONNECTION_URL,
+    },
     html5::{dom::Document, parse::Parser},
-    http::{Client, Header, Protocol, Request, url::URL},
+    http::{
+        Client, Header, Protocol, Request, RequestIntegrityError, RequestIntegrityErrorKind,
+        url::URL,
+    },
     infra::{InputStream, Serializable},
 };
 
@@ -69,8 +76,11 @@ impl Agent {
             });
 
             let response = match _response {
-                Some(resp) => resp,
-                None => return None,
+                Ok(resp) => resp,
+                Err(_) => {
+                    eprintln!("Failed to fetch stylesheet URL: {}", resolved_url);
+                    return None;
+                }
             };
 
             match response.body {
@@ -96,25 +106,48 @@ impl Agent {
         return Some(css_content);
     }
 
+    fn open_error_page(&mut self, error: RequestIntegrityError) -> Rc<RefCell<Document>> {
+        let url = match error.kind {
+            RequestIntegrityErrorKind::NoConnection => NO_CONNECTION_URL,
+            RequestIntegrityErrorKind::InvalidMethod => "harbor:invalidmethod",
+            RequestIntegrityErrorKind::InvalidHeaders => "harbor:invalidheaders",
+            RequestIntegrityErrorKind::InvalidBody => "harbor:invalidbody",
+        };
+
+        self.open(url).unwrap()
+    }
+
     pub fn open(&mut self, url: &str) -> Option<Rc<RefCell<Document>>> {
         if url.starts_with("harbor:") {
             let path = url.trim_start_matches("harbor:").to_string();
 
-            match path.as_str() {
-                "new" => {
-                    let html_content = fs::read_to_string("res/pages/tab.html").unwrap();
-                    let mut stream =
-                        InputStream::new(&html_content.chars().collect::<Vec<char>>()[..]);
+            let path = match path.as_str() {
+                NEW_TAB => NEW_TAB_PAGE_PATH,
+                NO_CONNECTION => NO_CONNECTION_PAGE_PATH,
+                ERROR => ERROR_PAGE_PATH,
+                _ => ERROR_PAGE_PATH,
+            };
 
-                    let document = Parser::parse_stream(&mut stream);
-                    document
-                        .borrow_mut()
-                        .insert_stylesheet(0, self.ua_stylesheet.clone());
+            println!("Path: {}", path);
+            let html_content = fs::read_to_string(path).unwrap();
+            let mut stream = InputStream::new(&html_content.chars().collect::<Vec<char>>()[..]);
 
-                    return Some(document);
-                }
-                _ => return None,
-            }
+            let document = Parser::parse_stream(&mut stream);
+            document
+                .borrow_mut()
+                .insert_stylesheet(0, self.ua_stylesheet.clone());
+
+            let this_url = format!(
+                "file://{}/{}",
+                std::env::current_dir().unwrap().to_str().unwrap(),
+                path
+            );
+
+            println!("This URL: {}", this_url);
+
+            self.handle_link_elements(&this_url, &document);
+
+            return Some(document);
         }
 
         let maybe_resolved_url = URL::pure_parse(url.to_string());
@@ -144,8 +177,8 @@ impl Agent {
                 });
 
                 let response = match _response {
-                    Some(resp) => resp,
-                    None => return None,
+                    Ok(resp) => resp,
+                    Err(e) => return Some(self.open_error_page(e)),
                 };
 
                 match response.body {
@@ -167,27 +200,33 @@ impl Agent {
                 .borrow_mut()
                 .insert_stylesheet(0, self.ua_stylesheet.clone());
 
-            let links = document.borrow().get_links();
-
-            for link in links {
-                if !link
-                    .borrow()
-                    .rel_list()
-                    .contains(&String::from("stylesheet"))
-                {
-                    continue;
-                }
-
-                if let Some(stylesheet) = self.fetch_stylesheet(&link.borrow().href) {
-                    document
-                        .borrow_mut()
-                        .insert_stylesheet(0, stylesheet.clone());
-                }
-            }
+            self.handle_link_elements(url, &document);
 
             self.cached_pages.insert(resolved_url, Rc::clone(&document));
 
             return Some(document);
+        }
+    }
+
+    fn handle_link_elements(&mut self, root_url: &str, document: &Rc<RefCell<Document>>) {
+        let links = document.borrow().get_links();
+
+        for link in links {
+            if !link
+                .borrow()
+                .rel_list()
+                .contains(&String::from("stylesheet"))
+            {
+                continue;
+            }
+
+            let joint = URL::join_urls(root_url.to_string(), link.borrow().href.clone()).unwrap();
+
+            if let Some(stylesheet) = self.fetch_stylesheet(joint.serialize().as_str()) {
+                document
+                    .borrow_mut()
+                    .insert_stylesheet(0, stylesheet.clone());
+            }
         }
     }
 }

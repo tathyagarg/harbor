@@ -18,7 +18,17 @@ pub const INITIAL_WINDOW_HEIGHT: u32 = 600;
 pub const MINIMUM_WINDOW_WIDTH: u32 = 400;
 pub const MINIMUM_WINDOW_HEIGHT: u32 = 300;
 
-pub const NEW_TAB_URL: &str = "harbor:new";
+pub const NEW_TAB_URL: &str = "harbor:new-tab";
+pub const NEW_TAB: &str = "new-tab";
+pub const NEW_TAB_PAGE_PATH: &str = "res/pages/tab.html";
+
+pub const NO_CONNECTION_URL: &str = "harbor:no-connection";
+pub const NO_CONNECTION: &str = "no-connection";
+pub const NO_CONNECTION_PAGE_PATH: &str = "res/pages/no_connection.html";
+
+pub const ERROR_URL: &str = "harbor:error";
+pub const ERROR: &str = "error";
+pub const ERROR_PAGE_PATH: &str = "res/pages/error.html";
 
 // TODO: Make this configurable
 pub const TABS_BAR_OFFSET: fn(f64, f64) -> (f64, f64) =

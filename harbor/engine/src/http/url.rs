@@ -761,6 +761,14 @@ pub enum URLPath {
 }
 
 impl URLPath {
+    pub fn pop(&mut self) -> Option<URLPathSegment> {
+        if self.is_opaque() {
+            return None;
+        }
+
+        self._ensure_list_mut().pop()
+    }
+
     fn is_opaque(&self) -> bool {
         matches!(self, URLPath::Segment(_))
     }
@@ -971,6 +979,41 @@ impl URL {
 
             _ = path.pop();
         }
+    }
+
+    pub fn join_urls(root: String, input: String) -> Result<URL, ParseURLError> {
+        let mut base = URL::parse(root, None, None)?;
+        let resultant_input = {
+            let mut inp = input;
+
+            if let URLPath::List(l) = &base.path
+                && l.last().is_some_and(|s| s.is_empty())
+            {
+                base.path.pop();
+            }
+
+            base.path.pop();
+
+            while inp.starts_with("../") {
+                println!("input: {}", inp);
+                inp = inp[3..].to_string();
+                base.path.pop();
+                println!("Base path: {:?}", base.path);
+            }
+
+            inp
+        };
+
+        println!("Base: {:?}, resultant_input: {}", base, resultant_input);
+
+        URL::basic_url_parser(
+            resultant_input,
+            Some(base.clone()),
+            None,
+            Some(&mut base),
+            Some(ParseURLState::Path),
+        )
+        .map(|maybe_url| maybe_url.unwrap())
     }
 
     pub fn resolve(&self, new: String) -> Result<URL, ParseURLError> {

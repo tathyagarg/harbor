@@ -1,0 +1,14 @@
+html, body {
+    background-color: #11111b !important;
+    color: #a6adc8 !important;
+}
+
+h1 {
+    color: #cdd6f4;
+}
+
+a {
+    color: #89b4fa;
+}
+
+h1, h2, p, ul { margin-left: 2rem; }

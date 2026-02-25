@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::ops::Deref;
 use std::rc::Weak;
@@ -5,8 +6,8 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::css::r#box::declarations::handle_declaration;
 use crate::css::cssom::{
-    CSSRuleNode, CSSRuleType, CSSStyleRuleData, CSSStyleSheet, CSSStyleSheetExt, ComputedStyle,
-    DocumentOrShadowRootStyle, StyleSheetList,
+    CSSDeclaration, CSSRuleNode, CSSRuleType, CSSStyleRuleData, CSSStyleSheet, CSSStyleSheetExt,
+    ComputedStyle, DocumentOrShadowRootStyle, StyleSheetList,
 };
 use crate::css::selectors::MatchesElement;
 use crate::html5::elements::link::LinkElement;
@@ -1027,6 +1028,8 @@ impl Element {
         let document = node_doc.borrow();
         let style_sheets = document.style_sheets();
 
+        let mut declarations_to_use: HashMap<String, Vec<CSSDeclaration>> = HashMap::new();
+
         for stylesheet in style_sheets.style_sheets.iter() {
             for rule in stylesheet.borrow().css_rules().iter() {
                 match rule.deref()._type() {
@@ -1040,12 +1043,17 @@ impl Element {
                         for selector in style_rule.selectors() {
                             if selector.matches(self, parents) {
                                 for declaration in style_rule.declarations() {
-                                    handle_declaration(
-                                        declaration,
-                                        self.style_mut(),
-                                        parents,
-                                        viewport_size,
-                                    );
+                                    declarations_to_use
+                                        .entry(declaration.property_name.clone())
+                                        .or_insert_with(Vec::new)
+                                        .push(declaration.clone());
+
+                                    // handle_declaration(
+                                    //     declaration,
+                                    //     self.style_mut(),
+                                    //     parents,
+                                    //     viewport_size,
+                                    // );
                                 }
                             }
                         }
@@ -1055,6 +1063,18 @@ impl Element {
                     }
                 }
             }
+        }
+
+        for (_, declaration) in declarations_to_use.iter() {
+            let mut declaration_to_use = declaration.last().unwrap();
+
+            for decl in declaration.iter().rev() {
+                if decl.important && !declaration_to_use.important {
+                    declaration_to_use = decl;
+                }
+            }
+
+            handle_declaration(declaration_to_use, self.style_mut(), parents, viewport_size);
         }
 
         let mut new_parents = match parents {

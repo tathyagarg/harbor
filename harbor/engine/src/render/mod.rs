@@ -256,7 +256,7 @@ impl ApplicationHandler<AppEvent> for App {
                             / TAB_WIDTH(state.config.width as f64, state.tab_datas.len()))
                         .floor() as usize;
 
-                        if selected_tab_index > state.tab_datas.len() {
+                        if selected_tab_index >= state.tab_datas.len() {
                             return;
                         }
 

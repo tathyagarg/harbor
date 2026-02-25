@@ -61,6 +61,8 @@ pub enum Protocol {
     HTTP1_1,
     HTTP2_0,
     HTTP3_0,
+
+    Unknown,
 }
 
 impl Protocol {
@@ -82,6 +84,7 @@ impl ReqEncodable for Protocol {
             Self::HTTP1_1 => "HTTP/1.1",
             Self::HTTP2_0 => "HTTP/2.0",
             Self::HTTP3_0 => "HTTP/3.0",
+            Self::Unknown => "HTTP/?.?",
         })
     }
 }
@@ -253,6 +256,10 @@ impl Request {
                 if let Some(stream) = client.connection.as_mut() {
                     if let Err(e) = stream.cs_write(self.encode().as_bytes()) {
                         eprintln!("Error in writing: {}", e);
+                        return Err(RequestIntegrityError {
+                            kind: RequestIntegrityErrorKind::InvalidBody,
+                            message: format!("Failed to write request to stream: {}", e),
+                        });
                     }
 
                     let mut response_decoder = ResponseDecoder::new();
@@ -272,6 +279,13 @@ impl Request {
                                 },
                             ));
 
+                        println!(
+                            "Bytes: {}",
+                            resp[..respected_bytes]
+                                .iter()
+                                .map(|b| *b as char)
+                                .collect::<String>()
+                        );
                         response_decoder.decode(&resp[..respected_bytes]);
 
                         if response_decoder.is_complete {
@@ -661,9 +675,16 @@ impl Response {
 
 impl fmt::Display for Response {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} ", self.protocol.as_ref().unwrap().encode())?;
+        write!(
+            f,
+            "{} ",
+            self.protocol
+                .as_ref()
+                .unwrap_or(&Protocol::Unknown)
+                .encode()
+        )?;
 
-        let status_code = *self.status_code.as_ref().unwrap();
+        let status_code = *self.status_code.as_ref().unwrap_or(&999);
         if status_code >= 100 && status_code <= 199 {
             write!(f, "{}", BLUE)?;
         } else if status_code >= 200 && status_code <= 299 {
@@ -678,7 +699,9 @@ impl fmt::Display for Response {
             f,
             "{} {}{}\n",
             status_code,
-            self.reason.as_ref().unwrap(),
+            self.reason
+                .as_ref()
+                .unwrap_or(&String::from("Unknown reason")),
             RESET
         )?;
 
@@ -811,16 +834,17 @@ impl Client {
         url_obj
     }
 
-    pub fn send_request(&mut self, request: Request) -> Option<Response> {
+    pub fn send_request(&mut self, request: Request) -> Result<Response, RequestIntegrityError> {
         let maybe_resp = match request.send(self) {
-            Ok(resp) => Some(resp),
+            Ok(resp) => Ok(resp),
             Err(e) => {
                 eprintln!("{}", e);
-                None
+                Err(e)
             }
         };
 
-        if let Some(resp) = maybe_resp.as_ref() {
+        if let Ok(resp) = maybe_resp.as_ref() {
+            println!("Received response:\n{}", resp);
             let status_code = resp.status_code.unwrap();
             if status_code >= 300 && status_code <= 399 {
                 return self.handle_redirect(request, resp.clone());
@@ -830,7 +854,11 @@ impl Client {
         maybe_resp
     }
 
-    pub fn handle_redirect(&mut self, initial: Request, response: Response) -> Option<Response> {
+    pub fn handle_redirect(
+        &mut self,
+        initial: Request,
+        response: Response,
+    ) -> Result<Response, RequestIntegrityError> {
         if let Some(redirect_url) = response.get_header_value("Location".to_string()) {
             let url = http::url::URL::pure_parse(redirect_url.clone()).unwrap();
 
@@ -846,7 +874,7 @@ impl Client {
 
         // Couldn't find a location to redirect to, so just take the original response
         // Do what u want w ts lol
-        Some(response)
+        Ok(response)
     }
 }
 
