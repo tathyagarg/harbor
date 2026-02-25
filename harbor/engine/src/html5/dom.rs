@@ -9,7 +9,7 @@ use crate::css::cssom::{
     CSSDeclaration, CSSRuleNode, CSSRuleType, CSSStyleRuleData, CSSStyleSheet, CSSStyleSheetExt,
     ComputedStyle, DocumentOrShadowRootStyle, StyleSheetList,
 };
-use crate::css::selectors::MatchesElement;
+use crate::css::selectors::{ComplexSelector, MatchesElement, Specificity};
 use crate::html5::elements::link::LinkElement;
 use crate::http::url::URL;
 use crate::infra::Serializable;
@@ -1028,7 +1028,8 @@ impl Element {
         let document = node_doc.borrow();
         let style_sheets = document.style_sheets();
 
-        let mut declarations_to_use: HashMap<String, Vec<CSSDeclaration>> = HashMap::new();
+        let mut declarations_to_use: HashMap<String, Vec<(ComplexSelector, CSSDeclaration)>> =
+            HashMap::new();
 
         for stylesheet in style_sheets.style_sheets.iter() {
             for rule in stylesheet.borrow().css_rules().iter() {
@@ -1046,7 +1047,7 @@ impl Element {
                                     declarations_to_use
                                         .entry(declaration.property_name.clone())
                                         .or_insert_with(Vec::new)
-                                        .push(declaration.clone());
+                                        .push((selector.clone(), declaration.clone()));
 
                                     // handle_declaration(
                                     //     declaration,
@@ -1065,16 +1066,29 @@ impl Element {
             }
         }
 
-        for (_, declaration) in declarations_to_use.iter() {
-            let mut declaration_to_use = declaration.last().unwrap();
+        for (_, declarations) in declarations_to_use.iter() {
+            let (_, declaration) = declarations
+                .iter()
+                .max_by(|(selector_a, decl_a), (selector_b, decl_b)| {
+                    // Compare specificity
+                    let spec_a = selector_a.specificity();
+                    let spec_b = selector_b.specificity();
 
-            for decl in declaration.iter().rev() {
-                if decl.important && !declaration_to_use.important {
-                    declaration_to_use = decl;
-                }
-            }
+                    if spec_a != spec_b {
+                        return spec_a.cmp(&spec_b);
+                    }
 
-            handle_declaration(declaration_to_use, self.style_mut(), parents, viewport_size);
+                    if decl_a.important && !decl_b.important {
+                        return std::cmp::Ordering::Greater;
+                    } else if !decl_a.important && decl_b.important {
+                        return std::cmp::Ordering::Less;
+                    }
+
+                    std::cmp::Ordering::Equal
+                })
+                .unwrap();
+
+            handle_declaration(declaration, self.style_mut(), parents, viewport_size);
         }
 
         let mut new_parents = match parents {
