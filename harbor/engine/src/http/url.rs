@@ -995,16 +995,12 @@ impl URL {
             base.path.pop();
 
             while inp.starts_with("../") {
-                println!("input: {}", inp);
                 inp = inp[3..].to_string();
                 base.path.pop();
-                println!("Base path: {:?}", base.path);
             }
 
             inp
         };
-
-        println!("Base: {:?}, resultant_input: {}", base, resultant_input);
 
         URL::basic_url_parser(
             resultant_input,

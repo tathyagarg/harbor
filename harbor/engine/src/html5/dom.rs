@@ -1085,9 +1085,6 @@ impl Element {
                 })
                 .unwrap();
 
-            if self.local_name == "h1" {
-                println!("Decl: {:?}", declaration);
-            }
             handle_declaration(declaration, self.style_mut(), parents, viewport_size);
         }
 

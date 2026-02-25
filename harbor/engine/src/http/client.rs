@@ -279,13 +279,6 @@ impl Request {
                                 },
                             ));
 
-                        println!(
-                            "Bytes: {}",
-                            resp[..respected_bytes]
-                                .iter()
-                                .map(|b| *b as char)
-                                .collect::<String>()
-                        );
                         response_decoder.decode(&resp[..respected_bytes]);
 
                         if response_decoder.is_complete {

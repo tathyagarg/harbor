@@ -142,14 +142,6 @@ impl CSSDeclaration {
                     _ => return vec![self.clone()],
                 };
 
-                println!(
-                    "Expanding 'margin' shorthand into longhand properties: top={}, right={}, bottom={}, left={}",
-                    top.serialize(),
-                    right.serialize(),
-                    bottom.serialize(),
-                    left.serialize()
-                );
-
                 vec![
                     CSSDeclaration::new("margin-top".to_string(), vec![top]),
                     CSSDeclaration::new("margin-right".to_string(), vec![right]),

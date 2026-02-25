@@ -128,7 +128,6 @@ impl Agent {
                 _ => ERROR_PAGE_PATH,
             };
 
-            println!("Path: {}", path);
             let html_content = fs::read_to_string(path).unwrap();
             let mut stream = InputStream::new(&html_content.chars().collect::<Vec<char>>()[..]);
 
@@ -142,8 +141,6 @@ impl Agent {
                 std::env::current_dir().unwrap().to_str().unwrap(),
                 path
             );
-
-            println!("This URL: {}", this_url);
 
             self.handle_link_elements(&this_url, &document);
 
