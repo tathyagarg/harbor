@@ -445,6 +445,33 @@ impl ApplicationHandler<AppEvent> for App {
                                 }
                             }
                         }
+                        (KeyCode::KeyW, ElementState::Pressed) => {
+                            if cfg!(target_os = "macos") {
+                                if !state.modifiers.state().super_key() {
+                                    return;
+                                }
+                            } else {
+                                if !state.modifiers.state().control_key() {
+                                    return;
+                                }
+                            }
+
+                            state.tab_datas.remove(state.active_tab);
+
+                            if state.active_tab >= state.tab_datas.len() && state.active_tab > 0 {
+                                state.active_tab -= 1;
+                            }
+
+                            if state.tab_datas.len() == 0 {
+                                state.tab_datas.push(TabData::empty_from(NEW_TAB_URL));
+                                state.active_tab = 0;
+                            }
+
+                            if let Some(callbacks) = &self.callbacks {
+                                let tab_data = &state.tab_datas[state.active_tab];
+                                (callbacks.open_tab)(tab_data);
+                            }
+                        }
                         _ => {}
                     }
                 } else {
