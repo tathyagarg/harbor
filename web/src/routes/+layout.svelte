@@ -1,6 +1,5 @@
 <script lang="ts">
   import "./layout.css";
-  import favicon from "$lib/assets/favicon.svg";
 
   import { onMount } from "svelte";
   import Navbar from "$lib/components/Navbar.svelte";
@@ -34,7 +33,11 @@
   const { children } = $props();
 </script>
 
-<svelte:head><link rel="icon" href={favicon} /></svelte:head>
+<svelte:head>
+  <title>Harbor Browser</title>
+
+  <link rel="icon" href="/assets/favicon.png" />
+</svelte:head>
 
 <div class="w-[80%] mx-auto">
   <Navbar />
