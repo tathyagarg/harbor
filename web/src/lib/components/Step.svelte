@@ -5,7 +5,7 @@
   export let last: boolean = false;
 </script>
 
-<li>
+<li class="animate">
   <button
     on:click={onClick}
     class="bg-(--cerulean) py-2 pl-8 border-2 border-(--celadon)/25

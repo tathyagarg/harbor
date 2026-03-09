@@ -1,6 +1,9 @@
 <script>
   import Step from "$lib/components/Step.svelte";
+  import HTTP from "$lib/components/steps/HTTP.svelte";
   import TTFLoader from "$lib/components/steps/TTFLoader.svelte";
+
+  let panel;
 
   const steps = [
     "TTF Loader",
@@ -15,6 +18,49 @@
   ];
 
   let selected_step = $state(0);
+
+  import { animate, onScroll, stagger } from "animejs";
+  import { onMount } from "svelte";
+
+  onMount(() => {
+    const elems = document.querySelectorAll(".animate");
+
+    animate(elems, {
+      opacity: [0, 1],
+      translateX: [-20, 0],
+      scale: [0.85, 1],
+      filter: ["blur(10px)", "blur(0)"],
+      duration: 300,
+      delay: stagger(100),
+      ease: "cubicBezier(0.25, 0.1, 0.25, 1)",
+      autoplay: onScroll({
+        target: "#header",
+        debug: false,
+      }),
+    });
+  });
+
+  async function changeStep(i) {
+    if (i === selected_step) return;
+
+    await animate(panel, {
+      opacity: [1, 0],
+      translateX: [0, -40],
+      filter: ["blur(0)", "blur(5px)"],
+      duration: 150,
+      easing: "cubicBezier(0.25, 0.1, 0.25, 1)",
+    });
+
+    selected_step = i;
+
+    await animate(panel, {
+      opacity: [0, 1],
+      translateX: [40, 0],
+      filter: ["blur(5px)", "blur(0)"],
+      duration: 150,
+      easing: "cubicBezier(0.25, 0.1, 0.25, 1)",
+    });
+  }
 </script>
 
 <div class="py-4 flex flex-row gap-8">
@@ -23,17 +69,22 @@
       <Step
         title={step}
         onClick={() => {
-          console.log("clicked", i);
-          selected_step = i;
+          changeStep(i);
         }}
         last={i === steps.length - 1}
       />
     {/each}
   </ol>
 
-  <div class="flex-2 bg-(--celadon)/25 rounded-lg">
+  <div bind:this={panel} class="flex-2 bg-(--cerulean)/25 rounded-lg relative">
+    <span class="absolute top-2 left-2"
+      >Step {selected_step + 1}: <b>{steps[selected_step]}</b></span
+    >
+
     {#if selected_step === 0}
       <TTFLoader />
+    {:else if selected_step === 1}
+      <HTTP />
     {/if}
   </div>
 </div>
