@@ -20,7 +20,7 @@ html, body {
   padding: 0;
   font-family: 'Arial', sans-serif;
 
-  background-color: var(--dark-deep-space-blue);
+  background-color: color-mix(in srgb, var(--dark-deep-space-blue) 80%, black 20%);
   color: var(--text);
 
   font-family: 'Bricolage Grotesque', sans-serif;

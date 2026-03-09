@@ -3,6 +3,7 @@
   import favicon from "$lib/assets/favicon.svg";
 
   import { onMount } from "svelte";
+  import Navbar from "$lib/components/Navbar.svelte";
 
   onMount(() => {
     const canvas = document.createElement("canvas");
@@ -34,4 +35,34 @@
 </script>
 
 <svelte:head><link rel="icon" href={favicon} /></svelte:head>
-{@render children()}
+
+<div class="w-[80%] mx-auto">
+  <Navbar />
+  {@render children()}
+</div>
+
+<div class="h-[50vh] bg-(--accent-text) relative overflow-hidden">
+  <div
+    class="w-[80%] mx-auto flex flex-col gap-4 h-full text-(--baltic-blue) py-12"
+  >
+    <div class="pb-4">
+      <h1 class="text-6xl font-bold">Harbor Browser</h1>
+      <p>A browser built completely from scratch in Rust and Zig.</p>
+    </div>
+
+    <button class="bg-(--baltic-blue) text-(--text) p-4 rounded-xl w-fit"
+      >Download</button
+    >
+
+    <!-- made with love tag -->
+    <h2 class="text-sm text-center text-(--baltic-blue) mt-auto">
+      Made with ❤️ by <a href="https://arson.dev/" class="underline">Tathya</a>
+    </h2>
+  </div>
+
+  <img
+    src="/assets/favicon.png"
+    alt="Harbor Browser Logo"
+    class="w-128 absolute -bottom-32 -right-32"
+  />
+</div>
