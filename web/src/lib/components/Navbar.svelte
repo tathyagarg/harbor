@@ -1,5 +1,5 @@
 <div>
-  <a href="/">
+  <a href="https://arson.dev/harbor">
     <span class="flex items-center py-4">
       <img
         src="assets/favicon.png"
