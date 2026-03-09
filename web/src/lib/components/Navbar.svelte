@@ -2,7 +2,7 @@
   <a href="https://arson.dev/harbor">
     <span class="flex items-center py-4">
       <img
-        src="assets/favicon.png"
+        src="https://arson.dev/harbor/assets/favicon.png"
         alt="harbor browser logo"
         class="w-16 mr-2"
       />
