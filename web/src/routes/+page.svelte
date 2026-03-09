@@ -41,11 +41,11 @@
       >GitHub</button
     >
   </div>
-  <img
-    src="/assets/ss.png"
-    alt="screenshot of harbor browser"
-    class="animate rounded-lg shadow-lg"
-  />
+  <div class="w-[80%] rounded-lg">
+    <img
+      src="/assets/ss.png"
+      alt="screenshot of harbor browser"
+      class="animate shadow-lg mt-8 overflow-hidden rounded-xl"
+    />
+  </div>
 </div>
-
-<div class="h-[200vh]"></div>
