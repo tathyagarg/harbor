@@ -91,7 +91,7 @@
   </div>
   <div class="w-[80%] rounded-lg">
     <img
-      src="/assets/ss.png"
+      src="assets/ss.png"
       alt="screenshot of harbor browser"
       class="animate shadow-lg mt-8 overflow-hidden rounded-xl"
     />
