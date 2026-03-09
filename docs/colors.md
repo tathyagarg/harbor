@@ -7,8 +7,8 @@
 6. **Pastel Green (Text)**: #a6e3a1
 
 ## Planned Future Colors
---deep-space-blue: #13293dff;
---baltic-blue: #006494ff;
---cerulean: #247ba0ff;
---celadon: #a1cca5ff;
---muted-teal: #8fb996ff;
+--deep-space-blue: #13293d;
+--baltic-blue: #006494;
+--cerulean: #247ba0;
+--celadon: #a1cca5;
+--muted-teal: #8fb996;

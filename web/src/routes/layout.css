@@ -1,0 +1,27 @@
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&display=swap');
+@import 'tailwindcss';
+
+:root {
+  --deep-space-blue: #13293d;
+  --dark-deep-space-blue: #0e1f2e;
+  
+  --baltic-blue: #006494;
+  --cerulean: #247ba0;
+  --celadon: #a1cca5;
+  --muted-teal: #8fb996;
+
+  --text: #E6F1F7;
+  --sec-text: #C7DDE8;
+  --accent-text: #D7F0DA;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Arial', sans-serif;
+
+  background-color: var(--dark-deep-space-blue);
+  color: var(--text);
+
+  font-family: 'Bricolage Grotesque', sans-serif;
+}
