@@ -24,6 +24,7 @@
 		"vite": "^7.3.1"
 	},
 	"dependencies": {
+		"@friendofsvelte/mermaid": "^0.0.4",
 		"animejs": "^4.3.6"
 	}
 }

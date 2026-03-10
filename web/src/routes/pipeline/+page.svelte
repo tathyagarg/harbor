@@ -1,9 +1,10 @@
-<script>
+<script lang="ts">
   import Step from "$lib/components/Step.svelte";
+  import HTML from "$lib/components/steps/HTML.svelte";
   import HTTP from "$lib/components/steps/HTTP.svelte";
   import TTFLoader from "$lib/components/steps/TTFLoader.svelte";
 
-  let panel;
+  let panel: HTMLDivElement;
 
   const steps = [
     "TTF Loader",
@@ -17,7 +18,7 @@
     "Painting",
   ];
 
-  let selected_step = $state(0);
+  let selected_step = $state(2);
 
   import { animate, onScroll, stagger } from "animejs";
   import { onMount } from "svelte";
@@ -40,7 +41,7 @@
     });
   });
 
-  async function changeStep(i) {
+  async function changeStep(i: number) {
     if (i === selected_step) return;
 
     await animate(panel, {
@@ -76,7 +77,10 @@
     {/each}
   </ol>
 
-  <div bind:this={panel} class="flex-2 bg-(--cerulean)/25 rounded-lg relative">
+  <div
+    bind:this={panel}
+    class="flex-2 bg-(--cerulean)/25 rounded-lg relative animate"
+  >
     <span class="absolute top-2 left-2"
       >Step {selected_step + 1}: <b>{steps[selected_step]}</b></span
     >
@@ -85,6 +89,8 @@
       <TTFLoader />
     {:else if selected_step === 1}
       <HTTP />
+    {:else if selected_step == 2}
+      <HTML />
     {/if}
   </div>
 </div>
