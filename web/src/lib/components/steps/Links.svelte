@@ -1,8 +1,9 @@
 <script>
+  import { primaryColor, primaryTextColor } from "$lib";
   import { Mermaid } from "@friendofsvelte/mermaid";
 </script>
 
-<div class="relative w-full top-[7.5%]">
+<div class="relative w-full top-[7.5%] bg-(--cerulean)/75 rounded-lg">
   <Mermaid
     string={`
 sequenceDiagram
@@ -21,8 +22,8 @@ sequenceDiagram
     config={{
       theme: "base",
       themeVariables: {
-        primaryColor: "#3b82f6",
-        primaryTextColor: "#E6F1F7",
+        primaryColor,
+        primaryTextColor,
       },
       sequence: {},
     }}

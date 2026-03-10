@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { primaryColor, primaryTextColor } from "$lib";
   import { Mermaid } from "@friendofsvelte/mermaid";
 </script>
 
@@ -31,8 +32,8 @@
       config={{
         theme: "base",
         themeVariables: {
-          primaryColor: "#3b82f6",
-          primaryTextColor: "#E6F1F7",
+          primaryColor,
+          primaryTextColor,
         },
       }}
     />
