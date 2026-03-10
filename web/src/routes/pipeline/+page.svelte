@@ -4,6 +4,7 @@
   import CSS from "$lib/components/steps/CSS.svelte";
   import HTML from "$lib/components/steps/HTML.svelte";
   import HTTP from "$lib/components/steps/HTTP.svelte";
+  import Layout from "$lib/components/steps/Layout.svelte";
   import Links from "$lib/components/steps/Links.svelte";
   import TTFLoader from "$lib/components/steps/TTFLoader.svelte";
 
@@ -21,7 +22,7 @@
     "Painting",
   ];
 
-  let selected_step = $state(5);
+  let selected_step = $state(6);
 
   import { animate, cubicBezier, onScroll, stagger } from "animejs";
   import { onMount } from "svelte";
@@ -67,6 +68,8 @@
   }
 </script>
 
+<h1 class="text-8xl font-bold text-center">Render Pipeline</h1>
+
 <div class="py-4 flex flex-row gap-8">
   <ol class="list-decimal pl-4 flex-1">
     {#each steps as step, i}
@@ -100,6 +103,8 @@
       <CSS />
     {:else if selected_step == 5}
       <Cascade />
+    {:else if selected_step == 6}
+      <Layout />
     {/if}
   </div>
 </div>
