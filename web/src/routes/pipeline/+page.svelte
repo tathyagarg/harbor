@@ -2,6 +2,7 @@
   import Step from "$lib/components/Step.svelte";
   import HTML from "$lib/components/steps/HTML.svelte";
   import HTTP from "$lib/components/steps/HTTP.svelte";
+  import Links from "$lib/components/steps/Links.svelte";
   import TTFLoader from "$lib/components/steps/TTFLoader.svelte";
 
   let panel: HTMLDivElement;
@@ -18,9 +19,9 @@
     "Painting",
   ];
 
-  let selected_step = $state(2);
+  let selected_step = $state(3);
 
-  import { animate, onScroll, stagger } from "animejs";
+  import { animate, cubicBezier, onScroll, stagger } from "animejs";
   import { onMount } from "svelte";
 
   onMount(() => {
@@ -33,7 +34,7 @@
       filter: ["blur(10px)", "blur(0)"],
       duration: 300,
       delay: stagger(100),
-      ease: "cubicBezier(0.25, 0.1, 0.25, 1)",
+      ease: cubicBezier(0.25, 0.1, 0.25, 1),
       autoplay: onScroll({
         target: "#header",
         debug: false,
@@ -91,6 +92,8 @@
       <HTTP />
     {:else if selected_step == 2}
       <HTML />
+    {:else if selected_step == 3}
+      <Links />
     {/if}
   </div>
 </div>

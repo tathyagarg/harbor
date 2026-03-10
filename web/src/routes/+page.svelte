@@ -1,7 +1,7 @@
 <script lang="ts">
   import Components from "$lib/components/Components.svelte";
   import Stat from "$lib/components/Stat.svelte";
-  import { animate, onScroll, stagger } from "animejs";
+  import { animate, cubicBezier, onScroll, stagger } from "animejs";
   import { onMount } from "svelte";
 
   onMount(() => {
@@ -13,7 +13,7 @@
       filter: ["blur(10px)", "blur(0)"],
       duration: 300,
       delay: stagger(200),
-      ease: "cubicBezier(0.25, 0.1, 0.25, 1)",
+      ease: cubicBezier(0.25, 0.1, 0.25, 1),
       autoplay: onScroll({
         target: "#header",
         debug: false,
