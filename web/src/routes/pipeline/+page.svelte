@@ -1,5 +1,6 @@
 <script lang="ts">
   import Step from "$lib/components/Step.svelte";
+  import CSS from "$lib/components/steps/CSS.svelte";
   import HTML from "$lib/components/steps/HTML.svelte";
   import HTTP from "$lib/components/steps/HTTP.svelte";
   import Links from "$lib/components/steps/Links.svelte";
@@ -19,7 +20,7 @@
     "Painting",
   ];
 
-  let selected_step = $state(3);
+  let selected_step = $state(4);
 
   import { animate, cubicBezier, onScroll, stagger } from "animejs";
   import { onMount } from "svelte";
@@ -94,6 +95,8 @@
       <HTML />
     {:else if selected_step == 3}
       <Links />
+    {:else if selected_step == 4}
+      <CSS />
     {/if}
   </div>
 </div>
