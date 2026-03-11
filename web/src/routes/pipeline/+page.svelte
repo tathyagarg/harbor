@@ -6,6 +6,7 @@
   import HTTP from "$lib/components/steps/HTTP.svelte";
   import Layout from "$lib/components/steps/Layout.svelte";
   import Links from "$lib/components/steps/Links.svelte";
+  import Paint from "$lib/components/steps/Paint.svelte";
   import Rasterize from "$lib/components/steps/Rasterize.svelte";
   import TTFLoader from "$lib/components/steps/TTFLoader.svelte";
 
@@ -23,7 +24,7 @@
     "Painting",
   ];
 
-  let selected_step = $state(7);
+  let selected_step = $state(0);
 
   import { animate, cubicBezier, onScroll, stagger } from "animejs";
   import { onMount } from "svelte";
@@ -108,6 +109,22 @@
       <Layout />
     {:else if selected_step == 7}
       <Rasterize />
+    {:else}
+      <Paint />
     {/if}
   </div>
+</div>
+
+<div class="bg-(--celadon) text-black p-4 rounded-lg my-8 animate">
+  <h1 class="text-4xl font-bold">A confession</h1>
+  <hr />
+
+  <p class="text-lg mt-4 leading-relaxed">
+    The functioning of Harbor Browser is far too complex to be accurately
+    represented by a single step-by-step diagram - it's impossible to summarize
+    30 thousand lines of code comprising deeply interlinked modules and services
+    in just a few steps. The steps outlined above are a very high-level overview
+    of the render pipeline, and do not capture the full complexity and nuance of
+    how Harbor Browser actually works.
+  </p>
 </div>
