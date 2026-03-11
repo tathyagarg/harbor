@@ -6,6 +6,7 @@
   import HTTP from "$lib/components/steps/HTTP.svelte";
   import Layout from "$lib/components/steps/Layout.svelte";
   import Links from "$lib/components/steps/Links.svelte";
+  import Rasterize from "$lib/components/steps/Rasterize.svelte";
   import TTFLoader from "$lib/components/steps/TTFLoader.svelte";
 
   let panel: HTMLDivElement;
@@ -22,7 +23,7 @@
     "Painting",
   ];
 
-  let selected_step = $state(6);
+  let selected_step = $state(7);
 
   import { animate, cubicBezier, onScroll, stagger } from "animejs";
   import { onMount } from "svelte";
@@ -105,6 +106,8 @@
       <Cascade />
     {:else if selected_step == 6}
       <Layout />
+    {:else if selected_step == 7}
+      <Rasterize />
     {/if}
   </div>
 </div>
