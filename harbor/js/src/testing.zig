@@ -33,3 +33,17 @@ pub fn are_equal_strings(actual: String, expected: String) bool {
 
     return true;
 }
+
+pub fn are_equal_strings_raw(actual: String, expected: [*]u8, expected_len: usize) bool {
+    if (actual.len != expected_len) {
+        return false;
+    }
+
+    for (actual.data, 0..actual.len) |a, i| {
+        if (a != @as(u16, @intCast(expected[i]))) {
+            return false;
+        }
+    }
+
+    return true;
+}

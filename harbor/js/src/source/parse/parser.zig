@@ -141,6 +141,11 @@ pub fn reset_to(parser: *Parser, position: usize) void {
     parser.curr = position;
 }
 
+pub const MemberExpressionStarter = enum {
+    Dot,
+    OpenBracket,
+};
+
 pub fn parse_assignment_expression(parser: *Parser) !*expr.AssignmentExpression {
     const prim = try parse_primary_expression(parser);
 
@@ -383,6 +388,162 @@ pub fn parse_primary_expression(parser: *Parser) error{ UnexpectedEndOfTokens, O
     return primary_expr;
 }
 
+fn token_is_member_expr_start(token: Token) ?MemberExpressionStarter {
+    if (token.kind == .CommonToken) {
+        const common_token_data: *CommonTokenData = @ptrFromInt(token.data);
+        if (common_token_data.common_token_kind == .Punctuator) {
+            const punctuator_kind: _text.PunctuatorKind = @enumFromInt(common_token_data.data);
+
+            if (punctuator_kind == .Period) {
+                return MemberExpressionStarter.Dot;
+            } else if (punctuator_kind == .OpenBracket) {
+                return MemberExpressionStarter.OpenBracket;
+            }
+        }
+    }
+
+    return null;
+}
+
+pub fn parse_member_expression(parser: *Parser) !*expr.MemberExpression {
+    const prim = try parse_primary_expression(parser);
+
+    const member_expr = parser.allocator.create(expr.MemberExpression) catch return error.OutOfMemory;
+    member_expr.* = expr.MemberExpression{
+        .tag = expr.MEMBER_EXPR_PRIMARY,
+        .data = .{
+            .primary = prim,
+        },
+    };
+
+    while (peek(parser) != null) {
+        const token = peek(parser).?;
+        const member_expr_start = token_is_member_expr_start(token) orelse break;
+
+        switch (member_expr_start) {
+            .Dot => {
+                _ = next(parser);
+
+                const property_token = peek(parser) orelse return error.UnexpectedEndOfTokens;
+
+                if (property_token.kind != .CommonToken) {
+                    return error.UnexpectedToken;
+                }
+
+                const property_common_token_data: *CommonTokenData = @ptrFromInt(property_token.data);
+
+                if (property_common_token_data.common_token_kind != .IdentifierName) {
+                    return error.UnexpectedToken;
+                }
+
+                const property_identifier_data: *IdentifierNameData = @ptrFromInt(property_common_token_data.data);
+
+                _ = next(parser);
+
+                const member_expr_clone = parser.allocator.create(expr.MemberExpression) catch return error.OutOfMemory;
+                member_expr_clone.* = member_expr.*;
+
+                member_expr.* = expr.MemberExpression{
+                    .tag = expr.MEMBER_EXPR_PROPERTY,
+                    .data = .{
+                        .property = .{
+                            .object = member_expr_clone,
+                            .property = property_identifier_data,
+                        },
+                    },
+                };
+            },
+            .OpenBracket => {
+                _ = next(parser);
+
+                const property_expr = try parse_assignment_expression(parser);
+
+                const property_arr = parser.allocator.create([1]expr.AssignmentExpression) catch return error.OutOfMemory;
+                property_arr.* = [_]expr.AssignmentExpression{property_expr.*};
+
+                // const property_arr = [_]expr.AssignmentExpression{property_expr.*};
+
+                const property_expr_wrapper = parser.allocator.create(expr.Expression) catch return error.OutOfMemory;
+                property_expr_wrapper.* = expr.Expression{
+                    .data = &property_arr.*,
+                    .len = 1,
+                };
+
+                try expect_skip_whitespace(parser, Token{
+                    .kind = .CommonToken,
+                    .data = @intFromPtr(&CommonTokenData{
+                        .common_token_kind = .Punctuator,
+                        .data = @intFromEnum(_text.PunctuatorKind.CloseBracket),
+                    }),
+                });
+
+                const member_expr_clone = parser.allocator.create(expr.MemberExpression) catch return error.OutOfMemory;
+                member_expr_clone.* = member_expr.*;
+
+                member_expr.* = expr.MemberExpression{
+                    .tag = expr.MEMBER_EXPR_MEMBER,
+                    .data = .{
+                        .member = .{
+                            .object = member_expr_clone,
+                            .expr = property_expr_wrapper,
+                        },
+                    },
+                };
+            },
+        }
+    }
+
+    return member_expr;
+}
+
+test "parse member expr" {
+    const text = "obj.prop[expr]";
+    const str = testing.u8_array_to_string(@ptrCast(@constCast(text)), text.len);
+
+    const tokens = try _text.parse_text_string(str, .InputElementHashbangOrRegExp);
+
+    var parser = Parser{
+        .tokens = tokens,
+        .curr = 0,
+        .arena = std.heap.ArenaAllocator.init(std.heap.page_allocator),
+        .allocator = undefined,
+    };
+    parser.allocator = parser.arena.allocator();
+
+    const result = (try parse_member_expression(&parser)).*;
+
+    const obj_str = testing.u8_array_to_string(@ptrCast(@constCast("obj")), 3);
+    const prop_str = testing.u8_array_to_string(@ptrCast(@constCast("prop")), 4);
+    const expr_str = testing.u8_array_to_string(@ptrCast(@constCast("expr")), 4);
+
+    std.debug.assert(result.tag == expr.MEMBER_EXPR_MEMBER);
+    std.debug.assert(result.data.member.object.tag == expr.MEMBER_EXPR_PROPERTY);
+    std.debug.assert(result.data.member.object.data.property.object.tag == expr.MEMBER_EXPR_PRIMARY);
+    std.debug.assert(result.data.member.object.data.property.object.data.primary.tag == expr.PRIMARY_EXPR_IDENTIFIER);
+
+    std.debug.assert(testing.are_equal_strings(
+        result.data.member.object.data.property.object.data.primary.data.identifier.data.identifier.name,
+        obj_str,
+    ));
+
+    std.debug.assert(testing.are_equal_strings(
+        result.data.member.object.data.property.property.name,
+        prop_str,
+    ));
+
+    std.debug.assert(result.data.member.expr.data[0].tag == expr.ASSIGNMENT_EXPR_PRIMARY);
+    std.debug.assert(result.data.member.expr.data[0].data.primary.tag == expr.PRIMARY_EXPR_IDENTIFIER);
+
+    std.debug.assert(testing.are_equal_strings(
+        result.data.member.expr.data[0].data.primary.data.identifier.data.identifier.name,
+        expr_str,
+    ));
+
+    _text.free_string(str);
+    _text.free_token_seq(tokens);
+    deinit(&parser);
+}
+
 test "parse primary expr identifier" {
     const text = "myVar";
     const str = testing.u8_array_to_string(@ptrCast(@constCast(text)), text.len);
@@ -416,7 +577,11 @@ test "parse primary expr identifier" {
 
     std.debug.assert(result.tag == expr.PRIMARY_EXPR_IDENTIFIER);
     std.debug.assert(result.data.identifier.tag == expr.IDENTIFIER_REF_IDENTIFIER);
-    std.debug.assert(testing.are_equal_strings(result.data.identifier.data.identifier.name, str));
+
+    std.debug.assert(testing.are_equal_strings(
+        result.data.identifier.data.identifier.name,
+        str,
+    ));
 
     _text.free_string(str);
     deinit(&parser);
@@ -476,7 +641,11 @@ test "parse primary expr string literal" {
 
     std.debug.assert(result.tag == expr.PRIMARY_EXPR_LITERAL);
     std.debug.assert(result.data.literal.tag == expr.LITERAL_STRING);
-    std.debug.assert(testing.are_equal_strings(result.data.literal.data.string.*, str));
+
+    std.debug.assert(testing.are_equal_strings(
+        result.data.literal.data.string.*,
+        str,
+    ));
 
     _text.free_string(str);
     deinit(&parser);

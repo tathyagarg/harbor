@@ -142,20 +142,24 @@ pub const MemberExpression = EXTERN_UNION(
     extern union {
         primary: *PrimaryExpression,
         member: extern struct {
+            // object[expr]
             object: *MemberExpression,
             expr: *Expression,
         },
         property: extern struct {
+            // object.property
             object: *MemberExpression,
             property: *IdentifierNameData,
         },
         super: *SuperProperty,
         import_meta: MetaProperty,
         new: extern struct {
+            // new callee arguments
             callee: *MemberExpression,
             arguments: *Arguments,
         },
         private_property: extern struct {
+            // object.#property
             object: *MemberExpression,
             property: *IdentifierNameData,
         },
