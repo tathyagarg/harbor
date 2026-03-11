@@ -496,6 +496,81 @@ pub fn parse_member_expression(parser: *Parser) !*expr.MemberExpression {
     return member_expr;
 }
 
+pub fn parse_new_expression(parser: *Parser) !*expr.NewExpression {
+    if (peek(parser) == null) {
+        return error.UnexpectedEndOfTokens;
+    }
+
+    const token = peek(parser).?;
+
+    if (token.kind == .CommonToken) {
+        const common_token_data: *CommonTokenData = @ptrFromInt(token.data);
+
+        if (common_token_data.common_token_kind == .IdentifierName) {
+            const identifier_data: *IdentifierNameData = @ptrFromInt(common_token_data.data);
+
+            if (testing.are_equal_strings(identifier_data.name, testing.u8_array_to_string(@ptrCast(@constCast("new")), 3))) {
+                _ = next(parser);
+
+                // skip whitespace after 'new' keyword
+                _ = next(parser);
+
+                const inner_expr = try parse_new_expression(parser);
+
+                const new_expr = parser.allocator.create(expr.NewExpression) catch return error.OutOfMemory;
+                new_expr.* = expr.NewExpression{
+                    .tag = expr.NEW_EXPR_NEW,
+                    .data = .{
+                        .new = inner_expr,
+                    },
+                };
+
+                return new_expr;
+            }
+        }
+    }
+
+    const member_expr = try parse_member_expression(parser);
+
+    const new_expr = parser.allocator.create(expr.NewExpression) catch return error.OutOfMemory;
+    new_expr.* = expr.NewExpression{
+        .tag = expr.NEW_EXPR_MEMBER,
+        .data = .{
+            .member = member_expr,
+        },
+    };
+
+    return new_expr;
+}
+
+test "parse new expr" {
+    const text = "new obj.prop[expr]";
+    const str = testing.u8_array_to_string(@ptrCast(@constCast(text)), text.len);
+
+    const tokens = try _text.parse_text_string(str, .InputElementHashbangOrRegExp);
+
+    var parser = Parser{
+        .tokens = tokens,
+        .curr = 0,
+        .arena = std.heap.ArenaAllocator.init(std.heap.page_allocator),
+        .allocator = undefined,
+    };
+    parser.allocator = parser.arena.allocator();
+
+    const result = (try parse_new_expression(&parser)).*;
+
+    std.debug.assert(result.tag == expr.NEW_EXPR_NEW);
+    std.debug.assert(result.data.new.tag == expr.NEW_EXPR_MEMBER);
+    std.debug.assert(result.data.new.data.member.tag == expr.MEMBER_EXPR_MEMBER);
+    std.debug.assert(result.data.new.data.member.data.member.object.tag == expr.MEMBER_EXPR_PROPERTY);
+    std.debug.assert(result.data.new.data.member.data.member.object.data.property.object.tag == expr.MEMBER_EXPR_PRIMARY);
+    std.debug.assert(result.data.new.data.member.data.member.object.data.property.object.data.primary.tag == expr.PRIMARY_EXPR_IDENTIFIER);
+
+    _text.free_string(str);
+    _text.free_token_seq(tokens);
+    deinit(&parser);
+}
+
 test "parse member expr" {
     const text = "obj.prop[expr]";
     const str = testing.u8_array_to_string(@ptrCast(@constCast(text)), text.len);
