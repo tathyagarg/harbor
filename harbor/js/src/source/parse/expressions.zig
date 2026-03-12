@@ -102,6 +102,7 @@ pub const OPTIONAL_CHAIN_CHAIN_PRIVATE_PROPERTY = 7;
 
 pub const Arguments = extern struct {
     arguments: Seq(AssignmentExpression),
+    is_spread: [*]const bool,
 };
 
 pub const SuperCall = Arguments;
@@ -113,20 +114,29 @@ pub const CallExpression = EXTERN_UNION(
         super: *SuperCall,
         import: *ImportCall,
         simple_call: extern struct {
+            // callee(arguments)
             callee: *CallExpression,
             arguments: *Arguments,
         },
         member: extern struct {
+            // object[expr]
             object: *CallExpression,
             expr: *Expression,
         },
         property: extern struct {
+            // object.property
             object: *CallExpression,
             property: *IdentifierNameData,
         },
         private_property: extern struct {
+            // object.#private
             object: *CallExpression,
             property: *IdentifierNameData,
+        },
+        cover: extern struct {
+            // member(arguments)
+            callee: *MemberExpression,
+            arguments: *Arguments,
         },
     },
 );
@@ -137,6 +147,7 @@ pub const CALL_EXPR_SIMPLE_CALL = 2;
 pub const CALL_EXPR_MEMBER = 3;
 pub const CALL_EXPR_PROPERTY = 4;
 pub const CALL_EXPR_PRIVATE_PROPERTY = 5;
+pub const CALL_EXPR_COVER = 6;
 
 pub const MemberExpression = EXTERN_UNION(
     extern union {
