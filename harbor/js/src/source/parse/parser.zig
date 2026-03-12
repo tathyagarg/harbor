@@ -661,6 +661,144 @@ pub fn parse_call_expression(parser: *Parser) !*expr.CallExpression {
     return call_expr;
 }
 
+pub fn parse_lhs_expression(parser: *Parser) !*expr.LeftHandSideExpression {
+    const new_expr = try parse_new_expression(parser);
+
+    const lhs = parser.allocator.create(expr.LeftHandSideExpression) catch return error.OutOfMemory;
+    lhs.* = expr.LeftHandSideExpression{
+        .tag = expr.LEFT_HAND_SIDE_EXPR_NEW,
+        .data = .{
+            .new = new_expr,
+        },
+    };
+
+    skip_whitespace(parser);
+
+    while (peek(parser) != null) {
+        const token = peek(parser).?;
+
+        if (token.kind == .CommonToken) {
+            const common_token_data: *CommonTokenData = @ptrFromInt(token.data);
+
+            if (common_token_data.common_token_kind == .Punctuator) {
+                const punctuator_kind: _text.PunctuatorKind = @enumFromInt(common_token_data.data);
+
+                if (punctuator_kind == .OpenParen) {
+                    const args = try parse_arguments(parser);
+
+                    const lhs_clone = parser.allocator.create(expr.LeftHandSideExpression) catch return error.OutOfMemory;
+                    lhs_clone.* = lhs.*;
+
+                    const call_expr = parser.allocator.create(expr.CallExpression) catch return error.OutOfMemory;
+
+                    if (lhs.tag == expr.LEFT_HAND_SIDE_EXPR_NEW) {
+                        const new_data = lhs.data.new;
+
+                        if (new_data.tag == expr.NEW_EXPR_MEMBER) {
+                            const member = new_data.data.member;
+
+                            call_expr.* = expr.CallExpression{
+                                .tag = expr.CALL_EXPR_COVER,
+                                .data = .{
+                                    .cover = .{
+                                        .callee = member,
+                                        .arguments = args,
+                                    },
+                                },
+                            };
+                        }
+                    } else if (lhs.tag == expr.LEFT_HAND_SIDE_EXPR_CALL) {
+                        const call_data = lhs.data.call;
+
+                        call_expr.* = expr.CallExpression{
+                            .tag = expr.CALL_EXPR_SIMPLE_CALL,
+                            .data = .{
+                                .simple_call = .{
+                                    .callee = call_data,
+                                    .arguments = args,
+                                },
+                            },
+                        };
+                    }
+
+                    lhs.* = expr.LeftHandSideExpression{
+                        .tag = expr.LEFT_HAND_SIDE_EXPR_CALL,
+                        .data = .{
+                            .call = call_expr,
+                        },
+                    };
+                } else {
+                    // TODO: handle things like abc()[x]
+                    break;
+                }
+            } else {
+                break;
+            }
+        } else {
+            break;
+        }
+    }
+
+    return lhs;
+}
+
+test "parse lhs" {
+    const text = "obj.method(arg1, arg2)";
+    const str = testing.u8_array_to_string(@ptrCast(@constCast(text)), text.len);
+
+    const tokens = try _text.parse_text_string(str, .InputElementHashbangOrRegExp);
+
+    var parser = Parser{
+        .tokens = tokens,
+        .curr = 0,
+        .arena = std.heap.ArenaAllocator.init(std.heap.page_allocator),
+        .allocator = undefined,
+    };
+    parser.allocator = parser.arena.allocator();
+
+    const result = (try parse_lhs_expression(&parser)).*;
+
+    std.debug.assert(result.tag == expr.LEFT_HAND_SIDE_EXPR_CALL);
+    std.debug.assert(result.data.call.tag == expr.CALL_EXPR_COVER);
+    std.debug.assert(result.data.call.data.cover.callee.tag == expr.MEMBER_EXPR_PROPERTY);
+    std.debug.assert(result.data.call.data.cover.callee.data.property.object.tag == expr.MEMBER_EXPR_PRIMARY);
+    std.debug.assert(result.data.call.data.cover.callee.data.property.object.data.primary.tag == expr.PRIMARY_EXPR_IDENTIFIER);
+
+    std.debug.assert(testing.are_equal_strings(
+        result.data.call.data.cover.callee.data.property.object.data.primary.data.identifier.data.identifier.name,
+        testing.u8_array_to_string(@ptrCast(@constCast("obj")), 3),
+    ));
+
+    std.debug.assert(testing.are_equal_strings(
+        result.data.call.data.cover.callee.data.property.property.name,
+        testing.u8_array_to_string(@ptrCast(@constCast("method")), 6),
+    ));
+
+    std.debug.assert(result.data.call.data.cover.arguments.arguments.len == 2);
+    std.debug.assert(result.data.call.data.cover.arguments.is_spread[0] == false);
+    std.debug.assert(result.data.call.data.cover.arguments.is_spread[1] == false);
+
+    std.debug.assert(result.data.call.data.cover.arguments.arguments.data[0].tag == expr.ASSIGNMENT_EXPR_PRIMARY);
+    std.debug.assert(result.data.call.data.cover.arguments.arguments.data[0].data.primary.tag == expr.PRIMARY_EXPR_IDENTIFIER);
+
+    std.debug.assert(testing.are_equal_strings(
+        result.data.call.data.cover.arguments.arguments.data[0].data.primary.data.identifier.data.identifier.name,
+        testing.u8_array_to_string(@ptrCast(@constCast("arg1")), 4),
+    ));
+
+    std.debug.assert(result.data.call.data.cover.arguments.arguments.data[1].tag == expr.ASSIGNMENT_EXPR_PRIMARY);
+    std.debug.assert(result.data.call.data.cover.arguments.arguments.data[1].data.primary.tag == expr.PRIMARY_EXPR_IDENTIFIER);
+
+    std.debug.assert(testing.are_equal_strings(
+        result.data.call.data.cover.arguments.arguments.data[1].data.primary.data.identifier.data.identifier.name,
+        testing.u8_array_to_string(@ptrCast(@constCast("arg2")), 4),
+    ));
+
+    _text.free_string(str);
+    _text.free_token_seq(tokens);
+    deinit(&parser);
+}
+
 test "parse call expr" {
     const text = "obj.method(arg1, arg2)";
     const str = testing.u8_array_to_string(@ptrCast(@constCast(text)), text.len);
