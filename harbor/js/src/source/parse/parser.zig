@@ -644,61 +644,135 @@ pub fn parse_call_expression(parser: *Parser) !*expr.CallExpression {
     const member_expr = try parse_member_expression(parser);
     skip_whitespace(parser);
 
-    // const token = peek(parser) orelse return error.UnexpectedEndOfTokens;
+    const arguments = try parse_arguments(parser);
 
-    if (match(parser, Token{
-        .kind = .CommonToken,
-        .data = @intFromPtr(&CommonTokenData{
-            .common_token_kind = .Punctuator,
-            .data = @intFromEnum(_text.PunctuatorKind.OpenParen),
-        }),
-    })) {
-        var args = std.ArrayList(expr.Expression).empty;
-        defer args.deinit(parser.allocator);
+    const call_expr = parser.allocator.create(expr.CallExpression) catch return error.OutOfMemory;
+    call_expr.* = expr.CallExpression{
+        .tag = expr.CALL_EXPR_COVER,
+        .data = .{
+            .cover = .{
+                .callee = member_expr,
+                .arguments = arguments,
+            },
+        },
+    };
 
-        while (true) {
-            const next_token = peek(parser) orelse break;
+    // TODO: handle optional chaining call expressions and the other bs
+    return call_expr;
+}
 
-            if (next_token.kind == .Whitespace or next_token.kind == .LineTerminator) {
-                _ = next(parser);
-                continue;
-            }
+test "parse call expr" {
+    const text = "obj.method(arg1, arg2)";
+    const str = testing.u8_array_to_string(@ptrCast(@constCast(text)), text.len);
 
-            if (next_token.kind == .CommonToken) {
-                const next_common_token_data: *CommonTokenData = @ptrFromInt(next_token.data);
+    const tokens = try _text.parse_text_string(str, .InputElementHashbangOrRegExp);
 
-                if (next_common_token_data.common_token_kind == .Punctuator) {
-                    const next_punctuator_kind: _text.PunctuatorKind = @enumFromInt(next_common_token_data.data);
+    var parser = Parser{
+        .tokens = tokens,
+        .curr = 0,
+        .arena = std.heap.ArenaAllocator.init(std.heap.page_allocator),
+        .allocator = undefined,
+    };
+    parser.allocator = parser.arena.allocator();
 
-                    if (next_punctuator_kind == .CloseParen) {
-                        _ = next(parser);
-                        break;
-                    } else if (next_punctuator_kind == .Comma) {
-                        _ = next(parser);
-                        continue;
-                    } else {
-                        return error.UnexpectedToken;
-                    }
-                }
-            }
+    const result = (try parse_call_expression(&parser)).*;
 
-            const arg_expr = try parse_assignment_expression(parser);
+    std.debug.assert(result.tag == expr.CALL_EXPR_COVER);
+    std.debug.assert(result.data.cover.callee.tag == expr.MEMBER_EXPR_PROPERTY);
+    std.debug.assert(result.data.cover.callee.data.property.object.tag == expr.MEMBER_EXPR_PRIMARY);
+    std.debug.assert(result.data.cover.callee.data.property.object.data.primary.tag == expr.PRIMARY_EXPR_IDENTIFIER);
 
-            try args.append(parser.allocator, arg_expr.*);
-        }
+    std.debug.assert(testing.are_equal_strings(
+        result.data.cover.callee.data.property.object.data.primary.data.identifier.data.identifier.name,
+        testing.u8_array_to_string(@ptrCast(@constCast("obj")), 3),
+    ));
 
-        const args_slice = args.toOwnedSlice(parser.allocator) catch return error.OutOfMemory;
+    std.debug.assert(testing.are_equal_strings(
+        result.data.cover.callee.data.property.property.name,
+        testing.u8_array_to_string(@ptrCast(@constCast("method")), 6),
+    ));
 
-        const call_expr = parser.allocator.create(expr.CallExpression) catch return error.OutOfMemory;
-        call_expr.* = expr.CallExpression{
-            .callee = member_expr,
-            .arguments = &args_slice.*,
-        };
+    std.debug.assert(result.data.cover.arguments.arguments.len == 2);
 
-        return call_expr;
-    } else {
-        return error.UnexpectedToken;
-    }
+    std.debug.assert(result.data.cover.arguments.is_spread[0] == false);
+    std.debug.assert(result.data.cover.arguments.is_spread[1] == false);
+
+    std.debug.assert(result.data.cover.arguments.arguments.data[0].tag == expr.ASSIGNMENT_EXPR_PRIMARY);
+    std.debug.assert(result.data.cover.arguments.arguments.data[0].data.primary.tag == expr.PRIMARY_EXPR_IDENTIFIER);
+
+    std.debug.assert(testing.are_equal_strings(
+        result.data.cover.arguments.arguments.data[0].data.primary.data.identifier.data.identifier.name,
+        testing.u8_array_to_string(@ptrCast(@constCast("arg1")), 4),
+    ));
+
+    std.debug.assert(result.data.cover.arguments.arguments.data[1].tag == expr.ASSIGNMENT_EXPR_PRIMARY);
+    std.debug.assert(result.data.cover.arguments.arguments.data[1].data.primary.tag == expr.PRIMARY_EXPR_IDENTIFIER);
+
+    std.debug.assert(testing.are_equal_strings(
+        result.data.cover.arguments.arguments.data[1].data.primary.data.identifier.data.identifier.name,
+        testing.u8_array_to_string(@ptrCast(@constCast("arg2")), 4),
+    ));
+
+    _text.free_string(str);
+    _text.free_token_seq(tokens);
+    deinit(&parser);
+}
+
+test "parse call expr (spread)" {
+    const text = "obj.method(arg1, ...args)";
+    const str = testing.u8_array_to_string(@ptrCast(@constCast(text)), text.len);
+
+    const tokens = try _text.parse_text_string(str, .InputElementHashbangOrRegExp);
+
+    var parser = Parser{
+        .tokens = tokens,
+        .curr = 0,
+        .arena = std.heap.ArenaAllocator.init(std.heap.page_allocator),
+        .allocator = undefined,
+    };
+    parser.allocator = parser.arena.allocator();
+
+    const result = (try parse_call_expression(&parser)).*;
+
+    std.debug.assert(result.tag == expr.CALL_EXPR_COVER);
+    std.debug.assert(result.data.cover.callee.tag == expr.MEMBER_EXPR_PROPERTY);
+    std.debug.assert(result.data.cover.callee.data.property.object.tag == expr.MEMBER_EXPR_PRIMARY);
+    std.debug.assert(result.data.cover.callee.data.property.object.data.primary.tag == expr.PRIMARY_EXPR_IDENTIFIER);
+
+    std.debug.assert(testing.are_equal_strings(
+        result.data.cover.callee.data.property.object.data.primary.data.identifier.data.identifier.name,
+        testing.u8_array_to_string(@ptrCast(@constCast("obj")), 3),
+    ));
+
+    std.debug.assert(testing.are_equal_strings(
+        result.data.cover.callee.data.property.property.name,
+        testing.u8_array_to_string(@ptrCast(@constCast("method")), 6),
+    ));
+
+    std.debug.assert(result.data.cover.arguments.arguments.len == 2);
+
+    std.debug.assert(result.data.cover.arguments.is_spread[0] == false);
+    std.debug.assert(result.data.cover.arguments.is_spread[1] == true);
+
+    std.debug.assert(result.data.cover.arguments.arguments.data[0].tag == expr.ASSIGNMENT_EXPR_PRIMARY);
+    std.debug.assert(result.data.cover.arguments.arguments.data[0].data.primary.tag == expr.PRIMARY_EXPR_IDENTIFIER);
+
+    std.debug.assert(testing.are_equal_strings(
+        result.data.cover.arguments.arguments.data[0].data.primary.data.identifier.data.identifier.name,
+        testing.u8_array_to_string(@ptrCast(@constCast("arg1")), 4),
+    ));
+
+    std.debug.assert(result.data.cover.arguments.arguments.data[1].tag == expr.ASSIGNMENT_EXPR_PRIMARY);
+    std.debug.assert(result.data.cover.arguments.arguments.data[1].data.primary.tag == expr.PRIMARY_EXPR_IDENTIFIER);
+
+    std.debug.assert(testing.are_equal_strings(
+        result.data.cover.arguments.arguments.data[1].data.primary.data.identifier.data.identifier.name,
+        testing.u8_array_to_string(@ptrCast(@constCast("args")), 4),
+    ));
+
+    _text.free_string(str);
+    _text.free_token_seq(tokens);
+    deinit(&parser);
 }
 
 test "parse arguments (empty)" {
