@@ -2,7 +2,20 @@ use crate::font::ttc::TTCData;
 use crate::font::{self};
 
 use std::collections::HashMap;
+use std::fs;
+use std::path::PathBuf;
 use std::sync::{Arc, LazyLock};
+
+macro_rules! page_path {
+    ($res:expr) => {
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("res")
+            .join("pages")
+            .join($res)
+    };
+}
+
+type ResPath = fn() -> PathBuf;
 
 pub const FRAMES_IN_FLIGHT: usize = 3;
 
@@ -20,15 +33,15 @@ pub const MINIMUM_WINDOW_HEIGHT: u32 = 300;
 
 pub const NEW_TAB_URL: &str = "harbor:new-tab";
 pub const NEW_TAB: &str = "new-tab";
-pub const NEW_TAB_PAGE_PATH: &str = "res/pages/tab.html";
+pub const NEW_TAB_PAGE_PATH: ResPath = || page_path!("tab.html");
 
 pub const NO_CONNECTION_URL: &str = "harbor:no-connection";
 pub const NO_CONNECTION: &str = "no-connection";
-pub const NO_CONNECTION_PAGE_PATH: &str = "res/pages/no_connection.html";
+pub const NO_CONNECTION_PAGE_PATH: ResPath = || page_path!("no_connection.html");
 
 pub const ERROR_URL: &str = "harbor:error";
 pub const ERROR: &str = "error";
-pub const ERROR_PAGE_PATH: &str = "res/pages/error.html";
+pub const ERROR_PAGE_PATH: ResPath = || page_path!("error.html");
 
 // TODO: Make this configurable
 pub const TABS_BAR_OFFSET: fn(f64, f64) -> (f64, f64) =
@@ -54,25 +67,41 @@ pub const TAB_WIDTH: fn(f64, usize) -> f64 =
     |window_width, num_tabs| (window_width / (4.max(num_tabs) as f64));
 
 pub static FONTS: LazyLock<HashMap<String, Arc<TTCData>>> = LazyLock::new(|| {
-    let arial = Arc::new(font::parse_ttc(include_bytes!("../res/fonts/Arial.ttc")));
+    let fonts_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("res")
+        .join("fonts");
 
-    let verdana = Arc::new(font::parse_ttc(include_bytes!("../res/fonts/Verdana.ttc")));
+    let arial = Arc::new(font::parse_ttc(
+        fs::read(fonts_dir.join("Arial.ttc")).unwrap().as_slice(),
+    ));
 
-    let tahoma = Arc::new(TTCData::new(vec![font::parse_ttf(include_bytes!(
-        "../res/fonts/Tahoma.ttf"
-    ))]));
+    let verdana = Arc::new(font::parse_ttc(
+        fs::read(fonts_dir.join("Verdana.ttc")).unwrap().as_slice(),
+    ));
 
-    let trebuchet_ms = Arc::new(font::parse_ttc(include_bytes!(
-        "../res/fonts/TrebuchetMS.ttc"
-    )));
+    let tahoma = Arc::new(TTCData::new(vec![font::parse_ttf(
+        fs::read(fonts_dir.join("Tahoma.ttf")).unwrap().as_slice(),
+    )]));
 
-    let georgia = Arc::new(font::parse_ttc(include_bytes!("../res/fonts/Georgia.ttc")));
+    let trebuchet_ms = Arc::new(font::parse_ttc(
+        fs::read(fonts_dir.join("TrebuchetMS.ttc"))
+            .unwrap()
+            .as_slice(),
+    ));
 
-    let garamond = Arc::new(font::parse_ttc(include_bytes!("../res/fonts/Garamond.ttc")));
+    let georgia = Arc::new(font::parse_ttc(
+        fs::read(fonts_dir.join("Georgia.ttc")).unwrap().as_slice(),
+    ));
 
-    let courier_prime = Arc::new(font::parse_ttc(include_bytes!(
-        "../res/fonts/CourierPrime.ttc"
-    )));
+    let garamond = Arc::new(font::parse_ttc(
+        fs::read(fonts_dir.join("Garamond.ttc")).unwrap().as_slice(),
+    ));
+
+    let courier_prime = Arc::new(font::parse_ttc(
+        fs::read(fonts_dir.join("CourierPrime.ttc"))
+            .unwrap()
+            .as_slice(),
+    ));
 
     let mut map: HashMap<String, Arc<TTCData>> = HashMap::new();
 

@@ -135,9 +135,11 @@ impl Agent {
                 NO_CONNECTION => NO_CONNECTION_PAGE_PATH,
                 ERROR => ERROR_PAGE_PATH,
                 _ => ERROR_PAGE_PATH,
-            };
+            }();
 
-            let html_content = fs::read_to_string(path).unwrap();
+            println!("Opening internal page: {} ({:?})", url, path);
+
+            let html_content = fs::read_to_string(&path).unwrap();
             let mut stream = InputStream::new(&html_content.chars().collect::<Vec<char>>()[..]);
 
             let document = Parser::parse_stream(&mut stream);
@@ -146,9 +148,12 @@ impl Agent {
                 .insert_stylesheet(0, self.ua_stylesheet.clone());
 
             let this_url = format!(
-                "file://{}/{}",
-                std::env::current_dir().unwrap().to_str().unwrap(),
-                path
+                "file://{}",
+                std::env::current_dir()
+                    .unwrap()
+                    .join(path)
+                    .to_str()
+                    .unwrap()
             );
 
             self.handle_link_elements(&this_url, &document);
