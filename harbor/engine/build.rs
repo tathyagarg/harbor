@@ -14,7 +14,7 @@ fn rerun_if_changed(root: &PathBuf) {
 
 fn main() {
     let root = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
-    let zig_dir = root.join("../js");
+    let zig_dir = root.parent().unwrap().join("js");
 
     let zig_src_dir = zig_dir.join("src");
 

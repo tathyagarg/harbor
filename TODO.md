@@ -1,5 +1,5 @@
 - [ ] Cleanup redundant code
-- [ ] Make a website for the project
+- [x] Make a website for the project
 - [ ] Add credits to triangulation paper: https://www.geometrictools.com/Documentation/TriangulationByEarClipping.pdf
 
 # Pre Ship Checklist
