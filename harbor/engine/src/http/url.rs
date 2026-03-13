@@ -690,7 +690,7 @@ pub fn percent_decode(bytes: &[u8]) -> Vec<u8> {
             output.push(*byte);
         } else {
             let hi = bytes[i + 1];
-            let lo = bytes[i + 1];
+            let lo = bytes[i + 2];
 
             let hex = |b| match b {
                 b'0'..=b'9' => b - b'0',
