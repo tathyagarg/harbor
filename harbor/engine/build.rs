@@ -13,13 +13,16 @@ fn rerun_if_changed(root: &PathBuf) {
 }
 
 fn main() {
+    let is_windows = cfg!(target_os = "windows");
+
     let root = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let zig_dir = root.parent().unwrap().join("js");
 
     let zig_src_dir = zig_dir.join("src");
 
     let out = PathBuf::from(env::var("OUT_DIR").unwrap());
-    let lib = out.join("libjs.a");
+    let lib_fname = if is_windows { "js.lib" } else { "libjs.a" };
+    let lib = out.join(lib_fname);
 
     rerun_if_changed(&zig_src_dir);
 
@@ -41,7 +44,7 @@ fn main() {
 
     println!("Built Zig library successfully, copying to output directory...");
 
-    std::fs::copy(root.join("libjs.a"), &lib).expect("Failed to copy built library");
+    std::fs::copy(root.join(lib_fname), &lib).expect("Failed to copy built library");
 
     println!("cargo:rustc-link-search=native={}", out.display());
     println!("cargo:rustc-link-lib=static=js");
