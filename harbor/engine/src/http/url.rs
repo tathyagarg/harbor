@@ -798,6 +798,30 @@ impl URLPath {
     fn is_empty_list(&self) -> bool {
         self._ensure_list().is_empty()
     }
+
+    pub fn serialize_as_fs_path(&self) -> String {
+        if self.is_opaque() {
+            return self.serialize();
+        }
+
+        let mut output = String::new();
+        for segment in self._ensure_list() {
+            // remove percent encoding
+            let effective_segment = utf8_decode_no_bom(percent_decode(segment.as_bytes()));
+
+            if cfg!(windows) {
+                if starts_with_windows_drive_letter(&effective_segment) {
+                    output.push_str(effective_segment.as_str());
+                } else {
+                    output.push_str(format!("\\{}", effective_segment).as_str());
+                }
+            } else {
+                output.push_str(format!("/{}", effective_segment).as_str());
+            }
+        }
+
+        output
+    }
 }
 
 impl Default for URLPath {

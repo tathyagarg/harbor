@@ -88,7 +88,13 @@ impl Agent {
                 None => return None,
             }
         } else if raw_url.scheme == "file" {
-            let path = raw_url.path.serialize().trim_end_matches('/').to_string();
+            let path = raw_url
+                .path
+                .serialize_as_fs_path()
+                .trim_end_matches('/')
+                .to_string();
+
+            println!("Fetching stylesheet from file: {} ({:?})", path, raw_url);
 
             fs::read_to_string(path).unwrap()
         } else {
