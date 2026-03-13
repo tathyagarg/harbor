@@ -13,6 +13,11 @@
 
 - [Components](#components)
   - [HTTP Client](#http-client) 
+  - [HTML Parser](#html-parser)
+  - [CSS Parser](#css-parser)
+  - [TTF Parser](#ttf-parser)
+  - [JavaScript Engine](#javascript-engine)
+  - [Renderer](#renderer)
 
 ### Components
 Harbor is comprised of 6 main components:

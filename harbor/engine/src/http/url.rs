@@ -1575,7 +1575,7 @@ impl URL {
                                 buffer.replace_range(
                                     buffer
                                         .char_indices()
-                                        .nth(2)
+                                        .nth(1)
                                         .map(|(pos, ch)| (pos..pos + ch.len_utf8()))
                                         .unwrap(),
                                     ":",
