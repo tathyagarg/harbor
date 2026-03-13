@@ -88,11 +88,14 @@ impl Agent {
                 None => return None,
             }
         } else if raw_url.scheme == "file" {
-            let path = raw_url
-                .path
-                .serialize_as_fs_path()
-                .trim_end_matches('/')
-                .to_string();
+            let temp_path = raw_url.path.serialize_as_fs_path();
+
+            let path = if cfg!(target_os = "windows") {
+                temp_path.trim_end_matches('\\')
+            } else {
+                temp_path.trim_end_matches('/')
+            }
+            .to_string();
 
             println!("Fetching stylesheet from file: {} ({:?})", path, raw_url);
 
