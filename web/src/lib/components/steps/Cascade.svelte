@@ -1,12 +1,30 @@
 <script>
   import { primaryColor, primaryTextColor } from "$lib";
-  import { Mermaid } from "@friendofsvelte/mermaid";
+  import mermaid from "mermaid";
+  import { onMount } from "svelte";
+
+  mermaid.initialize({
+    startOnLoad: true,
+    htmlLabels: true,
+    theme: "base",
+    themeVariables: {
+      primaryColor,
+      primaryTextColor,
+      secondaryColor: "#13293d",
+      nodeTextColor: "#fff",
+      tertiaryColor: "#8fb99680",
+      titleColor: primaryTextColor,
+    },
+  });
+
+  onMount(() => {
+    mermaid.contentLoaded();
+  });
 </script>
 
-<div class="relative w-full top-[7.5%] bg-(--cerulean)/75 rounded-lg">
-  <div class="mx-auto max-w-[60%]">
-    <Mermaid
-      string={`
+<div class="relative w-full top-[7.5%] rounded-lg">
+  <div class="w-[60%] mx-auto">
+    <pre class="mermaid">
 flowchart TD
   subgraph "body"
     H[font-size: 16px]
@@ -38,18 +56,6 @@ flowchart TD
   class A,B,C,G div
   class D,E,F span
   class H,I misc
-`}
-      config={{
-        theme: "base",
-        themeVariables: {
-          primaryColor,
-          primaryTextColor,
-          secondaryColor: "#13293d",
-          nodeTextColor: "#fff",
-          tertiaryColor: "#8fb99680",
-          titleColor: primaryTextColor,
-        },
-      }}
-    />
+</pre>
   </div>
 </div>

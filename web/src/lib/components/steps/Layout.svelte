@@ -1,7 +1,5 @@
 <script lang="ts">
   import { primaryColor, primaryTextColor } from "$lib";
-  import { Mermaid } from "@friendofsvelte/mermaid";
-
   import mermaid from "mermaid";
   import { onMount } from "svelte";
 
@@ -25,37 +23,31 @@
 </script>
 
 <div
-  class="grid grid-cols-7 gap-8 items-center justify-center w-full h-full p-8 mx-auto"
+  class="flex flex-row gap-8 items-center justify-center w-full h-full p-8 mx-auto"
 >
-  <div class="col-span-3 flex flex-col items-center">
-    <h1 class="self-start">DOM Structure</h1>
-    <Mermaid
-      string={`
-    graph TD
-      A[Document] --> B[HTML]
-      B --> C{Head}
-      B --> D{Body}
-      C --> E[Title]
-      C --> F[Meta]
-      D --> G[Headings]
-      D --> H[Paragraphs]
-      D --> I[etc.]
-  `}
-      config={{
-        theme: "base",
-        themeVariables: {
-          primaryColor,
-          primaryTextColor,
-        },
-      }}
-    />
+  <div class="flex-3 flex flex-col items-center">
+    <h1>DOM Structure</h1>
+    <div class="w-full rounded-lg p-4">
+      <pre class="mermaid">
+graph TD
+  A[Document] --> B[HTML]
+  B --> C&lcub;Head&rcub;
+  B --> D&lcub;Body&rcub;
+  C --> E[Title]
+  C --> F[Meta]
+  D --> G[Headings]
+  D --> H[Paragraphs]
+  D --> I[etc.]
+    </pre>
+    </div>
   </div>
 
-  <span class="text-6xl text-(--text) text-center">→</span>
+  <span class="flex-1 text-6xl text-(--text) text-center">→</span>
 
-  <div class="col-span-3 flex flex-col items-center">
-    <h1 class="self-start">Box Layout Structure</h1>
-    <pre class="mermaid">
+  <div class="flex flex-col items-center">
+    <h1>Box Layout Structure</h1>
+    <div class="w-full rounded-lg p-4 flex items-center justify-center">
+      <pre class="mermaid">
 flowchart TD
   subgraph "Body"
     direction TD
@@ -66,6 +58,7 @@ pos(x2, y2)
 dims(w2, h2)`"]
   end
 
-</pre>
+    </pre>
+    </div>
   </div>
 </div>

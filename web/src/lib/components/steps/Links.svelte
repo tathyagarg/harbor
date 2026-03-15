@@ -1,11 +1,33 @@
 <script>
-  import { primaryColor, primaryTextColor } from "$lib";
-  import { Mermaid } from "@friendofsvelte/mermaid";
+  import { primaryTextColor } from "$lib";
+  import mermaid from "mermaid";
+  import { onMount } from "svelte";
+
+  mermaid.initialize({
+    startOnLoad: true,
+    htmlLabels: true,
+    theme: "base",
+    themeVariables: {
+      primaryColor: "#13293d",
+      primaryTextColor: "#fff",
+      secondaryColor: "#13293d",
+      nodeTextColor: "#fff",
+      tertiaryColor: "#8fb99680",
+      titleColor: primaryTextColor,
+    },
+    sequence: {
+      useMaxWidth: true,
+    },
+  });
+
+  onMount(() => {
+    mermaid.contentLoaded();
+  });
 </script>
 
-<div class="relative w-full top-[7.5%] bg-(--cerulean)/75 rounded-lg">
-  <Mermaid
-    string={`
+<div class="relative w-full rounded-lg h-full flex items-center justify-center">
+  <div class="w-[60%] mx-auto">
+    <pre class="mermaid">
 sequenceDiagram
   participant Client
   participant Engine
@@ -18,14 +40,6 @@ sequenceDiagram
   Engine->>ProcessQueue: Enqueue Resource
   ProcessQueue-->>Engine: Dequeue Resource
   Engine->>Client: Use Resource
-`}
-    config={{
-      theme: "base",
-      themeVariables: {
-        primaryColor,
-        primaryTextColor,
-      },
-      sequence: {},
-    }}
-  />
+  </pre>
+  </div>
 </div>

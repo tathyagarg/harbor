@@ -2,7 +2,7 @@
   <div>
     <h1>Request Sent</h1>
     <div
-      class="bg-(--deep-space-blue) font-mono text-sm rounded-lg p-4 border border-(--celadon)/25"
+      class="bg-(--deep-space-blue) font-mono text-xl rounded-lg p-4 border border-(--celadon)/25"
     >
       <pre>
 GET / HTTP/1.1
@@ -14,7 +14,7 @@ User-Agent: Harbor Browser</pre>
   <div>
     <h1>Response Received</h1>
     <div
-      class="bg-(--deep-space-blue) font-mono text-sm rounded-lg p-4 border border-(--celadon)/25"
+      class="bg-(--deep-space-blue) font-mono text-xl rounded-lg p-4 border border-(--celadon)/25"
     >
       <pre>HTTP/1.1 200 OK
 Content-Type: text/html; charset=UTF-8

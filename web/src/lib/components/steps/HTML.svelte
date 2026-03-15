@@ -1,6 +1,25 @@
 <script lang="ts">
   import { primaryColor, primaryTextColor } from "$lib";
-  import { Mermaid } from "@friendofsvelte/mermaid";
+  import mermaid from "mermaid";
+  import { onMount } from "svelte";
+
+  mermaid.initialize({
+    startOnLoad: true,
+    htmlLabels: true,
+    theme: "base",
+    themeVariables: {
+      primaryColor,
+      primaryTextColor,
+      secondaryColor: "#13293d",
+      nodeTextColor: "#000",
+      tertiaryColor: "#8fb99680",
+      titleColor: primaryTextColor,
+    },
+  });
+
+  onMount(() => {
+    mermaid.contentLoaded();
+  });
 </script>
 
 <div class="flex flex-row gap-8 items-center justify-center w-full h-full">
@@ -15,27 +34,18 @@
 
   <span class="text-6xl text-(--text)">→</span>
 
-  <div>
+  <div class="w-[50%] rounded-lg p-4">
     <h1>DOM Structure</h1>
-    <Mermaid
-      string={`
+    <pre class="mermaid">
     graph TD
       A[Document] --> B[HTML]
-      B --> C{Head}
-      B --> D{Body}
+      B --> C&lcub;Head&rcub;
+      B --> D&lcub;Body&rcub;
       C --> E[Title]
       C --> F[Meta]
       D --> G[Headings]
       D --> H[Paragraphs]
       D --> I[etc.]
-  `}
-      config={{
-        theme: "base",
-        themeVariables: {
-          primaryColor,
-          primaryTextColor,
-        },
-      }}
-    />
+    </pre>
   </div>
 </div>

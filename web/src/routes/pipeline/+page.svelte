@@ -72,46 +72,51 @@
 
 <h1 class="text-8xl font-bold text-center">Render Pipeline</h1>
 
-<div class="py-4 flex flex-row gap-8">
-  <ol class="list-decimal pl-4 flex-1">
-    {#each steps as step, i}
-      <Step
-        title={step}
-        onClick={() => {
-          changeStep(i);
-        }}
-        last={i === steps.length - 1}
-      />
-    {/each}
-  </ol>
+<div class="flex flex-col h-[75vh]">
+  <h1>Scroll horizontally to see the rest!</h1>
+  <div class="py-4 overflow-x-scroll overflow-y-hidden h-[20%]">
+    <ol class="list-none grid grid-cols-9 gap-2 w-[300%] h-[100%]">
+      {#each steps as step, i}
+        <Step
+          title={step}
+          onClick={() => {
+            changeStep(i);
+          }}
+          last={i === steps.length - 1}
+        />
+      {/each}
+    </ol>
+  </div>
 
   <div
     bind:this={panel}
-    class="flex-2 bg-(--cerulean)/25 rounded-lg relative animate"
+    class="bg-(--cerulean)/25 rounded-lg relative animate h-full"
   >
-    <span class="absolute top-2 left-2"
+    <span class="absolute top-2 left-2 text-2xl"
       >Step {selected_step + 1}: <b>{steps[selected_step]}</b></span
     >
 
-    {#if selected_step === 0}
-      <TTFLoader />
-    {:else if selected_step === 1}
-      <HTTP />
-    {:else if selected_step == 2}
-      <HTML />
-    {:else if selected_step == 3}
-      <Links />
-    {:else if selected_step == 4}
-      <CSS />
-    {:else if selected_step == 5}
-      <Cascade />
-    {:else if selected_step == 6}
-      <Layout />
-    {:else if selected_step == 7}
-      <Rasterize />
-    {:else}
-      <Paint />
-    {/if}
+    <div class="absolute w-full h-full">
+      {#if selected_step === 0}
+        <TTFLoader />
+      {:else if selected_step === 1}
+        <HTTP />
+      {:else if selected_step == 2}
+        <HTML />
+      {:else if selected_step == 3}
+        <Links />
+      {:else if selected_step == 4}
+        <CSS />
+      {:else if selected_step == 5}
+        <Cascade />
+      {:else if selected_step == 6}
+        <Layout />
+      {:else if selected_step == 7}
+        <Rasterize />
+      {:else}
+        <Paint />
+      {/if}
+    </div>
   </div>
 </div>
 
