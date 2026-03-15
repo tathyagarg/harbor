@@ -6,7 +6,14 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::{Arc, LazyLock};
 
-pub const ROOT_PATH: fn() -> PathBuf = || std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+pub const ROOT_PATH: fn() -> PathBuf = || {
+    let res = std::path::PathBuf::from(std::env::current_exe().unwrap().parent().unwrap());
+    if std::env::var("HARBOR_DEV").is_ok_and(|v| v == "super_secret_password") {
+        return std::path::PathBuf::from(res.parent().unwrap().parent().unwrap());
+    }
+
+    res
+};
 
 pub const RES_PATH: fn() -> PathBuf = || ROOT_PATH().join("res");
 
