@@ -10,6 +10,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
       - name: Count lines of code
         run: |
           curl -sL https://api.codetabs.com/v1/loc?source=tathyagarg/harbor > lines.txt
