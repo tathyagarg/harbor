@@ -1,9 +1,10 @@
 # Harbor Browser
 ![Banner](.github/assets/banner-16_9.png)
 
-![Language Badge](https://shields.arson.dev/badge/Language-Rust%2C%20Zig-red)
-![Hackatime Badge](https://hackatime-badge.hackclub.com/U082L0UTJ66/harbor?color=green)
-![License Badge](https://shields.arson.dev/github/license/tathyagarg/harbor?color=blue)
+![Language Badge](https://shields.arson.dev/badge/Language-Rust%2C%20Zig-red?color=#ff0000)
+![Hackatime Badge](https://hackatime-badge.hackclub.com/U082L0UTJ66/harbor?color=#80ff00)
+![License Badge](https://shields.arson.dev/github/license/tathyagarg/harbor?color=#00ffff)
+![Lines Badge](https://shields.arson.dev/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Ftathyagarg%2Fharbor%2Frefs%2Fheads%2Fmain%2Flines.json&query=%24.lines&label=Lines&color=%238000ff)
 
 ⭐ Star us on GitHub — it motivates us a lot!
 
