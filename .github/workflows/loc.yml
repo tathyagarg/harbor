@@ -1,0 +1,26 @@
+name: Count lines of code
+
+on:
+  push:
+    branches: ['main']
+
+jobs:
+  request:
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Count lines of code
+        run: |
+          curl -L https://api.codetabs.com/v1/loc?source=tathyagarg/harbor | jq -r '.[-1].lines' > lines.txt
+
+      - name: Commit
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add lines.txt
+          git commit -m "Update lines of code count"
+          git push origin main
