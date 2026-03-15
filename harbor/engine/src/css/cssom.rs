@@ -149,7 +149,53 @@ impl CSSDeclaration {
                     CSSDeclaration::new("margin-left".to_string(), vec![left]),
                 ]
             }
-            _ => todo!("Expand shorthand property into longhand properties"),
+            "padding" => {
+                let actual_tokens = self
+                    .value
+                    .iter()
+                    .filter(|cv| !matches!(cv, ComponentValue::Token(CSSToken::Whitespace)))
+                    .cloned()
+                    .collect::<Vec<ComponentValue>>();
+
+                let (top, right, bottom, left) = match actual_tokens.len() {
+                    1 => (
+                        actual_tokens[0].clone(),
+                        actual_tokens[0].clone(),
+                        actual_tokens[0].clone(),
+                        actual_tokens[0].clone(),
+                    ),
+                    2 => (
+                        actual_tokens[0].clone(),
+                        actual_tokens[1].clone(),
+                        actual_tokens[0].clone(),
+                        actual_tokens[1].clone(),
+                    ),
+                    3 => (
+                        actual_tokens[0].clone(),
+                        actual_tokens[1].clone(),
+                        actual_tokens[2].clone(),
+                        actual_tokens[1].clone(),
+                    ),
+                    4 => (
+                        actual_tokens[0].clone(),
+                        actual_tokens[1].clone(),
+                        actual_tokens[2].clone(),
+                        actual_tokens[3].clone(),
+                    ),
+                    _ => return vec![self.clone()],
+                };
+
+                vec![
+                    CSSDeclaration::new("padding-top".to_string(), vec![top]),
+                    CSSDeclaration::new("padding-right".to_string(), vec![right]),
+                    CSSDeclaration::new("padding-bottom".to_string(), vec![bottom]),
+                    CSSDeclaration::new("padding-left".to_string(), vec![left]),
+                ]
+            }
+            name => todo!(
+                "Expand shorthand property into longhand properties: {}",
+                name
+            ),
         }
     }
 }
