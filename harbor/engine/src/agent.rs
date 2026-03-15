@@ -7,7 +7,7 @@ use crate::{
     css::{cssom::CSSStyleSheet, parser::parse_stylesheet, tokenize::tokenize},
     globals::{
         ERROR, ERROR_PAGE_PATH, NEW_TAB, NEW_TAB_PAGE_PATH, NO_CONNECTION, NO_CONNECTION_PAGE_PATH,
-        NO_CONNECTION_URL,
+        NO_CONNECTION_URL, RES_PATH,
     },
     html5::{dom::Document, parse::Parser},
     http::{
@@ -29,7 +29,9 @@ impl Agent {
     pub fn new() -> Rc<RefCell<Self>> {
         let client = Client::new(Protocol::HTTP1_1, true);
 
-        let stylesheet_content = fs::read_to_string("res/css/ua.css").unwrap();
+        let ua_path = RES_PATH().join("css").join("ua.css");
+
+        let stylesheet_content = fs::read_to_string(ua_path).unwrap();
         let css_content = parse_stylesheet(
             &mut InputStream::new(&tokenize(&mut InputStream::new(
                 &stylesheet_content.chars().collect::<Vec<char>>()[..],
@@ -103,7 +105,6 @@ impl Agent {
         } else {
             return None;
         };
-
         let css_content = parse_stylesheet(
             &mut InputStream::new(&tokenize(&mut InputStream::new(
                 &body.chars().collect::<Vec<char>>()[..],

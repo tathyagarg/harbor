@@ -6,12 +6,12 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::{Arc, LazyLock};
 
+pub const RES_PATH: fn() -> PathBuf =
+    || std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("res");
+
 macro_rules! page_path {
     ($res:expr) => {
-        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("res")
-            .join("pages")
-            .join($res)
+        RES_PATH().join("pages").join($res)
     };
 }
 
