@@ -6,8 +6,9 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::{Arc, LazyLock};
 
-pub const RES_PATH: fn() -> PathBuf =
-    || std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("res");
+pub const ROOT_PATH: fn() -> PathBuf = || std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+
+pub const RES_PATH: fn() -> PathBuf = || ROOT_PATH().join("res");
 
 macro_rules! page_path {
     ($res:expr) => {
@@ -17,7 +18,7 @@ macro_rules! page_path {
 
 type ResPath = fn() -> PathBuf;
 
-pub const FRAMES_IN_FLIGHT: usize = 3;
+pub const UA_CSS_PATH: fn() -> PathBuf = || RES_PATH().join("css").join("ua.css");
 
 pub const DEFAULT_FONT_FAMILY: &str = "sans-serif";
 pub const DEFAULT_FONT_WEIGHT: u16 = 400;
