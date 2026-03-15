@@ -15,7 +15,7 @@ jobs:
 
       - name: Count lines of code
         run: |
-          curl -L https://api.codetabs.com/v1/loc?source=tathyagarg/harbor | jq -r '.[-1].lines' > lines.txt
+          curl -sL https://api.codetabs.com/v1/loc?source=tathyagarg/harbor | jq -r '.[] | select(.language=="Total") | .lines' > lines.txt
 
       - name: Commit
         run: |
