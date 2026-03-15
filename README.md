@@ -11,6 +11,7 @@
 
 ## Table of Contents
 
+- [Install](#install)
 - [Components](#components)
   - [HTTP Client](#http-client) 
   - [HTML Parser](#html-parser)
@@ -18,6 +19,24 @@
   - [TTF Parser](#ttf-parser)
   - [JavaScript Engine](#javascript-engine)
   - [Renderer](#renderer)
+
+### Install
+
+#### Linux and MacOS
+Run the following command in your terminal in a directory of your choice:
+```bash
+curl -fsSL https://raw.githubusercontent.com/tathyagarg/harbor/main/scripts/install.sh | sh
+./harbor
+```
+
+OR you can clone the repository and build it yourself:
+> [!NOTE]
+> You require both [Rust](https://rust-lang.org/) and [Zig](https://ziglang.org/) installed to build the browser from source.
+```bash
+git clone https://github.com/tathyagarg/harbor.git
+cd harbor/harbor/engine
+cargo run --release
+```
 
 ### Components
 Harbor is comprised of 6 main components:
