@@ -1,5 +1,6 @@
 <script lang="ts">
   import "./layout.css";
+  import Icon from "@iconify/svelte";
 
   import { onMount } from "svelte";
   import Navbar from "$lib/components/Navbar.svelte";
@@ -51,6 +52,14 @@
     <div class="pb-4">
       <h1 class="text-6xl font-bold">Harbor Browser</h1>
       <p>A browser built completely from scratch in Rust and Zig.</p>
+    </div>
+
+    <div>
+      <h2 class="font-bold text-lg">Resources</h2>
+      <a href="https://github.com/tathyagarg/harbor" class="hover:underline">
+        <Icon icon="mdi:github" class="inline-block" />
+        GitHub</a
+      >
     </div>
 
     <button class="bg-(--baltic-blue) text-(--text) p-4 rounded-xl w-fit"

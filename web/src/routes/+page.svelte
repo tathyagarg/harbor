@@ -1,6 +1,7 @@
 <script lang="ts">
   import Components from "$lib/components/Components.svelte";
   import Stat from "$lib/components/Stat.svelte";
+  import Icon from "@iconify/svelte";
   import { animate, cubicBezier, onScroll, stagger } from "animejs";
   import { onMount } from "svelte";
 
@@ -80,14 +81,19 @@
     handwritten in Rust (and Zig)
   </h2>
   <div class="flex gap-4 my-4">
-    <button class="bg-(--baltic-blue) p-4 rounded-xl animate"
-      >Alpha is now available!</button
+    <a
+      class="bg-(--baltic-blue) p-4 rounded-xl animate"
+      href="https://github.com/tathyagarg/harbor/releases"
     >
+      Alpha is now available!
+    </a>
     <a
       href="https://github.com/tathyagarg/harbor"
       class="text-(--dark-deep-space-blue) bg-(--celadon) p-4 rounded-xl animate"
-      >GitHub</a
     >
+      <Icon icon="mdi:github" class="inline-block" />
+      GitHub
+    </a>
   </div>
   <div class="w-[80%] rounded-lg">
     <img

@@ -24,6 +24,18 @@
     "Painting",
   ];
 
+  const icons = [
+    "qlementine-icons:font-16",
+    "material-symbols:http",
+    "flowbite:html-solid",
+    "mingcute:link-fill",
+    "flowbite:css-solid",
+    "entypo:flow-cascade",
+    "boxicons:layout-filled",
+    "dinkie-icons:file-ttf-filled",
+    "tabler:paint-filled",
+  ];
+
   let selected_step = $state(0);
 
   import { animate, cubicBezier, onScroll, stagger } from "animejs";
@@ -83,6 +95,8 @@
             changeStep(i);
           }}
           last={i === steps.length - 1}
+          selected={i === selected_step}
+          icon={icons[i]}
         />
       {/each}
     </ol>

@@ -1,10 +1,14 @@
 <script lang="ts">
+  import Icon from "@iconify/svelte";
   import { animate, eases } from "animejs";
 
+  export let selected: boolean = false;
   export let title: string;
   export let onClick: () => void;
 
   export let last: boolean = false;
+
+  export let icon: string;
 
   let step: HTMLLIElement;
 
@@ -41,15 +45,18 @@
 <li class="animate min-w-full" bind:this={step}>
   <button
     on:click={onClick}
-    class="bg-(--deep-space-blue) py-2 border-1 border-(--celadon)
+    class:bg-(--cerulean)={selected}
+    class:bg-(--deep-space-blue)={!selected}
+    class="py-2 border-1 border-(--celadon)
     rounded-lg relative cursor-pointer hover:bg-(--cerulean)/75
-    transition-colors duration-200 text-center w-full h-full"
+    transition-colors duration-200 text-center w-full h-full text-2xl font-bold"
     type="button"
     tabindex="0"
     class:mb-4={!last}
     on:mousemove={handleMouseMove}
     on:mouseleave={handleMouseLeave}
   >
+    <Icon {icon} class="inline-block" />
     {title}
   </button>
 </li>

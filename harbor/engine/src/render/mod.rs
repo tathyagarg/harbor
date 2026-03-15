@@ -118,7 +118,7 @@ impl ApplicationHandler<AppEvent> for App {
         #[allow(unused_mut)]
         let mut window_attributes = Window::default_attributes()
             .with_title("Harbor Browser")
-            .with_decorations(false)
+            .with_decorations(true)
             .with_inner_size(winit::dpi::LogicalSize::new(
                 INITIAL_WINDOW_WIDTH,
                 INITIAL_WINDOW_HEIGHT,
