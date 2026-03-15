@@ -1600,7 +1600,7 @@ impl URL {
                                     buffer
                                         .char_indices()
                                         .nth(1)
-                                        .map(|(pos, ch)| (pos..pos + ch.len_utf8()))
+                                        .map(|(pos, ch)| pos..pos + ch.len_utf8())
                                         .unwrap(),
                                     ":",
                                 );

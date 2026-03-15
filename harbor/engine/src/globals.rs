@@ -64,7 +64,7 @@ pub const TOOLBAR_OFFSET: fn(f64, f64) -> (f64, f64) = |window_width, window_hei
 };
 
 pub const TAB_WIDTH: fn(f64, usize) -> f64 =
-    |window_width, num_tabs| (window_width / (4.max(num_tabs) as f64));
+    |window_width, num_tabs| window_width / (4.max(num_tabs) as f64);
 
 pub static FONTS: LazyLock<HashMap<String, Arc<TTCData>>> = LazyLock::new(|| {
     let fonts_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))

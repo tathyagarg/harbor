@@ -769,7 +769,7 @@ impl InsertMode {
                     parser.open_elements_stack.close_p_tag();
                 }
 
-                let form_element = parser.open_elements_stack.insert_html_element(&token);
+                let _form_element = parser.open_elements_stack.insert_html_element(&token);
 
                 parser.state = ParserState::Data;
 

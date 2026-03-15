@@ -453,7 +453,7 @@ fn consume(stream: &mut InputStream<char>) -> CSSToken {
     match stream.consume() {
         Some(ch) => {
             match ch {
-                '\u{0020}' | '\u{0009}' | '\u{000A}' => {
+                '\u{0020}' | '\u{0009}' | '\u{000A}' | '\u{000D}' => {
                     // consume as many whitespace as possible
                     while stream.peek().is_some_and(|ch| char_is_whitespace(ch)) {
                         stream.consume();

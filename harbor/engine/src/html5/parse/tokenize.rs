@@ -143,7 +143,7 @@ pub enum ParserState {
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(stream: &mut InputStream<char>) -> Parser {
+    pub fn new(stream: &mut InputStream<char>) -> Parser<'_> {
         Parser {
             stream,
 

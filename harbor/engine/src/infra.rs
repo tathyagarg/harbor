@@ -74,7 +74,7 @@ pub fn would_start_ident(chars: &[char]) -> bool {
 }
 
 pub fn char_is_whitespace(ch: char) -> bool {
-    matches!(ch, '\u{0009}' | '\u{000A}' | '\u{0020}')
+    matches!(ch, '\u{0009}' | '\u{000A}' | '\u{0020}' | '\u{000D}')
 }
 
 pub fn char_is_non_printable(ch: char) -> bool {

@@ -360,6 +360,7 @@ pub fn parse_stylesheet(
     let mut rules = Vec::<Box<dyn CSSRuleExt>>::new();
 
     for rule in consume_list_of_rules(stream, true) {
+        println!("Parsing rule: {:#?}", rule);
         match rule {
             Rule::AtRule(at_rule) => {
                 println!("At-Rule: {:#?}", at_rule);
