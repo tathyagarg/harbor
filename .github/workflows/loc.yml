@@ -18,12 +18,12 @@ jobs:
 
       - name: Count lines of code
         run: |
-          curl -sL https://api.codetabs.com/v1/loc?github=tathyagarg/harbor | jq -r '.[-1].lines' > lines.txt
+          curl -sL https://api.codetabs.com/v1/loc?github=tathyagarg/harbor | jq -r '.[-1]' > lines.json
 
       - name: Commit
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add lines.txt
-          git commit -m "Update lines of code count"
+          git add lines.json
+          git commit -m "ci: update lines of code count"
           git push origin main
