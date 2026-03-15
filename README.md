@@ -9,9 +9,16 @@
 
 **Every last pixel is rendered by me, and every line of code is written from scratch.**
 
+> [!IMPORTANT]
+> If you don't want to build/download the browser, that's fine! Please check out the [screenshots](#screenshots) section to see the browser in action.
+
 ## Table of Contents
 
 - [Install](#install)
+- [Screenshots](#screenshots)
+  - [New Tab page](#new-tab-page)
+  - [Flavorless](#flavorless)
+  - [Sans Style](#sans-style)
 - [Components](#components)
   - [HTTP Client](#http-client) 
   - [HTML Parser](#html-parser)
@@ -26,6 +33,7 @@
 Run the following command in your terminal in a directory of your choice:
 ```bash
 curl -fsSL https://raw.githubusercontent.com/tathyagarg/harbor/main/scripts/install.sh | sh
+chmod +x harbor
 ./harbor
 ```
 
@@ -37,6 +45,32 @@ git clone https://github.com/tathyagarg/harbor.git
 cd harbor/harbor/engine
 cargo run --release
 ```
+
+### Screenshots
+
+#### New Tab page
+
+<div align="center">
+  <img src="https://raw.githubusercontent.com/tathyagarg/harbor/main/.github/assets/screenshots/tab.png" alt="New Tab Page" width="80%">
+  <br/>
+  <em>The default (and very bare bones) new tag page</em>
+</div>
+
+#### Flavorless
+
+<div align="center">
+  <img src="https://raw.githubusercontent.com/tathyagarg/harbor/main/.github/assets/screenshots/flavorless.png" alt="Flavorless" width="80%">
+  <br/>
+  <em>The website for the <a href="https://flavorless.hackclub.com">flavorless</a> YSWS</em>
+</div>
+
+#### Sans Style
+
+<div align="center">
+  <img src="https://raw.githubusercontent.com/tathyagarg/harbor/main/.github/assets/screenshots/sans-style.png" alt="Sans Style" width="80%">
+  <br/>
+  <em>The website <a href="https://sans.style/">sans.style</a></em>
+</div>
 
 ### Components
 Harbor is comprised of 6 main components:
