@@ -6,7 +6,9 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::{Arc, LazyLock};
 
-pub const ROOT_PATH: fn() -> PathBuf = || {
+type ResPath = fn() -> PathBuf;
+
+pub const ROOT_PATH: ResPath = || {
     let res = std::path::PathBuf::from(std::env::current_exe().unwrap().parent().unwrap());
     if std::env::var("HARBOR_DEV").is_ok_and(|v| v == "super_secret_password") {
         return std::path::PathBuf::from(res.parent().unwrap().parent().unwrap());
@@ -15,7 +17,7 @@ pub const ROOT_PATH: fn() -> PathBuf = || {
     res
 };
 
-pub const RES_PATH: fn() -> PathBuf = || ROOT_PATH().join("res");
+pub const RES_PATH: ResPath = || ROOT_PATH().join("res");
 
 macro_rules! page_path {
     ($res:expr) => {
@@ -23,9 +25,7 @@ macro_rules! page_path {
     };
 }
 
-type ResPath = fn() -> PathBuf;
-
-pub const UA_CSS_PATH: fn() -> PathBuf = || RES_PATH().join("css").join("ua.css");
+pub const UA_CSS_PATH: ResPath = || RES_PATH().join("css").join("ua.css");
 
 pub const DEFAULT_FONT_FAMILY: &str = "sans-serif";
 pub const DEFAULT_FONT_WEIGHT: u16 = 400;
@@ -51,6 +51,8 @@ pub const ERROR_URL: &str = "harbor:error";
 pub const ERROR: &str = "error";
 pub const ERROR_PAGE_PATH: ResPath = || page_path!("error.html");
 
+pub const FONTS_PATH: ResPath = || RES_PATH().join("fonts");
+
 // TODO: Make this configurable
 pub const TABS_BAR_OFFSET: fn(f64, f64) -> (f64, f64) =
     |_window_width, window_height| (0.0, (window_height * 0.05).min(50.0));
@@ -75,38 +77,42 @@ pub const TAB_WIDTH: fn(f64, usize) -> f64 =
     |window_width, num_tabs| window_width / (4.max(num_tabs) as f64);
 
 pub static FONTS: LazyLock<HashMap<String, Arc<TTCData>>> = LazyLock::new(|| {
-    let fonts_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("res")
-        .join("fonts");
-
     let arial = Arc::new(font::parse_ttc(
-        fs::read(fonts_dir.join("Arial.ttc")).unwrap().as_slice(),
+        fs::read(FONTS_PATH().join("Arial.ttc")).unwrap().as_slice(),
     ));
 
     let verdana = Arc::new(font::parse_ttc(
-        fs::read(fonts_dir.join("Verdana.ttc")).unwrap().as_slice(),
+        fs::read(FONTS_PATH().join("Verdana.ttc"))
+            .unwrap()
+            .as_slice(),
     ));
 
     let tahoma = Arc::new(TTCData::new(vec![font::parse_ttf(
-        fs::read(fonts_dir.join("Tahoma.ttf")).unwrap().as_slice(),
+        fs::read(FONTS_PATH().join("Tahoma.ttf"))
+            .unwrap()
+            .as_slice(),
     )]));
 
     let trebuchet_ms = Arc::new(font::parse_ttc(
-        fs::read(fonts_dir.join("TrebuchetMS.ttc"))
+        fs::read(FONTS_PATH().join("TrebuchetMS.ttc"))
             .unwrap()
             .as_slice(),
     ));
 
     let georgia = Arc::new(font::parse_ttc(
-        fs::read(fonts_dir.join("Georgia.ttc")).unwrap().as_slice(),
+        fs::read(FONTS_PATH().join("Georgia.ttc"))
+            .unwrap()
+            .as_slice(),
     ));
 
     let garamond = Arc::new(font::parse_ttc(
-        fs::read(fonts_dir.join("Garamond.ttc")).unwrap().as_slice(),
+        fs::read(FONTS_PATH().join("Garamond.ttc"))
+            .unwrap()
+            .as_slice(),
     ));
 
     let courier_prime = Arc::new(font::parse_ttc(
-        fs::read(fonts_dir.join("CourierPrime.ttc"))
+        fs::read(FONTS_PATH().join("CourierPrime.ttc"))
             .unwrap()
             .as_slice(),
     ));
