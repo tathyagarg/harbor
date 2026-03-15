@@ -63,7 +63,7 @@
       title: "JavaScript Engine",
       description:
         "A custom JavaScript engine written in Zig that executes JavaScript code on web pages. (Not functional yet)",
-      loc: "2,400",
+      loc: "3,000",
     },
   ];
 </script>
@@ -107,7 +107,7 @@
 <hr class="border-(--celadon)" />
 
 <div class="flex justify-around py-16">
-  <Stat title="Lines of Code" value="33k+" />
+  <Stat title="Lines of Code" value="35k+" />
   <Stat title="Third Party Dependencies" value="0" />
   <Stat title="Core Modules" value="6" />
 </div>

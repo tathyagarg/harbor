@@ -62,10 +62,6 @@
       >
     </div>
 
-    <button class="bg-(--baltic-blue) text-(--text) p-4 rounded-xl w-fit"
-      >Download</button
-    >
-
     <!-- made with love tag -->
     <h2 class="text-sm text-center text-(--baltic-blue) mt-auto">
       Made with ❤️ by <a href="https://arson.dev/" class="underline">Tathya</a>

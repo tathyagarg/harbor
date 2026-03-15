@@ -1,7 +1,9 @@
 # Harbor Browser
 ![Banner](.github/assets/banner-16_9.png)
 
-![Static Badge](https://shields.arson.dev/badge/Language-Rust%2C%20Zig-darkgreen)
+![Language Badge](https://shields.arson.dev/badge/Language-Rust%2C%20Zig-darkgreen)
+![Hackatime Badge](https://hackatime-badge.hackclub.com/U082L0UTJ66/harbor)
+![License Badge](https://shields.arson.dev/github/license/tathyagarg/harbor)
 
 ⭐ Star us on GitHub — it motivates us a lot!
 
