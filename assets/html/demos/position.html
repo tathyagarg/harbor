@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>position property demo</title>
+  <style>
+    .relative-box {
+      position: relative;
+      background-color: blue;
+      color: white;
+    }
+
+    .absolute-box {
+      position: absolute;
+      top: 150px;
+      left: 100px;
+      background-color: green;
+      color: white;
+    }
+  </style>
+</head>
+<body>
+  <div class="absolute-box">
+    <h1>This box has <code>position: absolute</code>.</h1>
+  </div>
+  <div class="relative-box">
+      <h1>This box has <code>position: relative</code>.</h1>
+  </div>
+</body>
+</html>

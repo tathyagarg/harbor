@@ -26,6 +26,7 @@ Harbor Browser
   - [New Tab page](#new-tab-page)
   - [Flavorless](#flavorless)
   - [Sans Style](#sans-style)
+- [Features](#features)
 - [Components](#components)
   - [HTTP Client](#http-client) 
   - [HTML Parser](#html-parser)
@@ -81,7 +82,7 @@ cargo run --release
 
 ## Features
 - Custom HTTP client with TLS support
-- Almost [spec-compliant](https://html.spec.whatwg.org/multipage/parsing.html) HTML parser (it's a long spec)
+- Almost spec-compliant[^1] HTML parser (it's a long spec)
 - CSS parser with support for a decent amount of properties (listed below)
 - TTF parser to extract glyph information from font files
 - GPU rendering using `wgpu` and `winit`
@@ -106,19 +107,55 @@ The HTML parser takes the raw HTML content fetched by the HTTP client and parses
 
 ### CSS Parser
 The CSS parser processes the CSS stylesheets associated with the webpage. It parses the CSS rules and applies them to the corresponding HTML elements in the DOM, determining how each element should be styled. Currently only the following CSS properties are supported:
+
 - `color`
+
+<div align="center">
+  <img src="https://raw.githubusercontent.com/tathyagarg/harbor/main/.github/assets/screenshots/demos/color.png" alt="Color Demo" width="80%">
+  <br/>
+  <em><a href="assets/html/demos/color.html">Demo showcasing `color` property</a></em>
+</div>
+
 - `background-color`
+
+<div align="center">
+  <img src="https://raw.githubusercontent.com/tathyagarg/harbor/main/.github/assets/screenshots/demos/background-color.png" alt="Background Color Demo" width="80%">
+  <br/>
+  <em><a href="assets/html/demos/background-color.html">Demo showcasing `background-color` property</a></em>
+</div>
+
 - `width`
 - `position`
 - `top`
 - `left`
 - `right`
 - `bottom`
+
+<div align="center">
+  <img src="https://raw.githubusercontent.com/tathyagarg/harbor/main/.github/assets/screenshots/demos/position.png" alt="Position Demo" width="80%">
+  <br/>
+  <em><a href="assets/html/demos/position.html">Demo showcasing `position`, `top`, `left`, `right`, and `bottom` properties</a></em>
+</div>
+
 - `display`
+- `margin`
+
+<div align="center">
+  <img src="https://raw.githubusercontent.com/tathyagarg/harbor/main/.github/assets/screenshots/demos/margin.png" alt="Box Model Demo" width="80%">
+  <br/>
+  <em><a href="assets/html/demos/margin.html">Demo showcasing `display` and `margin` properties</a></em>
+</div>
+
 - `font-size`
 - `font-family`
 - `font-weight`
 - `font-style`
+
+<div align="center">
+  <img src="https://raw.githubusercontent.com/tathyagarg/harbor/main/.github/assets/screenshots/demos/font.png" alt="Font Demo" width="80%">
+  <br/>
+  <em><a href="assets/html/demos/font.html">Demo showcasing `font-size`, `font-family`, `font-weight`, and `font-style` properties</a></em>
+</div>
 
 ### TTF Parser
 The TTF (TrueType Font) parser is responsible for parsing font files to extract glyph information. This allows the browser to render text using the correct fonts specified in the CSS. This enables me to render text manually from glyphs, which is a fun challenge.
@@ -127,6 +164,7 @@ The TTF (TrueType Font) parser is responsible for parsing font files to extract 
 The JavaScript engine executes JavaScript code embedded in web pages. WIP
 
 ### Renderer
-The renderer takes the structured data from the HTML and CSS parsers and renders it onto the screen. It uses the `wgpu` library for GPU-accelerated rendering and `winit` for window management. The renderer is responsible for drawing all visual elements of the webpage. The renderer uses ear clipping to render glyphs from contours into filled triangles[^1]
+The renderer takes the structured data from the HTML and CSS parsers and renders it onto the screen. It uses the `wgpu` library for GPU-accelerated rendering and `winit` for window management. The renderer is responsible for drawing all visual elements of the webpage. The renderer uses ear clipping to render glyphs from contours into filled triangles[^2]
 
-[^1]: [Triangulation by Ear Clipping](https://www.geometrictools.com/Documentation/TriangulationByEarClipping.pdf)
+[^1]: [HTML Parsing](https://html.spec.whatwg.org/multipage/parsing.html)
+[^2]: [Triangulation by Ear Clipping](https://www.geometrictools.com/Documentation/TriangulationByEarClipping.pdf)
