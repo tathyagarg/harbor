@@ -271,13 +271,28 @@ pub const BinaryOrUnaryExpression = EXTERN_UNION(
     extern union {
         binary: *BinaryExpression,
         unary: *UnaryExpression,
+        none: void,
     },
 );
 
+pub const BINARY_OR_UNARY_BINARY = 0;
+pub const BINARY_OR_UNARY_UNARY = 1;
+pub const BINARY_OR_UNARY_NONE = 2;
+
+pub const UnaryExpressionOrNull = EXTERN_UNION(
+    extern union {
+        unary: *UnaryExpression,
+        none: void,
+    },
+);
+
+pub const UNARY_EXPR_OR_NULL_UNARY = 0;
+pub const UNARY_EXPR_OR_NULL_NONE = 1;
+
 pub const BinaryExpression = extern struct {
-    left: *AssignmentExpression,
+    left: *BinaryOrUnaryExpression,
     operator: BinaryOperator,
-    right: *AssignmentExpression,
+    right: *UnaryExpressionOrNull,
 };
 
 pub const BinaryOperator = enum(u8) {
@@ -303,6 +318,14 @@ pub const BinaryOperator = enum(u8) {
     ShortCircuitLogicalAnd = 19,
     ShortCircuitLogicalOr = 20,
     NullishCoalescing = 21,
+
+    None = 22,
+
+    BitwiseAnd = 23,
+    BitwiseXor = 24,
+    BitwiseOr = 25,
+    LogicalAnd = 26,
+    LogicalOr = 27,
 };
 
 pub const UnaryExpression = extern struct {

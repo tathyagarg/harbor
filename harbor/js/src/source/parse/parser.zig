@@ -846,6 +846,226 @@ pub fn parse_unary_expression(parser: *Parser) !*expr.UnaryExpression {
     return unary_expr;
 }
 
+pub fn is_binary_operator(token: Token) ?expr.BinaryOperator {
+    if (token.kind != .CommonToken) {
+        return null;
+    }
+
+    const common_token_data: *CommonTokenData = @ptrFromInt(token.data);
+
+    if (common_token_data.common_token_kind == .Punctuator) {
+        const punctuator_kind: _text.PunctuatorKind = @enumFromInt(common_token_data.data);
+
+        return switch (punctuator_kind) {
+            .Plus => .Plus,
+            .Minus => .Minus,
+            .Asterisk => .Star,
+            .Slash => .Slash,
+            .Percent => .Percent,
+            .Exponentiation => .Exponentiation,
+            .BitwiseAnd => .BitwiseAnd,
+            .BitwiseOr => .BitwiseOr,
+            .BitwiseXor => .BitwiseXor,
+            .LogicalAnd => .LogicalAnd,
+            .LogicalOr => .LogicalOr,
+            .Equals => .Equal,
+            .NotEquals => .NotEqual,
+            .StrictEquals => .StrictEqual,
+            .StrictNotEquals => .StrictNotEqual,
+            else => return null,
+        };
+    } else if (common_token_data.common_token_kind == .IdentifierName) {
+        const identifier_data: *IdentifierNameData = @ptrFromInt(common_token_data.data);
+
+        if (testing.are_equal_strings(identifier_data.name, testing.u8_array_to_string(@ptrCast(@constCast("instanceof")), 10))) {
+            return .InstanceOf;
+        } else if (testing.are_equal_strings(identifier_data.name, testing.u8_array_to_string(@ptrCast(@constCast("in")), 2))) {
+            return .In;
+        } else {
+            return null;
+        }
+    } else {
+        return null;
+    }
+}
+
+pub fn precedence_of_binop(operator: expr.BinaryOperator) u8 {
+    return switch (operator) {
+        .Star, .Slash, .Percent => 14,
+        .Exponentiation => 15,
+        .Plus, .Minus => 13,
+        .LeftShift, .RightShift, .UnsignedRightShift => 12,
+        .LessThan, .LessThanOrEqual, .GreaterThan, .GreaterThanOrEqual, .In, .InstanceOf => 11,
+        .Equal, .NotEqual, .StrictEqual, .StrictNotEqual => 10,
+        .BitwiseAnd => 9,
+        .BitwiseXor => 8,
+        .BitwiseOr => 7,
+        .LogicalAnd => 6,
+        .LogicalOr => 5,
+        else => 0,
+    };
+}
+
+pub fn parse_binary_expression(parser: *Parser, min_precedence: u8) !*expr.BinaryExpression {
+    const left = try parse_unary_expression(parser);
+
+    const binary_or_unary = parser.allocator.create(expr.BinaryOrUnaryExpression) catch return error.OutOfMemory;
+    binary_or_unary.* = .{
+        .tag = expr.BINARY_OR_UNARY_UNARY,
+        .data = .{
+            .unary = left,
+        },
+    };
+
+    const unary_or_null = parser.allocator.create(expr.UnaryExpressionOrNull) catch return error.OutOfMemory;
+    unary_or_null.* = .{
+        .tag = expr.UNARY_EXPR_OR_NULL_UNARY,
+        .data = .{
+            .none = {},
+        },
+    };
+
+    const binary = parser.allocator.create(expr.BinaryExpression) catch return error.OutOfMemory;
+
+    const binary_or_unary_clone = parser.allocator.create(expr.BinaryOrUnaryExpression) catch return error.OutOfMemory;
+    binary_or_unary_clone.* = binary_or_unary.*;
+
+    binary.* = expr.BinaryExpression{
+        .operator = expr.BinaryOperator.None,
+        .left = binary_or_unary_clone,
+        .right = unary_or_null,
+    };
+
+    while (peek(parser)) |token| {
+        const operator = is_binary_operator(token) orelse break;
+
+        const precedence = precedence_of_binop(operator);
+
+        if (precedence < min_precedence) {
+            break;
+        }
+
+        _ = next(parser);
+        skip_whitespace(parser);
+
+        const right = try parse_unary_expression(parser);
+        skip_whitespace(parser);
+
+        const right_or_null = parser.allocator.create(expr.UnaryExpressionOrNull) catch return error.OutOfMemory;
+        right_or_null.* = .{
+            .tag = expr.UNARY_EXPR_OR_NULL_UNARY,
+            .data = .{
+                .unary = right,
+            },
+        };
+
+        const new_left = parser.allocator.create(expr.BinaryOrUnaryExpression) catch return error.OutOfMemory;
+        new_left.* = binary_or_unary.*;
+
+        binary.* = expr.BinaryExpression{
+            .operator = operator,
+            .left = new_left,
+            .right = right_or_null,
+        };
+
+        const binary_clone = parser.allocator.create(expr.BinaryExpression) catch return error.OutOfMemory;
+        binary_clone.* = binary.*;
+
+        binary_or_unary.* = .{
+            .tag = expr.BINARY_OR_UNARY_BINARY,
+            .data = .{
+                .binary = binary_clone,
+            },
+        };
+    }
+
+    return binary;
+}
+
+test "parse binary (basic)" {
+    const text = "1 + 2";
+    const str = testing.u8_array_to_string(@ptrCast(@constCast(text)), text.len);
+
+    const tokens = try _text.parse_text_string(str, .InputElementHashbangOrRegExp);
+
+    var parser = Parser{
+        .tokens = tokens,
+        .curr = 0,
+        .arena = std.heap.ArenaAllocator.init(std.heap.page_allocator),
+        .allocator = undefined,
+    };
+    parser.allocator = parser.arena.allocator();
+
+    const result = (try parse_binary_expression(&parser, 0)).*;
+
+    std.debug.assert(result.operator == .Plus);
+    std.debug.assert(result.left.tag == expr.BINARY_OR_UNARY_UNARY);
+    std.debug.assert(result.left.data.unary.operand.tag == expr.UNARY_EXPR_OR_LHS_LHS);
+    std.debug.assert(result.left.data.unary.operand.data.left_hand_side.tag == expr.LEFT_HAND_SIDE_EXPR_NEW);
+    std.debug.assert(result.left.data.unary.operand.data.left_hand_side.data.new.tag == expr.NEW_EXPR_MEMBER);
+    std.debug.assert(result.left.data.unary.operand.data.left_hand_side.data.new.data.member.tag == expr.MEMBER_EXPR_PRIMARY);
+    std.debug.assert(result.left.data.unary.operand.data.left_hand_side.data.new.data.member.data.primary.tag == expr.PRIMARY_EXPR_LITERAL);
+    std.debug.assert(result.left.data.unary.operand.data.left_hand_side.data.new.data.member.data.primary.data.literal.tag == expr.LITERAL_NUMBER);
+    std.debug.assert(result.left.data.unary.operand.data.left_hand_side.data.new.data.member.data.primary.data.literal.data.number.value == 1);
+
+    std.debug.assert(result.right.tag == expr.UNARY_EXPR_OR_NULL_UNARY);
+    std.debug.assert(result.right.data.unary.operand.tag == expr.UNARY_EXPR_OR_LHS_LHS);
+    std.debug.assert(result.right.data.unary.operand.data.left_hand_side.tag == expr.LEFT_HAND_SIDE_EXPR_NEW);
+    std.debug.assert(result.right.data.unary.operand.data.left_hand_side.data.new.tag == expr.NEW_EXPR_MEMBER);
+    std.debug.assert(result.right.data.unary.operand.data.left_hand_side.data.new.data.member.tag == expr.MEMBER_EXPR_PRIMARY);
+    std.debug.assert(result.right.data.unary.operand.data.left_hand_side.data.new.data.member.data.primary.tag == expr.PRIMARY_EXPR_LITERAL);
+    std.debug.assert(result.right.data.unary.operand.data.left_hand_side.data.new.data.member.data.primary.data.literal.tag == expr.LITERAL_NUMBER);
+    std.debug.assert(result.right.data.unary.operand.data.left_hand_side.data.new.data.member.data.primary.data.literal.data.number.value == 2);
+}
+
+test "parse binary (medium)" {
+    const text = "1 + 2 * 3";
+    const str = testing.u8_array_to_string(@ptrCast(@constCast(text)), text.len);
+
+    const tokens = try _text.parse_text_string(str, .InputElementHashbangOrRegExp);
+
+    var parser = Parser{
+        .tokens = tokens,
+        .curr = 0,
+        .arena = std.heap.ArenaAllocator.init(std.heap.page_allocator),
+        .allocator = undefined,
+    };
+    parser.allocator = parser.arena.allocator();
+
+    const result = (try parse_binary_expression(&parser, 0)).*;
+
+    std.debug.assert(result.operator == .Star);
+
+    std.debug.assert(result.left.tag == expr.BINARY_OR_UNARY_BINARY);
+    std.debug.assert(result.left.data.binary.operator == .Plus);
+    std.debug.assert(result.left.data.binary.left.tag == expr.BINARY_OR_UNARY_UNARY);
+    std.debug.assert(result.left.data.binary.left.data.unary.operand.tag == expr.UNARY_EXPR_OR_LHS_LHS);
+    std.debug.assert(result.left.data.binary.left.data.unary.operand.data.left_hand_side.tag == expr.LEFT_HAND_SIDE_EXPR_NEW);
+    std.debug.assert(result.left.data.binary.left.data.unary.operand.data.left_hand_side.data.new.tag == expr.NEW_EXPR_MEMBER);
+    std.debug.assert(result.left.data.binary.left.data.unary.operand.data.left_hand_side.data.new.data.member.tag == expr.MEMBER_EXPR_PRIMARY);
+    std.debug.assert(result.left.data.binary.left.data.unary.operand.data.left_hand_side.data.new.data.member.data.primary.tag == expr.PRIMARY_EXPR_LITERAL);
+    std.debug.assert(result.left.data.binary.left.data.unary.operand.data.left_hand_side.data.new.data.member.data.primary.data.literal.tag == expr.LITERAL_NUMBER);
+    std.debug.assert(result.left.data.binary.left.data.unary.operand.data.left_hand_side.data.new.data.member.data.primary.data.literal.data.number.value == 1);
+
+    std.debug.assert(result.left.data.binary.right.tag == expr.UNARY_EXPR_OR_NULL_UNARY);
+    std.debug.assert(result.left.data.binary.right.data.unary.operand.tag == expr.UNARY_EXPR_OR_LHS_LHS);
+    std.debug.assert(result.left.data.binary.right.data.unary.operand.data.left_hand_side.tag == expr.LEFT_HAND_SIDE_EXPR_NEW);
+    std.debug.assert(result.left.data.binary.right.data.unary.operand.data.left_hand_side.data.new.tag == expr.NEW_EXPR_MEMBER);
+    std.debug.assert(result.left.data.binary.right.data.unary.operand.data.left_hand_side.data.new.data.member.tag == expr.MEMBER_EXPR_PRIMARY);
+    std.debug.assert(result.left.data.binary.right.data.unary.operand.data.left_hand_side.data.new.data.member.data.primary.tag == expr.PRIMARY_EXPR_LITERAL);
+    std.debug.assert(result.left.data.binary.right.data.unary.operand.data.left_hand_side.data.new.data.member.data.primary.data.literal.tag == expr.LITERAL_NUMBER);
+    std.debug.assert(result.left.data.binary.right.data.unary.operand.data.left_hand_side.data.new.data.member.data.primary.data.literal.data.number.value == 2);
+
+    std.debug.assert(result.right.tag == expr.UNARY_EXPR_OR_NULL_UNARY);
+    std.debug.assert(result.right.data.unary.operand.tag == expr.UNARY_EXPR_OR_LHS_LHS);
+    std.debug.assert(result.right.data.unary.operand.data.left_hand_side.tag == expr.LEFT_HAND_SIDE_EXPR_NEW);
+    std.debug.assert(result.right.data.unary.operand.data.left_hand_side.data.new.tag == expr.NEW_EXPR_MEMBER);
+    std.debug.assert(result.right.data.unary.operand.data.left_hand_side.data.new.data.member.tag == expr.MEMBER_EXPR_PRIMARY);
+    std.debug.assert(result.right.data.unary.operand.data.left_hand_side.data.new.data.member.data.primary.tag == expr.PRIMARY_EXPR_LITERAL);
+    std.debug.assert(result.right.data.unary.operand.data.left_hand_side.data.new.data.member.data.primary.data.literal.tag == expr.LITERAL_NUMBER);
+    std.debug.assert(result.right.data.unary.operand.data.left_hand_side.data.new.data.member.data.primary.data.literal.data.number.value == 3);
+}
+
 test "parse unary" {
     const text = "++abc";
     const str = testing.u8_array_to_string(@ptrCast(@constCast(text)), text.len);

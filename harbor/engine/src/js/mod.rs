@@ -763,10 +763,29 @@ pub struct TernaryExpression {
 }
 
 #[repr(C)]
+pub union BinaryOrUnaryExpression {
+    binary: *const BinaryExpression,
+    unary: *const UnaryExpression,
+    none: (),
+}
+
+pub const BINARY_OR_UNARY_EXPR_BINARY: u8 = 0;
+pub const BINARY_OR_UNARY_EXPR_UNARY: u8 = 1;
+
+#[repr(C)]
+pub union UnaryExpressionOrNull {
+    unary: *const UnaryExpression,
+    none: (),
+}
+
+pub const UNARY_EXPR_OR_NULL_UNARY: u8 = 0;
+pub const UNARY_EXPR_OR_NULL_NONE: u8 = 1;
+
+#[repr(C)]
 pub struct BinaryExpression {
-    pub left: *const AssignmentExpression,
+    pub left: *const BinaryOrUnaryExpression,
     pub operator: BinaryOperator,
-    pub right: *const AssignmentExpression,
+    pub right: *const UnaryExpressionOrNull,
 }
 
 #[repr(u8)]
@@ -794,6 +813,14 @@ pub enum BinaryOperator {
     ShortCircuitLogicalAnd = 19,
     ShortCircuitLogicalOr = 20,
     NullishCoalescing = 21,
+
+    None = 22,
+
+    BitwiseAnd = 23,
+    BitwiseXor = 24,
+    BitwiseOr = 25,
+    LogicalAnd = 26,
+    LogicalOr = 27,
 }
 
 #[repr(C)]
@@ -1188,6 +1215,8 @@ pub enum UnaryOperator {
     PostfixIncrement = 9,
     PostfixDecrement = 10,
     Await = 11,
+
+    None = 12,
 }
 
 pub const UNARY_EXPR_UPDATE: u8 = 0;
