@@ -113,7 +113,7 @@ The CSS parser processes the CSS stylesheets associated with the webpage. It par
 <div align="center">
   <img src="https://raw.githubusercontent.com/tathyagarg/harbor/main/.github/assets/screenshots/demos/color.png" alt="Color Demo" width="80%">
   <br/>
-  <em><a href="assets/html/demos/color.html">Demo showcasing `color` property</a></em>
+  <em><a href="assets/html/demos/color.html">Demo showcasing <code>color</code> property</a></em>
 </div>
 
 - `background-color`
@@ -121,7 +121,7 @@ The CSS parser processes the CSS stylesheets associated with the webpage. It par
 <div align="center">
   <img src="https://raw.githubusercontent.com/tathyagarg/harbor/main/.github/assets/screenshots/demos/background-color.png" alt="Background Color Demo" width="80%">
   <br/>
-  <em><a href="assets/html/demos/background-color.html">Demo showcasing `background-color` property</a></em>
+  <em><a href="assets/html/demos/background-color.html">Demo showcasing <code>background-color</code> property</a></em>
 </div>
 
 - `width`
@@ -134,7 +134,7 @@ The CSS parser processes the CSS stylesheets associated with the webpage. It par
 <div align="center">
   <img src="https://raw.githubusercontent.com/tathyagarg/harbor/main/.github/assets/screenshots/demos/position.png" alt="Position Demo" width="80%">
   <br/>
-  <em><a href="assets/html/demos/position.html">Demo showcasing `position`, `top`, `left`, `right`, and `bottom` properties</a></em>
+  <em><a href="assets/html/demos/position.html">Demo showcasing <code>position</code>, <code>top</code>, <code>left</code>, <code>right</code>, and <code>bottom</code> properties</a></em>
 </div>
 
 - `display`
@@ -143,7 +143,7 @@ The CSS parser processes the CSS stylesheets associated with the webpage. It par
 <div align="center">
   <img src="https://raw.githubusercontent.com/tathyagarg/harbor/main/.github/assets/screenshots/demos/margin.png" alt="Box Model Demo" width="80%">
   <br/>
-  <em><a href="assets/html/demos/margin.html">Demo showcasing `display` and `margin` properties</a></em>
+  <em><a href="assets/html/demos/margin.html">Demo showcasing <code>margin</code> property</a></em>
 </div>
 
 - `font-size`
@@ -154,7 +154,7 @@ The CSS parser processes the CSS stylesheets associated with the webpage. It par
 <div align="center">
   <img src="https://raw.githubusercontent.com/tathyagarg/harbor/main/.github/assets/screenshots/demos/font.png" alt="Font Demo" width="80%">
   <br/>
-  <em><a href="assets/html/demos/font.html">Demo showcasing `font-size`, `font-family`, `font-weight`, and `font-style` properties</a></em>
+  <em><a href="assets/html/demos/font.html">Demo showcasing <code>font-size</code>, <code>font-family</code>, <code>font-weight</code>, and <code>font-style</code> properties</a></em>
 </div>
 
 ### TTF Parser
