@@ -5,11 +5,15 @@ Harbor Browser
 
 ![Banner](.github/assets/banner-16_9.png)
 
-![Language Badge](https://shields.arson.dev/badge/Language-Rust%2C%20Zig-red?color=ff0000)
-![Hackatime Badge](https://hackatime-badge.hackclub.com/U082L0UTJ66/harbor?color=ccff00)
-![License Badge](https://shields.arson.dev/github/license/tathyagarg/harbor?color=00ff66)
-![Lines Badge](https://shields.arson.dev/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Ftathyagarg%2Fharbor%2Frefs%2Fheads%2Fmain%2F.github%2Flines.json&query=%24.lines&label=Lines&color=0066ff)
-![GitHub Repo stars](https://shields.arson.dev/github/stars/tathyagarg/harbor?style=flat&color=cc00ff)
+<div align="center">
+
+![Language Badge](https://shields.arson.dev/badge/Language-Rust%2C%20Zig-red?color=EF4444)
+![Hackatime Badge](https://hackatime-badge.hackclub.com/U082L0UTJ66/harbor?color=EFBF04)
+![License Badge](https://shields.arson.dev/github/license/tathyagarg/harbor?color=10B981)
+![Lines Badge](https://shields.arson.dev/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Ftathyagarg%2Fharbor%2Frefs%2Fheads%2Fmain%2F.github%2Flines.json&query=%24.lines&label=Lines&color=3B82F6)
+![GitHub Repo stars](https://shields.arson.dev/github/stars/tathyagarg/harbor?style=flat&color=8B5CF6)
+
+</div>
 
 ⭐ Star us on GitHub — it motivates us a lot!
 
