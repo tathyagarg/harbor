@@ -169,53 +169,53 @@ impl Agent {
         let raw_url = maybe_resolved_url.as_ref().unwrap();
         let resolved_url = raw_url.serialize();
 
-        if let Some(doc) = self.cached_pages.get(&resolved_url) {
-            return Some(doc.clone());
-        } else {
-            let html_content = if raw_url.scheme == "http" || raw_url.scheme == "https" {
-                let url_obj = self.http_client.connect_to_url(resolved_url.clone());
+        // if let Some(doc) = self.cached_pages.get(&resolved_url) {
+        //     return Some(doc.clone());
+        // } else {
+        let html_content = if raw_url.scheme == "http" || raw_url.scheme == "https" {
+            let url_obj = self.http_client.connect_to_url(resolved_url.clone());
 
-                let _response = self.http_client.send_request(Request {
-                    method: String::from("GET"),
-                    request_target: url_obj.path.serialize(),
-                    protocol: Protocol::HTTP1_1,
-                    headers: vec![
-                        Header::new(String::from("User-Agent"), String::from("Harbor Browser")),
-                        Header::new(String::from("Host"), url_obj.host.unwrap().serialize()),
-                    ],
-                    body: None,
-                });
+            let _response = self.http_client.send_request(Request {
+                method: String::from("GET"),
+                request_target: url_obj.path.serialize(),
+                protocol: Protocol::HTTP1_1,
+                headers: vec![
+                    Header::new(String::from("User-Agent"), String::from("Harbor Browser")),
+                    Header::new(String::from("Host"), url_obj.host.unwrap().serialize()),
+                ],
+                body: None,
+            });
 
-                let response = match _response {
-                    Ok(resp) => resp,
-                    Err(e) => return Some(self.open_error_page(e)),
-                };
-
-                match response.body {
-                    Some(body) => body,
-                    None => return None,
-                }
-            } else if raw_url.scheme == "file" {
-                let path = raw_url.path.serialize().trim_end_matches('/').to_string();
-
-                fs::read_to_string(path).unwrap()
-            } else {
-                return None;
+            let response = match _response {
+                Ok(resp) => resp,
+                Err(e) => return Some(self.open_error_page(e)),
             };
 
-            let mut stream = InputStream::new(&html_content.chars().collect::<Vec<char>>()[..]);
+            match response.body {
+                Some(body) => body,
+                None => return None,
+            }
+        } else if raw_url.scheme == "file" {
+            let path = raw_url.path.serialize().trim_end_matches('/').to_string();
 
-            let document = Parser::parse_stream(&mut stream);
-            document
-                .borrow_mut()
-                .insert_stylesheet(0, self.ua_stylesheet.clone());
+            fs::read_to_string(path).unwrap()
+        } else {
+            return None;
+        };
 
-            self.handle_link_elements(url, &document);
+        let mut stream = InputStream::new(&html_content.chars().collect::<Vec<char>>()[..]);
 
-            self.cached_pages.insert(resolved_url, Rc::clone(&document));
+        let document = Parser::parse_stream(&mut stream);
+        document
+            .borrow_mut()
+            .insert_stylesheet(0, self.ua_stylesheet.clone());
 
-            return Some(document);
-        }
+        self.handle_link_elements(url, &document);
+
+        self.cached_pages.insert(resolved_url, Rc::clone(&document));
+
+        return Some(document);
+        // }
     }
 
     fn handle_link_elements(&mut self, root_url: &str, document: &Rc<RefCell<Document>>) {

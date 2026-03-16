@@ -759,7 +759,60 @@ impl Box {
 
         if let Some(node_rc) = &self.associated_node {
             if let NodeKind::Element(_) = node_rc.borrow().deref() {
-                parents.pop();
+                let e = parents.pop().unwrap();
+                let style = e.borrow().style().unwrap_or_default();
+
+                if style.position != Position::Static {
+                    let y = if !matches!(style.top.kind, PositioningValueKind::Auto) {
+                        style.top.resolved()
+                    } else if !matches!(style.bottom.kind, PositioningValueKind::Auto) {
+                        -style.bottom.resolved()
+                    } else {
+                        0.0
+                    };
+
+                    let x = if !matches!(style.left.kind, PositioningValueKind::Auto) {
+                        style.left.resolved()
+                    } else if !matches!(style.right.kind, PositioningValueKind::Auto) {
+                        -style.right.resolved()
+                    } else {
+                        0.0
+                    };
+
+                    match style.position {
+                        Position::Relative => {
+                            self._position_x = Some(self._position_x.unwrap_or(0.0) + x);
+                            self._position_y = Some(self._position_y.unwrap_or(0.0) + y);
+                        }
+                        Position::Absolute | Position::Fixed => {
+                            self._position_x = Some(x);
+                            self._position_y = Some(y);
+                        }
+                        _ => {}
+                    }
+                }
+
+                if style.position == Position::Absolute {
+                    self.position_relative_to = parents
+                        .iter()
+                        .rposition(|b| {
+                            let b_borrow = b.borrow();
+                            if let Some(node_rc) = &b_borrow.associated_node {
+                                if let NodeKind::Element(_) = node_rc.borrow().deref() {
+                                    let style = b_borrow.style().unwrap_or_default();
+
+                                    return style.position != Position::Static;
+                                }
+                            }
+
+                            false
+                        })
+                        .map(|idx| parents.len() - 1 - idx);
+
+                    println!("Position: {:?}, {:?}", self._position_x, self._position_y);
+
+                    return (0.0, 0.0, false);
+                }
             }
         }
 
@@ -982,6 +1035,8 @@ impl Box {
                             false
                         })
                         .map(|idx| parents.len() - 1 - idx);
+
+                    println!("Position: {:?}, {:?}", self._position_x, self._position_y);
 
                     return (0.0, 0.0, false);
                 }

@@ -7,7 +7,7 @@ use crate::{
             CSSStyleSheetExt, DeclarationOrAtRule,
         },
         selectors::parse_tokens_as_selector_list,
-        tokenize::{CSSToken, tokenize_from_string},
+        tokenize::{tokenize_from_string, CSSToken},
     },
     html5::dom::Document,
     infra::*,
@@ -360,7 +360,6 @@ pub fn parse_stylesheet(
     let mut rules = Vec::<Box<dyn CSSRuleExt>>::new();
 
     for rule in consume_list_of_rules(stream, true) {
-        println!("Parsing rule: {:#?}", rule);
         match rule {
             Rule::AtRule(at_rule) => {
                 println!("At-Rule: {:#?}", at_rule);
