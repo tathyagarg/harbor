@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   request:
-    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    if: "contains(github.event.head_commit.message, '[ci]')"
     runs-on: ubuntu-latest
 
     steps:
