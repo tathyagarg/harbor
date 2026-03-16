@@ -742,6 +742,143 @@ pub fn parse_lhs_expression(parser: *Parser) !*expr.LeftHandSideExpression {
     return lhs;
 }
 
+pub fn is_unary_operator(token: Token, is_prefix: bool) ?expr.UnaryOperator {
+    if (token.kind != .CommonToken) {
+        return null;
+    }
+
+    const common_token_data: *CommonTokenData = @ptrFromInt(token.data);
+
+    if (common_token_data.common_token_kind == .Punctuator) {
+        const punctuator_kind: _text.PunctuatorKind = @enumFromInt(common_token_data.data);
+
+        return switch (punctuator_kind) {
+            .Increment => if (is_prefix) .PrefixIncrement else .PostfixIncrement,
+            .Decrement => if (is_prefix) .PrefixDecrement else .PostfixDecrement,
+            .Plus => if (is_prefix) .Plus else return null,
+            .Minus => if (is_prefix) .Minus else return null,
+            .Not => if (is_prefix) .LogicalNot else return null,
+            .BitwiseNot => if (is_prefix) .BitwiseNot else return null,
+            else => return null,
+        };
+    } else if (common_token_data.common_token_kind == .IdentifierName) {
+        const identifier_data: *IdentifierNameData = @ptrFromInt(common_token_data.data);
+
+        if (testing.are_equal_strings(identifier_data.name, testing.u8_array_to_string(@ptrCast(@constCast("typeof")), 6))) {
+            return if (is_prefix) .TypeOf else null;
+        } else if (testing.are_equal_strings(identifier_data.name, testing.u8_array_to_string(@ptrCast(@constCast("void")), 4))) {
+            return if (is_prefix) .Void else null;
+        } else if (testing.are_equal_strings(identifier_data.name, testing.u8_array_to_string(@ptrCast(@constCast("delete")), 6))) {
+            return if (is_prefix) .Delete else null;
+        } else if (testing.are_equal_strings(identifier_data.name, testing.u8_array_to_string(@ptrCast(@constCast("await")), 5))) {
+            return if (is_prefix) .Await else null;
+        } else {
+            return null;
+        }
+    } else {
+        return null;
+    }
+}
+
+pub fn parse_unary_expression(parser: *Parser) !*expr.UnaryExpression {
+    const next_token = peek(parser).?;
+
+    if (is_unary_operator(next_token, true)) |unary_op| {
+        _ = next(parser);
+        skip_whitespace(parser);
+
+        const operand = try parse_unary_expression(parser);
+
+        const unary_expr_or_lhs = parser.allocator.create(expr.UnaryExpressionOrLHS) catch return error.OutOfMemory;
+        unary_expr_or_lhs.* = .{
+            .tag = expr.UNARY_EXPR_OR_LHS_UNARY,
+            .data = .{
+                .unary = operand,
+            },
+        };
+
+        const unary_expr = parser.allocator.create(expr.UnaryExpression) catch return error.OutOfMemory;
+        unary_expr.* = expr.UnaryExpression{
+            .operator = @constCast(&unary_op),
+            .operand = unary_expr_or_lhs,
+        };
+
+        return unary_expr;
+    }
+
+    const operand = try parse_lhs_expression(parser);
+
+    const unary_expr_or_lhs = parser.allocator.create(expr.UnaryExpressionOrLHS) catch return error.OutOfMemory;
+    const unary_expr = parser.allocator.create(expr.UnaryExpression) catch return error.OutOfMemory;
+
+    if (peek(parser)) |token| {
+        if (is_unary_operator(token, false)) |operator| {
+            _ = next(parser);
+
+            unary_expr_or_lhs.* = .{
+                .tag = expr.UNARY_EXPR_OR_LHS_LHS,
+                .data = .{
+                    .left_hand_side = operand,
+                },
+            };
+
+            unary_expr.* = expr.UnaryExpression{
+                .operator = @constCast(&operator),
+                .operand = unary_expr_or_lhs,
+            };
+
+            return unary_expr;
+        }
+    }
+
+    unary_expr_or_lhs.* = .{
+        .tag = expr.UNARY_EXPR_OR_LHS_LHS,
+        .data = .{
+            .left_hand_side = operand,
+        },
+    };
+
+    unary_expr.* = expr.UnaryExpression{
+        .operator = @constCast(&expr.UnaryOperator.None),
+        .operand = unary_expr_or_lhs,
+    };
+
+    return unary_expr;
+}
+
+test "parse unary" {
+    const text = "++abc";
+    const str = testing.u8_array_to_string(@ptrCast(@constCast(text)), text.len);
+
+    const tokens = try _text.parse_text_string(str, .InputElementHashbangOrRegExp);
+
+    var parser = Parser{
+        .tokens = tokens,
+        .curr = 0,
+        .arena = std.heap.ArenaAllocator.init(std.heap.page_allocator),
+        .allocator = undefined,
+    };
+
+    parser.allocator = parser.arena.allocator();
+    const result = (try parse_unary_expression(&parser)).*;
+
+    std.debug.assert(result.operator.* == .PrefixIncrement);
+    std.debug.assert(result.operand.tag == expr.UNARY_EXPR_OR_LHS_UNARY);
+    std.debug.assert(result.operand.data.unary.operand.tag == expr.UNARY_EXPR_OR_LHS_LHS);
+    std.debug.assert(result.operand.data.unary.operand.data.left_hand_side.tag == expr.LEFT_HAND_SIDE_EXPR_NEW);
+    std.debug.assert(result.operand.data.unary.operand.data.left_hand_side.data.new.tag == expr.NEW_EXPR_MEMBER);
+    std.debug.assert(result.operand.data.unary.operand.data.left_hand_side.data.new.data.member.tag == expr.MEMBER_EXPR_PRIMARY);
+    std.debug.assert(result.operand.data.unary.operand.data.left_hand_side.data.new.data.member.data.primary.tag == expr.PRIMARY_EXPR_IDENTIFIER);
+    std.debug.assert(testing.are_equal_strings(
+        result.operand.data.unary.operand.data.left_hand_side.data.new.data.member.data.primary.data.identifier.data.identifier.name,
+        testing.u8_array_to_string(@ptrCast(@constCast("abc")), 3),
+    ));
+
+    _text.free_string(str);
+    _text.free_token_seq(tokens);
+    deinit(&parser);
+}
+
 test "parse lhs" {
     const text = "obj.method(arg1, arg2)";
     const str = testing.u8_array_to_string(@ptrCast(@constCast(text)), text.len);

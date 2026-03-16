@@ -323,6 +323,7 @@ pub const UnaryOperator = enum(u8) {
     PostfixIncrement = 9,
     PostfixDecrement = 10,
     Await = 11,
+    None = 12,
 };
 
 pub const UnaryExpressionOrLHS = EXTERN_UNION(
