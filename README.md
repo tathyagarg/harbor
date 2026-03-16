@@ -1,4 +1,8 @@
-# Harbor Browser
+Harbor Browser
+&middot;
+![Release Badge](https://shields.arson.dev/github/v/release/tathyagarg/harbor?include_prereleases&color=247ba0)
+===
+
 ![Banner](.github/assets/banner-16_9.png)
 
 ![Language Badge](https://shields.arson.dev/badge/Language-Rust%2C%20Zig-red?color=ff0000)
@@ -30,9 +34,9 @@
   - [JavaScript Engine](#javascript-engine)
   - [Renderer](#renderer)
 
-### Install
+## Install
 
-#### Linux and MacOS
+### Linux and MacOS
 Run the following command in your terminal in a directory of your choice:
 ```bash
 curl -fsSL https://raw.githubusercontent.com/tathyagarg/harbor/main/scripts/install.sh | sh
@@ -49,9 +53,9 @@ cd harbor/harbor/engine
 cargo run --release
 ```
 
-### Screenshots
+## Screenshots
 
-#### New Tab page
+### New Tab page
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/tathyagarg/harbor/main/.github/assets/screenshots/tab.png" alt="New Tab Page" width="80%">
@@ -59,7 +63,7 @@ cargo run --release
   <em>The default (and very bare bones) new tag page</em>
 </div>
 
-#### Flavorless
+### Flavorless
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/tathyagarg/harbor/main/.github/assets/screenshots/flavorless.png" alt="Flavorless" width="80%">
@@ -67,7 +71,7 @@ cargo run --release
   <em>The website for the <a href="https://flavorless.hackclub.com">flavorless</a> YSWS</em>
 </div>
 
-#### Sans Style
+### Sans Style
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/tathyagarg/harbor/main/.github/assets/screenshots/sans-style.png" alt="Sans Style" width="80%">
@@ -75,16 +79,32 @@ cargo run --release
   <em>The website <a href="https://sans.style/">sans.style</a></em>
 </div>
 
-### Components
+## Features
+- Custom HTTP client with TLS support
+- Almost [spec-compliant](https://html.spec.whatwg.org/multipage/parsing.html) HTML parser (it's a long spec)
+- CSS parser with support for a decent amount of properties (listed below)
+- TTF parser to extract glyph information from font files
+- GPU rendering using `wgpu` and `winit`
+- JavaScript engine (WIP)
+- Shipped with basic resources (new tab page, fonts, stylesheets, etc.) installed with browser.
+- Opening multiple tabs
+- Going back and forward in history
+- Reloading pages
+- Changing URL of tab
+
+> [!TIP]
+> Most of these features seem basic but are actually the result of hundreds, if not thousands, of lines of code.
+
+## Components
 Harbor is comprised of 6 main components:
 
-#### HTTP Client
+### HTTP Client
 The HTTP client is responsible for making network requests to fetch web resources. It handles the complexities of the HTTP protocol, including headers, and redirects. This component is the only one that uses external libraries (except for the renderer which uses wgpu and winit) - and that is for `TLS` support (enabling `https` support).
 
-#### HTML Parser
+### HTML Parser
 The HTML parser takes the raw HTML content fetched by the HTTP client and parses it into a structured format, the DOM (Document Object Model). This allows the browser to understand the structure of the webpage and how elements relate to each other.
 
-#### CSS Parser
+### CSS Parser
 The CSS parser processes the CSS stylesheets associated with the webpage. It parses the CSS rules and applies them to the corresponding HTML elements in the DOM, determining how each element should be styled. Currently only the following CSS properties are supported:
 - `color`
 - `background-color`
@@ -100,11 +120,13 @@ The CSS parser processes the CSS stylesheets associated with the webpage. It par
 - `font-weight`
 - `font-style`
 
-#### TTF Parser
+### TTF Parser
 The TTF (TrueType Font) parser is responsible for parsing font files to extract glyph information. This allows the browser to render text using the correct fonts specified in the CSS. This enables me to render text manually from glyphs, which is a fun challenge.
 
-#### JavaScript Engine
+### JavaScript Engine
 The JavaScript engine executes JavaScript code embedded in web pages. WIP
 
-#### Renderer
-The renderer takes the structured data from the HTML and CSS parsers and renders it onto the screen. It uses the `wgpu` library for GPU-accelerated rendering and `winit` for window management. The renderer is responsible for drawing all visual elements of the webpage.
+### Renderer
+The renderer takes the structured data from the HTML and CSS parsers and renders it onto the screen. It uses the `wgpu` library for GPU-accelerated rendering and `winit` for window management. The renderer is responsible for drawing all visual elements of the webpage. The renderer uses ear clipping to render glyphs from contours into filled triangles[^1]
+
+[^1]: [Triangulation by Ear Clipping](https://www.geometrictools.com/Documentation/TriangulationByEarClipping.pdf)
