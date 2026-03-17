@@ -10,7 +10,7 @@ Harbor Browser
 ![Language Badge](https://shields.arson.dev/badge/Language-Rust%2C%20Zig-red?color=EF4444)
 ![Hackatime Badge](https://hackatime-badge.hackclub.com/U082L0UTJ66/harbor?color=EFBF04)
 ![License Badge](https://shields.arson.dev/github/license/tathyagarg/harbor?color=10B981)
-![Lines Badge](https://shields.arson.dev/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Ftathyagarg%2Fharbor%2Frefs%2Fheads%2Fmain%2F.github%2Flines.json&query=%24.lines&label=Lines&color=3B82F6)
+![Lines Badge](https://shields.arson.dev/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Ftathyagarg%2Fharbor%2Frefs%2Fheads%2Fmain%2F.github%2Flines.json&query=%24.total&label=Lines&color=3B82F6)
 ![GitHub Repo stars](https://shields.arson.dev/github/stars/tathyagarg/harbor?style=flat&color=8B5CF6)
 
 </div>

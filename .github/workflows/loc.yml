@@ -16,9 +16,28 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Count lines of code
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.13'
+
+      - name: Count lines
         run: |
-          curl -sL https://api.codetabs.com/v1/loc?github=tathyagarg/harbor | jq -r '.[-1]' > .github/lines.json
+          git ls-files \
+          | xargs wc -l \
+          | python scripts/loc.py \
+              -- '{
+                "css": "harbor/engine/src/css",
+                "js": [
+                  "harbor/engine/src/js", 
+                  "harbor/js"
+                ],
+                "html": "harbor/engine/src/html5",
+                "http": "harbor/engine/src/http",
+                "font": "harbor/engine/src/font",
+                "render": "harbor/engine/src/render"
+              }' \
+          > .github/lines.json
 
       - name: Commit
         run: |
