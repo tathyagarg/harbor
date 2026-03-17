@@ -4,6 +4,9 @@
   import Icon from "@iconify/svelte";
   import { animate, cubicBezier, onScroll, stagger } from "animejs";
   import { onMount } from "svelte";
+  import type { PageProps } from "./$types";
+
+  let { data }: PageProps = $props();
 
   onMount(() => {
     const elems = document.querySelectorAll(".animate");
@@ -28,42 +31,42 @@
       title: "HTML Parser",
       description:
         "A custom HTML parser that converts HTML text into a DOM tree structure.",
-      loc: "7,900",
+      loc: data.modules.html,
     },
     {
       icon: "{ }",
       title: "CSS Parser",
       description:
         "A custom CSS parser that converts CSS text into a stylesheet object.",
-      loc: "5,900",
+      loc: data.modules.css,
     },
     {
       icon: "Aa",
       title: "TrueType Font Reader",
       description:
         "A custom TrueType font reader that reads .ttf files into usable glyph data for rendering text.",
-      loc: "4,300",
+      loc: data.modules.font,
     },
     {
       icon: "↔",
       title: "HTTP Client",
       description:
         "A custom HTTP client that handles all network requests, including fetching HTML, CSS, etc. It supports upto HTTP/1.1 in writing and HTTP/2 in reading (i think).",
-      loc: "2,200",
+      loc: data.modules.http,
     },
     {
       icon: "░",
       title: "Renderer",
       description:
         "A custom renderer that takes the DOM tree and stylesheet object and renders it to the screen.",
-      loc: "2,200",
+      loc: data.modules.render,
     },
     {
       icon: "{ }",
       title: "JavaScript Engine",
       description:
         "A custom JavaScript engine written in Zig that executes JavaScript code on web pages. (Not functional yet)",
-      loc: "3,000",
+      loc: data.modules.js,
     },
   ];
 </script>
@@ -107,7 +110,7 @@
 <hr class="border-(--celadon)" />
 
 <div class="flex justify-around py-16">
-  <Stat title="Lines of Code" value="35k+" />
+  <Stat title="Lines of Code" value={data.total} />
   <Stat title="Third Party Dependencies" value="0" />
   <Stat title="Core Modules" value="6" />
 </div>
