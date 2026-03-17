@@ -173,7 +173,7 @@ fn is_assignment_operator(token: Token) ?expr.AssignmentOperator {
         const punctuator_kind: _text.PunctuatorKind = @enumFromInt(common_token_data.data);
 
         return switch (punctuator_kind) {
-            .Equals => .Raw,
+            .Assign => .Raw,
             .PlusAssign => .Plus,
             .MinusAssign => .Minus,
             .AsteriskAssign => .Star,
@@ -240,12 +240,18 @@ fn coerce_to_lhs(expression: *expr.AssignmentExpression, parser: *Parser) error{
                 else => return error.UnexpectedToken,
             }
         },
-        else => return error.UnexpectedToken,
+        expr.ASSIGNMENT_EXPR_LHS => return expression.data.lhs,
+        else => {
+            std.debug.print("Cannot coerce expression to left-hand side expression: {any}\n", .{expression});
+            return error.UnexpectedToken;
+        },
     };
 }
 
 pub fn parse_assignment_expression(parser: *Parser) error{ OutOfMemory, UnexpectedToken, UnexpectedEndOfTokens }!*expr.AssignmentExpression {
     const left = try parse_binary_expression(parser, 0);
+    skip_whitespace(parser);
+
     const left_assignment = parser.allocator.create(expr.AssignmentExpression) catch return error.OutOfMemory;
 
     if (left.operator == .None) {
@@ -1132,6 +1138,108 @@ pub fn parse_binary_expression(parser: *Parser, min_precedence: u8) error{ OutOf
     return binary;
 }
 
+fn get_parse_result(
+    T: type,
+    f: fn (*Parser) error{ OutOfMemory, UnexpectedToken, UnexpectedEndOfTokens }!*T,
+    text: []const u8,
+) !T {
+    const str = testing.u8_array_to_string(@ptrCast(@constCast(text)), text.len);
+
+    const tokens = try _text.parse_text_string(str, .InputElementHashbangOrRegExp);
+
+    var parser = Parser{
+        .tokens = tokens,
+        .curr = 0,
+        .arena = std.heap.ArenaAllocator.init(std.heap.page_allocator),
+        .allocator = undefined,
+    };
+    parser.allocator = parser.arena.allocator();
+
+    const result = try f(&parser);
+
+    return result.*;
+}
+
+test "parse assignment (raw)" {
+    const result = try get_parse_result(
+        expr.AssignmentExpression,
+        parse_assignment_expression,
+        "abc = 1 + 2",
+    );
+
+    std.debug.assert(result.tag == expr.ASSIGNMENT_EXPR_RAW);
+    std.debug.assert(result.data.raw_assignment.left.tag == expr.LEFT_HAND_SIDE_EXPR_NEW);
+    std.debug.assert(result.data.raw_assignment.left.data.new.tag == expr.NEW_EXPR_MEMBER);
+    std.debug.assert(result.data.raw_assignment.left.data.new.data.member.tag == expr.MEMBER_EXPR_PRIMARY);
+    std.debug.assert(result.data.raw_assignment.left.data.new.data.member.data.primary.tag == expr.PRIMARY_EXPR_IDENTIFIER);
+
+    std.debug.assert(testing.are_equal_strings(
+        result.data.raw_assignment.left.data.new.data.member.data.primary.data.identifier.data.identifier.name,
+        testing.u8_array_to_string(@ptrCast(@constCast("abc")), 3),
+    ));
+
+    std.debug.assert(result.data.raw_assignment.right.tag == expr.ASSIGNMENT_EXPR_BINARY);
+    std.debug.assert(result.data.raw_assignment.right.data.binary.operator == .Plus);
+    std.debug.assert(result.data.raw_assignment.right.data.binary.left.tag == expr.BINARY_OR_UNARY_UNARY);
+    std.debug.assert(result.data.raw_assignment.right.data.binary.left.data.unary.operand.tag == expr.UNARY_EXPR_OR_LHS_LHS);
+    std.debug.assert(result.data.raw_assignment.right.data.binary.left.data.unary.operand.data.left_hand_side.tag == expr.LEFT_HAND_SIDE_EXPR_NEW);
+    std.debug.assert(result.data.raw_assignment.right.data.binary.left.data.unary.operand.data.left_hand_side.data.new.tag == expr.NEW_EXPR_MEMBER);
+    std.debug.assert(result.data.raw_assignment.right.data.binary.left.data.unary.operand.data.left_hand_side.data.new.data.member.tag == expr.MEMBER_EXPR_PRIMARY);
+    std.debug.assert(result.data.raw_assignment.right.data.binary.left.data.unary.operand.data.left_hand_side.data.new.data.member.data.primary.tag == expr.PRIMARY_EXPR_LITERAL);
+    std.debug.assert(result.data.raw_assignment.right.data.binary.left.data.unary.operand.data.left_hand_side.data.new.data.member.data.primary.data.literal.tag == expr.LITERAL_NUMBER);
+    std.debug.assert(result.data.raw_assignment.right.data.binary.left.data.unary.operand.data.left_hand_side.data.new.data.member.data.primary.data.literal.data.number.value == 1);
+
+    std.debug.assert(result.data.raw_assignment.right.data.binary.right.tag == expr.UNARY_EXPR_OR_NULL_UNARY);
+    std.debug.assert(result.data.raw_assignment.right.data.binary.right.data.unary.operand.tag == expr.UNARY_EXPR_OR_LHS_LHS);
+    std.debug.assert(result.data.raw_assignment.right.data.binary.right.data.unary.operand.data.left_hand_side.tag == expr.LEFT_HAND_SIDE_EXPR_NEW);
+    std.debug.assert(result.data.raw_assignment.right.data.binary.right.data.unary.operand.data.left_hand_side.data.new.tag == expr.NEW_EXPR_MEMBER);
+    std.debug.assert(result.data.raw_assignment.right.data.binary.right.data.unary.operand.data.left_hand_side.data.new.data.member.tag == expr.MEMBER_EXPR_PRIMARY);
+    std.debug.assert(result.data.raw_assignment.right.data.binary.right.data.unary.operand.data.left_hand_side.data.new.data.member.data.primary.tag == expr.PRIMARY_EXPR_LITERAL);
+    std.debug.assert(result.data.raw_assignment.right.data.binary.right.data.unary.operand.data.left_hand_side.data.new.data.member.data.primary.data.literal.tag == expr.LITERAL_NUMBER);
+    std.debug.assert(result.data.raw_assignment.right.data.binary.right.data.unary.operand.data.left_hand_side.data.new.data.member.data.primary.data.literal.data.number.value == 2);
+}
+
+test "parse assignment (operator)" {
+    const result = try get_parse_result(
+        expr.AssignmentExpression,
+        parse_assignment_expression,
+        "abc += 1 + 2",
+    );
+
+    std.debug.assert(result.tag == expr.ASSIGNMENT_EXPR_OPERATOR);
+
+    std.debug.assert(result.data.operator_assignment.operator == .Plus);
+    std.debug.assert(result.data.operator_assignment.left.tag == expr.LEFT_HAND_SIDE_EXPR_NEW);
+    std.debug.assert(result.data.operator_assignment.left.data.new.tag == expr.NEW_EXPR_MEMBER);
+    std.debug.assert(result.data.operator_assignment.left.data.new.data.member.tag == expr.MEMBER_EXPR_PRIMARY);
+    std.debug.assert(result.data.operator_assignment.left.data.new.data.member.data.primary.tag == expr.PRIMARY_EXPR_IDENTIFIER);
+
+    std.debug.assert(testing.are_equal_strings(
+        result.data.operator_assignment.left.data.new.data.member.data.primary.data.identifier.data.identifier.name,
+        testing.u8_array_to_string(@ptrCast(@constCast("abc")), 3),
+    ));
+
+    std.debug.assert(result.data.operator_assignment.right.tag == expr.ASSIGNMENT_EXPR_BINARY);
+    std.debug.assert(result.data.operator_assignment.right.data.binary.operator == .Plus);
+    std.debug.assert(result.data.operator_assignment.right.data.binary.left.tag == expr.BINARY_OR_UNARY_UNARY);
+    std.debug.assert(result.data.operator_assignment.right.data.binary.left.data.unary.operand.tag == expr.UNARY_EXPR_OR_LHS_LHS);
+    std.debug.assert(result.data.operator_assignment.right.data.binary.left.data.unary.operand.data.left_hand_side.tag == expr.LEFT_HAND_SIDE_EXPR_NEW);
+    std.debug.assert(result.data.operator_assignment.right.data.binary.left.data.unary.operand.data.left_hand_side.data.new.tag == expr.NEW_EXPR_MEMBER);
+    std.debug.assert(result.data.operator_assignment.right.data.binary.left.data.unary.operand.data.left_hand_side.data.new.data.member.tag == expr.MEMBER_EXPR_PRIMARY);
+    std.debug.assert(result.data.operator_assignment.right.data.binary.left.data.unary.operand.data.left_hand_side.data.new.data.member.data.primary.tag == expr.PRIMARY_EXPR_LITERAL);
+    std.debug.assert(result.data.operator_assignment.right.data.binary.left.data.unary.operand.data.left_hand_side.data.new.data.member.data.primary.data.literal.tag == expr.LITERAL_NUMBER);
+    std.debug.assert(result.data.operator_assignment.right.data.binary.left.data.unary.operand.data.left_hand_side.data.new.data.member.data.primary.data.literal.data.number.value == 1);
+
+    std.debug.assert(result.data.operator_assignment.right.data.binary.right.tag == expr.UNARY_EXPR_OR_NULL_UNARY);
+    std.debug.assert(result.data.operator_assignment.right.data.binary.right.data.unary.operand.tag == expr.UNARY_EXPR_OR_LHS_LHS);
+    std.debug.assert(result.data.operator_assignment.right.data.binary.right.data.unary.operand.data.left_hand_side.tag == expr.LEFT_HAND_SIDE_EXPR_NEW);
+    std.debug.assert(result.data.operator_assignment.right.data.binary.right.data.unary.operand.data.left_hand_side.data.new.tag == expr.NEW_EXPR_MEMBER);
+    std.debug.assert(result.data.operator_assignment.right.data.binary.right.data.unary.operand.data.left_hand_side.data.new.data.member.tag == expr.MEMBER_EXPR_PRIMARY);
+    std.debug.assert(result.data.operator_assignment.right.data.binary.right.data.unary.operand.data.left_hand_side.data.new.data.member.data.primary.tag == expr.PRIMARY_EXPR_LITERAL);
+    std.debug.assert(result.data.operator_assignment.right.data.binary.right.data.unary.operand.data.left_hand_side.data.new.data.member.data.primary.data.literal.tag == expr.LITERAL_NUMBER);
+    std.debug.assert(result.data.operator_assignment.right.data.binary.right.data.unary.operand.data.left_hand_side.data.new.data.member.data.primary.data.literal.data.number.value == 2);
+}
+
 test "parse binary (basic)" {
     const text = "1 + 2";
     const str = testing.u8_array_to_string(@ptrCast(@constCast(text)), text.len);
@@ -1146,7 +1254,7 @@ test "parse binary (basic)" {
     };
     parser.allocator = parser.arena.allocator();
 
-    const result = (try parse_binary_expression(&parser, 0)).*;
+    const result = try parse_binary_expression(&parser, 0);
 
     std.debug.assert(result.operator == .Plus);
     std.debug.assert(result.left.tag == expr.BINARY_OR_UNARY_UNARY);
@@ -1182,7 +1290,7 @@ test "parse binary (medium)" {
     };
     parser.allocator = parser.arena.allocator();
 
-    const result = (try parse_binary_expression(&parser, 0)).*;
+    const result = try parse_binary_expression(&parser, 0);
 
     std.debug.assert(result.operator == .Star);
 
@@ -1217,20 +1325,11 @@ test "parse binary (medium)" {
 }
 
 test "parse unary" {
-    const text = "++abc";
-    const str = testing.u8_array_to_string(@ptrCast(@constCast(text)), text.len);
-
-    const tokens = try _text.parse_text_string(str, .InputElementHashbangOrRegExp);
-
-    var parser = Parser{
-        .tokens = tokens,
-        .curr = 0,
-        .arena = std.heap.ArenaAllocator.init(std.heap.page_allocator),
-        .allocator = undefined,
-    };
-
-    parser.allocator = parser.arena.allocator();
-    const result = (try parse_unary_expression(&parser)).*;
+    const result = try get_parse_result(
+        expr.UnaryExpression,
+        parse_unary_expression,
+        "++abc",
+    );
 
     std.debug.assert(result.operator == .PrefixIncrement);
     std.debug.assert(result.operand.tag == expr.UNARY_EXPR_OR_LHS_UNARY);
@@ -1243,27 +1342,14 @@ test "parse unary" {
         result.operand.data.unary.operand.data.left_hand_side.data.new.data.member.data.primary.data.identifier.data.identifier.name,
         testing.u8_array_to_string(@ptrCast(@constCast("abc")), 3),
     ));
-
-    _text.free_string(str);
-    _text.free_token_seq(tokens);
-    deinit(&parser);
 }
 
 test "parse lhs" {
-    const text = "obj.method(arg1, arg2)";
-    const str = testing.u8_array_to_string(@ptrCast(@constCast(text)), text.len);
-
-    const tokens = try _text.parse_text_string(str, .InputElementHashbangOrRegExp);
-
-    var parser = Parser{
-        .tokens = tokens,
-        .curr = 0,
-        .arena = std.heap.ArenaAllocator.init(std.heap.page_allocator),
-        .allocator = undefined,
-    };
-    parser.allocator = parser.arena.allocator();
-
-    const result = (try parse_lhs_expression(&parser)).*;
+    const result = try get_parse_result(
+        expr.LeftHandSideExpression,
+        parse_lhs_expression,
+        "obj.method(arg1, arg2)",
+    );
 
     std.debug.assert(result.tag == expr.LEFT_HAND_SIDE_EXPR_CALL);
     std.debug.assert(result.data.call.tag == expr.CALL_EXPR_COVER);
@@ -1306,27 +1392,14 @@ test "parse lhs" {
         result.data.call.data.cover.arguments.arguments.data[1].data.lhs.data.new.data.member.data.primary.data.identifier.data.identifier.name,
         testing.u8_array_to_string(@ptrCast(@constCast("arg2")), 4),
     ));
-
-    _text.free_string(str);
-    _text.free_token_seq(tokens);
-    deinit(&parser);
 }
 
 test "parse call expr" {
-    const text = "obj.method(arg1, arg2)";
-    const str = testing.u8_array_to_string(@ptrCast(@constCast(text)), text.len);
-
-    const tokens = try _text.parse_text_string(str, .InputElementHashbangOrRegExp);
-
-    var parser = Parser{
-        .tokens = tokens,
-        .curr = 0,
-        .arena = std.heap.ArenaAllocator.init(std.heap.page_allocator),
-        .allocator = undefined,
-    };
-    parser.allocator = parser.arena.allocator();
-
-    const result = (try parse_call_expression(&parser)).*;
+    const result = try get_parse_result(
+        expr.CallExpression,
+        parse_call_expression,
+        "obj.method(arg1, arg2)",
+    );
 
     std.debug.assert(result.tag == expr.CALL_EXPR_COVER);
     std.debug.assert(result.data.cover.callee.tag == expr.MEMBER_EXPR_PROPERTY);
@@ -1369,27 +1442,14 @@ test "parse call expr" {
         result.data.cover.arguments.arguments.data[1].data.lhs.data.new.data.member.data.primary.data.identifier.data.identifier.name,
         testing.u8_array_to_string(@ptrCast(@constCast("arg2")), 4),
     ));
-
-    _text.free_string(str);
-    _text.free_token_seq(tokens);
-    deinit(&parser);
 }
 
 test "parse call expr (spread)" {
-    const text = "obj.method(arg1, ...args)";
-    const str = testing.u8_array_to_string(@ptrCast(@constCast(text)), text.len);
-
-    const tokens = try _text.parse_text_string(str, .InputElementHashbangOrRegExp);
-
-    var parser = Parser{
-        .tokens = tokens,
-        .curr = 0,
-        .arena = std.heap.ArenaAllocator.init(std.heap.page_allocator),
-        .allocator = undefined,
-    };
-    parser.allocator = parser.arena.allocator();
-
-    const result = (try parse_call_expression(&parser)).*;
+    const result = try get_parse_result(
+        expr.CallExpression,
+        parse_call_expression,
+        "obj.method(arg1, ...args)",
+    );
 
     std.debug.assert(result.tag == expr.CALL_EXPR_COVER);
     std.debug.assert(result.data.cover.callee.tag == expr.MEMBER_EXPR_PROPERTY);
@@ -1432,94 +1492,46 @@ test "parse call expr (spread)" {
         result.data.cover.arguments.arguments.data[1].data.lhs.data.new.data.member.data.primary.data.identifier.data.identifier.name,
         testing.u8_array_to_string(@ptrCast(@constCast("args")), 4),
     ));
-
-    _text.free_string(str);
-    _text.free_token_seq(tokens);
-    deinit(&parser);
 }
 
 test "parse arguments (empty)" {
-    const text = "( )";
-    const str = testing.u8_array_to_string(@ptrCast(@constCast(text)), text.len);
-
-    const tokens = try _text.parse_text_string(str, .InputElementHashbangOrRegExp);
-
-    var parser = Parser{
-        .tokens = tokens,
-        .curr = 0,
-        .arena = std.heap.ArenaAllocator.init(std.heap.page_allocator),
-        .allocator = undefined,
-    };
-    parser.allocator = parser.arena.allocator();
-
-    const result = (try parse_arguments(&parser)).*;
+    const result = try get_parse_result(
+        expr.Arguments,
+        parse_arguments,
+        "()",
+    );
 
     std.debug.assert(result.arguments.len == 0);
 }
 
 test "parse arguments (with args)" {
-    const text = "(arg1, arg2)";
-    const str = testing.u8_array_to_string(@ptrCast(@constCast(text)), text.len);
-
-    const tokens = try _text.parse_text_string(str, .InputElementHashbangOrRegExp);
-
-    var parser = Parser{
-        .tokens = tokens,
-        .curr = 0,
-        .arena = std.heap.ArenaAllocator.init(std.heap.page_allocator),
-        .allocator = undefined,
-    };
-    parser.allocator = parser.arena.allocator();
-
-    const result = (try parse_arguments(&parser)).*;
+    const result = try get_parse_result(
+        expr.Arguments,
+        parse_arguments,
+        "(arg1, arg2)",
+    );
 
     std.debug.assert(result.arguments.len == 2);
-
-    _text.free_string(str);
-    _text.free_token_seq(tokens);
-    deinit(&parser);
 }
 
 test "parse arguments (with spread)" {
-    const text = "(arg1, ...rest)";
-    const str = testing.u8_array_to_string(@ptrCast(@constCast(text)), text.len);
-
-    const tokens = try _text.parse_text_string(str, .InputElementHashbangOrRegExp);
-
-    var parser = Parser{
-        .tokens = tokens,
-        .curr = 0,
-        .arena = std.heap.ArenaAllocator.init(std.heap.page_allocator),
-        .allocator = undefined,
-    };
-    parser.allocator = parser.arena.allocator();
-
-    const result = (try parse_arguments(&parser)).*;
+    const result = try get_parse_result(
+        expr.Arguments,
+        parse_arguments,
+        "(arg1, ...rest)",
+    );
 
     std.debug.assert(result.arguments.len == 2);
     std.debug.assert(result.is_spread[0] == false);
     std.debug.assert(result.is_spread[1] == true);
-
-    _text.free_string(str);
-    _text.free_token_seq(tokens);
-    deinit(&parser);
 }
 
 test "parse new expr" {
-    const text = "new obj.prop[expr]";
-    const str = testing.u8_array_to_string(@ptrCast(@constCast(text)), text.len);
-
-    const tokens = try _text.parse_text_string(str, .InputElementHashbangOrRegExp);
-
-    var parser = Parser{
-        .tokens = tokens,
-        .curr = 0,
-        .arena = std.heap.ArenaAllocator.init(std.heap.page_allocator),
-        .allocator = undefined,
-    };
-    parser.allocator = parser.arena.allocator();
-
-    const result = (try parse_new_expression(&parser)).*;
+    const result = try get_parse_result(
+        expr.NewExpression,
+        parse_new_expression,
+        "new obj.prop[expr]",
+    );
 
     std.debug.assert(result.tag == expr.NEW_EXPR_NEW);
     std.debug.assert(result.data.new.tag == expr.NEW_EXPR_MEMBER);
@@ -1527,27 +1539,14 @@ test "parse new expr" {
     std.debug.assert(result.data.new.data.member.data.member.object.tag == expr.MEMBER_EXPR_PROPERTY);
     std.debug.assert(result.data.new.data.member.data.member.object.data.property.object.tag == expr.MEMBER_EXPR_PRIMARY);
     std.debug.assert(result.data.new.data.member.data.member.object.data.property.object.data.primary.tag == expr.PRIMARY_EXPR_IDENTIFIER);
-
-    _text.free_string(str);
-    _text.free_token_seq(tokens);
-    deinit(&parser);
 }
 
 test "parse member expr" {
-    const text = "obj.prop[expr]";
-    const str = testing.u8_array_to_string(@ptrCast(@constCast(text)), text.len);
-
-    const tokens = try _text.parse_text_string(str, .InputElementHashbangOrRegExp);
-
-    var parser = Parser{
-        .tokens = tokens,
-        .curr = 0,
-        .arena = std.heap.ArenaAllocator.init(std.heap.page_allocator),
-        .allocator = undefined,
-    };
-    parser.allocator = parser.arena.allocator();
-
-    const result = (try parse_member_expression(&parser)).*;
+    const result = try get_parse_result(
+        expr.MemberExpression,
+        parse_member_expression,
+        "obj.prop[expr]",
+    );
 
     std.debug.assert(result.tag == expr.MEMBER_EXPR_MEMBER);
     std.debug.assert(result.data.member.object.tag == expr.MEMBER_EXPR_PROPERTY);
@@ -1574,10 +1573,6 @@ test "parse member expr" {
         result.data.member.expr.data[0].data.lhs.data.new.data.member.data.primary.data.identifier.data.identifier.name,
         testing.u8_array_to_string(@ptrCast(@constCast("expr")), 4),
     ));
-
-    _text.free_string(str);
-    _text.free_token_seq(tokens);
-    deinit(&parser);
 }
 
 test "parse primary expr identifier" {
