@@ -162,19 +162,169 @@ pub const MemberExpressionStarter = enum {
     OpenBracket,
 };
 
-pub fn parse_assignment_expression(parser: *Parser) !*expr.AssignmentExpression {
-    const prim = try parse_primary_expression(parser);
+fn is_assignment_operator(token: Token) ?expr.AssignmentOperator {
+    if (token.kind != .CommonToken) {
+        return null;
+    }
 
-    const assignment_expr = parser.allocator.create(expr.AssignmentExpression) catch return error.OutOfMemory;
+    const common_token_data: *CommonTokenData = @ptrFromInt(token.data);
 
-    assignment_expr.* = expr.AssignmentExpression{
-        .tag = expr.ASSIGNMENT_EXPR_PRIMARY,
-        .data = .{
-            .primary = prim,
+    if (common_token_data.common_token_kind == .Punctuator) {
+        const punctuator_kind: _text.PunctuatorKind = @enumFromInt(common_token_data.data);
+
+        return switch (punctuator_kind) {
+            .Equals => .Raw,
+            .PlusAssign => .Plus,
+            .MinusAssign => .Minus,
+            .AsteriskAssign => .Star,
+            .SlashAssign => .Slash,
+            .PercentAssign => .Percent,
+            .ExponentiationAssign => .Exponentiation,
+            .LeftShiftAssign => .LeftShift,
+            .RightShiftAssign => .RightShift,
+            .UnsignedRightShiftAssign => .UnsignedRightShift,
+            .BitwiseAndAssign => .BitwiseAnd,
+            .BitwiseOrAssign => .BitwiseOr,
+            .BitwiseXorAssign => .BitwiseXor,
+            else => return null,
+        };
+    } else {
+        return null;
+    }
+}
+
+fn coerce_to_lhs(expression: *expr.AssignmentExpression, parser: *Parser) error{ OutOfMemory, UnexpectedToken }!*expr.LeftHandSideExpression {
+    return switch (expression.tag) {
+        expr.ASSIGNMENT_EXPR_PRIMARY => {
+            const primary = expression.data.primary;
+
+            switch (primary.tag) {
+                expr.PRIMARY_EXPR_IDENTIFIER => {
+                    const identifier_ref = primary.data.identifier;
+
+                    const lhs = parser.allocator.create(expr.LeftHandSideExpression) catch return error.OutOfMemory;
+                    const new = parser.allocator.create(expr.NewExpression) catch return error.OutOfMemory;
+                    const member = parser.allocator.create(expr.MemberExpression) catch return error.OutOfMemory;
+                    const new_primary = parser.allocator.create(expr.PrimaryExpression) catch return error.OutOfMemory;
+
+                    primary.* = .{
+                        .tag = expr.PRIMARY_EXPR_IDENTIFIER,
+                        .data = .{
+                            .identifier = identifier_ref,
+                        },
+                    };
+
+                    member.* = .{
+                        .tag = expr.MEMBER_EXPR_PRIMARY,
+                        .data = .{
+                            .primary = new_primary,
+                        },
+                    };
+
+                    new.* = .{
+                        .tag = expr.NEW_EXPR_MEMBER,
+                        .data = .{
+                            .member = member,
+                        },
+                    };
+
+                    lhs.* = expr.LeftHandSideExpression{
+                        .tag = expr.LEFT_HAND_SIDE_EXPR_NEW,
+                        .data = .{
+                            .new = new,
+                        },
+                    };
+
+                    return lhs;
+                },
+                else => return error.UnexpectedToken,
+            }
         },
+        else => return error.UnexpectedToken,
     };
+}
 
-    return assignment_expr;
+pub fn parse_assignment_expression(parser: *Parser) error{ OutOfMemory, UnexpectedToken, UnexpectedEndOfTokens }!*expr.AssignmentExpression {
+    const left = try parse_binary_expression(parser, 0);
+    const left_assignment = parser.allocator.create(expr.AssignmentExpression) catch return error.OutOfMemory;
+
+    if (left.operator == .None) {
+        if (left.left.data.unary.operator == .None) {
+            left_assignment.* = expr.AssignmentExpression{
+                .tag = expr.ASSIGNMENT_EXPR_LHS,
+                .data = .{
+                    .lhs = left.left.data.unary.operand.data.left_hand_side,
+                },
+            };
+        } else {
+            left_assignment.* = expr.AssignmentExpression{
+                .tag = expr.ASSIGNMENT_EXPR_UNARY,
+                .data = .{
+                    .unary = left.left.data.unary,
+                },
+            };
+        }
+    } else {
+        left_assignment.* = expr.AssignmentExpression{
+            .tag = expr.ASSIGNMENT_EXPR_BINARY,
+            .data = .{
+                .binary = left,
+            },
+        };
+    }
+
+    const tok = peek(parser) orelse return left_assignment;
+
+    if (is_assignment_operator(tok)) |op| {
+        _ = next(parser);
+        skip_whitespace(parser);
+
+        const right = try parse_assignment_expression(parser);
+
+        const lhs = try coerce_to_lhs(left_assignment, parser);
+
+        const node = parser.allocator.create(expr.AssignmentExpression) catch return error.OutOfMemory;
+
+        if (op == .Raw) {
+            node.* = expr.AssignmentExpression{
+                .tag = expr.ASSIGNMENT_EXPR_RAW,
+                .data = .{
+                    .raw_assignment = .{
+                        .left = lhs,
+                        .right = right,
+                    },
+                },
+            };
+        } else {
+            node.* = expr.AssignmentExpression{
+                .tag = expr.ASSIGNMENT_EXPR_OPERATOR,
+                .data = .{
+                    .operator_assignment = .{
+                        .operator = op,
+                        .left = lhs,
+                        .right = right,
+                    },
+                },
+            };
+        }
+
+        return node;
+    }
+
+    return left_assignment;
+
+    // const prim = try parse_primary_expression(parser);
+
+    // const assignment_expr = parser.allocator.create(expr.AssignmentExpression) catch return error.OutOfMemory;
+
+    // assignment_expr.* = expr.AssignmentExpression{
+    //     .tag = expr.ASSIGNMENT_EXPR_PRIMARY,
+    //     .data = .{
+    //         .primary = prim,
+    //     },
+    // };
+
+    // return assignment_expr;
 }
 
 pub fn parse_primary_expression(parser: *Parser) error{ UnexpectedEndOfTokens, OutOfMemory, UnexpectedToken }!*expr.PrimaryExpression {
@@ -421,7 +571,7 @@ fn token_is_member_expr_start(token: Token) ?MemberExpressionStarter {
     return null;
 }
 
-pub fn parse_member_expression(parser: *Parser) !*expr.MemberExpression {
+pub fn parse_member_expression(parser: *Parser) error{ OutOfMemory, UnexpectedToken, UnexpectedEndOfTokens }!*expr.MemberExpression {
     const prim = try parse_primary_expression(parser);
 
     const member_expr = parser.allocator.create(expr.MemberExpression) catch return error.OutOfMemory;
@@ -512,7 +662,7 @@ pub fn parse_member_expression(parser: *Parser) !*expr.MemberExpression {
     return member_expr;
 }
 
-pub fn parse_new_expression(parser: *Parser) !*expr.NewExpression {
+pub fn parse_new_expression(parser: *Parser) error{ OutOfMemory, UnexpectedToken, UnexpectedEndOfTokens }!*expr.NewExpression {
     if (peek(parser) == null) {
         return error.UnexpectedEndOfTokens;
     }
@@ -661,7 +811,7 @@ pub fn parse_call_expression(parser: *Parser) !*expr.CallExpression {
     return call_expr;
 }
 
-pub fn parse_lhs_expression(parser: *Parser) !*expr.LeftHandSideExpression {
+pub fn parse_lhs_expression(parser: *Parser) error{ OutOfMemory, UnexpectedToken, UnexpectedEndOfTokens }!*expr.LeftHandSideExpression {
     const new_expr = try parse_new_expression(parser);
 
     const lhs = parser.allocator.create(expr.LeftHandSideExpression) catch return error.OutOfMemory;
@@ -780,7 +930,7 @@ pub fn is_unary_operator(token: Token, is_prefix: bool) ?expr.UnaryOperator {
     }
 }
 
-pub fn parse_unary_expression(parser: *Parser) !*expr.UnaryExpression {
+pub fn parse_unary_expression(parser: *Parser) error{ OutOfMemory, UnexpectedToken, UnexpectedEndOfTokens }!*expr.UnaryExpression {
     const next_token = peek(parser).?;
 
     if (is_unary_operator(next_token, true)) |unary_op| {
@@ -799,7 +949,7 @@ pub fn parse_unary_expression(parser: *Parser) !*expr.UnaryExpression {
 
         const unary_expr = parser.allocator.create(expr.UnaryExpression) catch return error.OutOfMemory;
         unary_expr.* = expr.UnaryExpression{
-            .operator = @constCast(&unary_op),
+            .operator = unary_op,
             .operand = unary_expr_or_lhs,
         };
 
@@ -823,7 +973,7 @@ pub fn parse_unary_expression(parser: *Parser) !*expr.UnaryExpression {
             };
 
             unary_expr.* = expr.UnaryExpression{
-                .operator = @constCast(&operator),
+                .operator = operator,
                 .operand = unary_expr_or_lhs,
             };
 
@@ -839,7 +989,7 @@ pub fn parse_unary_expression(parser: *Parser) !*expr.UnaryExpression {
     };
 
     unary_expr.* = expr.UnaryExpression{
-        .operator = @constCast(&expr.UnaryOperator.None),
+        .operator = .None,
         .operand = unary_expr_or_lhs,
     };
 
@@ -906,7 +1056,7 @@ pub fn precedence_of_binop(operator: expr.BinaryOperator) u8 {
     };
 }
 
-pub fn parse_binary_expression(parser: *Parser, min_precedence: u8) !*expr.BinaryExpression {
+pub fn parse_binary_expression(parser: *Parser, min_precedence: u8) error{ OutOfMemory, UnexpectedToken, UnexpectedEndOfTokens }!*expr.BinaryExpression {
     const left = try parse_unary_expression(parser);
 
     const binary_or_unary = parser.allocator.create(expr.BinaryOrUnaryExpression) catch return error.OutOfMemory;
@@ -1082,7 +1232,7 @@ test "parse unary" {
     parser.allocator = parser.arena.allocator();
     const result = (try parse_unary_expression(&parser)).*;
 
-    std.debug.assert(result.operator.* == .PrefixIncrement);
+    std.debug.assert(result.operator == .PrefixIncrement);
     std.debug.assert(result.operand.tag == expr.UNARY_EXPR_OR_LHS_UNARY);
     std.debug.assert(result.operand.data.unary.operand.tag == expr.UNARY_EXPR_OR_LHS_LHS);
     std.debug.assert(result.operand.data.unary.operand.data.left_hand_side.tag == expr.LEFT_HAND_SIDE_EXPR_NEW);
@@ -1135,19 +1285,25 @@ test "parse lhs" {
     std.debug.assert(result.data.call.data.cover.arguments.is_spread[0] == false);
     std.debug.assert(result.data.call.data.cover.arguments.is_spread[1] == false);
 
-    std.debug.assert(result.data.call.data.cover.arguments.arguments.data[0].tag == expr.ASSIGNMENT_EXPR_PRIMARY);
-    std.debug.assert(result.data.call.data.cover.arguments.arguments.data[0].data.primary.tag == expr.PRIMARY_EXPR_IDENTIFIER);
+    std.debug.assert(result.data.call.data.cover.arguments.arguments.data[0].tag == expr.ASSIGNMENT_EXPR_LHS);
+    std.debug.assert(result.data.call.data.cover.arguments.arguments.data[0].data.lhs.tag == expr.LEFT_HAND_SIDE_EXPR_NEW);
+    std.debug.assert(result.data.call.data.cover.arguments.arguments.data[0].data.lhs.data.new.tag == expr.NEW_EXPR_MEMBER);
+    std.debug.assert(result.data.call.data.cover.arguments.arguments.data[0].data.lhs.data.new.data.member.tag == expr.MEMBER_EXPR_PRIMARY);
+    std.debug.assert(result.data.call.data.cover.arguments.arguments.data[0].data.lhs.data.new.data.member.data.primary.tag == expr.PRIMARY_EXPR_IDENTIFIER);
 
     std.debug.assert(testing.are_equal_strings(
-        result.data.call.data.cover.arguments.arguments.data[0].data.primary.data.identifier.data.identifier.name,
+        result.data.call.data.cover.arguments.arguments.data[0].data.lhs.data.new.data.member.data.primary.data.identifier.data.identifier.name,
         testing.u8_array_to_string(@ptrCast(@constCast("arg1")), 4),
     ));
 
-    std.debug.assert(result.data.call.data.cover.arguments.arguments.data[1].tag == expr.ASSIGNMENT_EXPR_PRIMARY);
-    std.debug.assert(result.data.call.data.cover.arguments.arguments.data[1].data.primary.tag == expr.PRIMARY_EXPR_IDENTIFIER);
+    std.debug.assert(result.data.call.data.cover.arguments.arguments.data[1].tag == expr.ASSIGNMENT_EXPR_LHS);
+    std.debug.assert(result.data.call.data.cover.arguments.arguments.data[1].data.lhs.tag == expr.LEFT_HAND_SIDE_EXPR_NEW);
+    std.debug.assert(result.data.call.data.cover.arguments.arguments.data[1].data.lhs.data.new.tag == expr.NEW_EXPR_MEMBER);
+    std.debug.assert(result.data.call.data.cover.arguments.arguments.data[1].data.lhs.data.new.data.member.tag == expr.MEMBER_EXPR_PRIMARY);
+    std.debug.assert(result.data.call.data.cover.arguments.arguments.data[1].data.lhs.data.new.data.member.data.primary.tag == expr.PRIMARY_EXPR_IDENTIFIER);
 
     std.debug.assert(testing.are_equal_strings(
-        result.data.call.data.cover.arguments.arguments.data[1].data.primary.data.identifier.data.identifier.name,
+        result.data.call.data.cover.arguments.arguments.data[1].data.lhs.data.new.data.member.data.primary.data.identifier.data.identifier.name,
         testing.u8_array_to_string(@ptrCast(@constCast("arg2")), 4),
     ));
 
@@ -1192,19 +1348,25 @@ test "parse call expr" {
     std.debug.assert(result.data.cover.arguments.is_spread[0] == false);
     std.debug.assert(result.data.cover.arguments.is_spread[1] == false);
 
-    std.debug.assert(result.data.cover.arguments.arguments.data[0].tag == expr.ASSIGNMENT_EXPR_PRIMARY);
-    std.debug.assert(result.data.cover.arguments.arguments.data[0].data.primary.tag == expr.PRIMARY_EXPR_IDENTIFIER);
+    std.debug.assert(result.data.cover.arguments.arguments.data[0].tag == expr.ASSIGNMENT_EXPR_LHS);
+    std.debug.assert(result.data.cover.arguments.arguments.data[0].data.lhs.tag == expr.LEFT_HAND_SIDE_EXPR_NEW);
+    std.debug.assert(result.data.cover.arguments.arguments.data[0].data.lhs.data.new.tag == expr.NEW_EXPR_MEMBER);
+    std.debug.assert(result.data.cover.arguments.arguments.data[0].data.lhs.data.new.data.member.tag == expr.MEMBER_EXPR_PRIMARY);
+    std.debug.assert(result.data.cover.arguments.arguments.data[0].data.lhs.data.new.data.member.data.primary.tag == expr.PRIMARY_EXPR_IDENTIFIER);
 
     std.debug.assert(testing.are_equal_strings(
-        result.data.cover.arguments.arguments.data[0].data.primary.data.identifier.data.identifier.name,
+        result.data.cover.arguments.arguments.data[0].data.lhs.data.new.data.member.data.primary.data.identifier.data.identifier.name,
         testing.u8_array_to_string(@ptrCast(@constCast("arg1")), 4),
     ));
 
-    std.debug.assert(result.data.cover.arguments.arguments.data[1].tag == expr.ASSIGNMENT_EXPR_PRIMARY);
-    std.debug.assert(result.data.cover.arguments.arguments.data[1].data.primary.tag == expr.PRIMARY_EXPR_IDENTIFIER);
+    std.debug.assert(result.data.cover.arguments.arguments.data[1].tag == expr.ASSIGNMENT_EXPR_LHS);
+    std.debug.assert(result.data.cover.arguments.arguments.data[1].data.lhs.tag == expr.LEFT_HAND_SIDE_EXPR_NEW);
+    std.debug.assert(result.data.cover.arguments.arguments.data[1].data.lhs.data.new.tag == expr.NEW_EXPR_MEMBER);
+    std.debug.assert(result.data.cover.arguments.arguments.data[1].data.lhs.data.new.data.member.tag == expr.MEMBER_EXPR_PRIMARY);
+    std.debug.assert(result.data.cover.arguments.arguments.data[1].data.lhs.data.new.data.member.data.primary.tag == expr.PRIMARY_EXPR_IDENTIFIER);
 
     std.debug.assert(testing.are_equal_strings(
-        result.data.cover.arguments.arguments.data[1].data.primary.data.identifier.data.identifier.name,
+        result.data.cover.arguments.arguments.data[1].data.lhs.data.new.data.member.data.primary.data.identifier.data.identifier.name,
         testing.u8_array_to_string(@ptrCast(@constCast("arg2")), 4),
     ));
 
@@ -1249,19 +1411,25 @@ test "parse call expr (spread)" {
     std.debug.assert(result.data.cover.arguments.is_spread[0] == false);
     std.debug.assert(result.data.cover.arguments.is_spread[1] == true);
 
-    std.debug.assert(result.data.cover.arguments.arguments.data[0].tag == expr.ASSIGNMENT_EXPR_PRIMARY);
-    std.debug.assert(result.data.cover.arguments.arguments.data[0].data.primary.tag == expr.PRIMARY_EXPR_IDENTIFIER);
+    std.debug.assert(result.data.cover.arguments.arguments.data[0].tag == expr.ASSIGNMENT_EXPR_LHS);
+    std.debug.assert(result.data.cover.arguments.arguments.data[0].data.lhs.tag == expr.LEFT_HAND_SIDE_EXPR_NEW);
+    std.debug.assert(result.data.cover.arguments.arguments.data[0].data.lhs.data.new.tag == expr.NEW_EXPR_MEMBER);
+    std.debug.assert(result.data.cover.arguments.arguments.data[0].data.lhs.data.new.data.member.tag == expr.MEMBER_EXPR_PRIMARY);
+    std.debug.assert(result.data.cover.arguments.arguments.data[0].data.lhs.data.new.data.member.data.primary.tag == expr.PRIMARY_EXPR_IDENTIFIER);
 
     std.debug.assert(testing.are_equal_strings(
-        result.data.cover.arguments.arguments.data[0].data.primary.data.identifier.data.identifier.name,
+        result.data.cover.arguments.arguments.data[0].data.lhs.data.new.data.member.data.primary.data.identifier.data.identifier.name,
         testing.u8_array_to_string(@ptrCast(@constCast("arg1")), 4),
     ));
 
-    std.debug.assert(result.data.cover.arguments.arguments.data[1].tag == expr.ASSIGNMENT_EXPR_PRIMARY);
-    std.debug.assert(result.data.cover.arguments.arguments.data[1].data.primary.tag == expr.PRIMARY_EXPR_IDENTIFIER);
+    std.debug.assert(result.data.cover.arguments.arguments.data[1].tag == expr.ASSIGNMENT_EXPR_LHS);
+    std.debug.assert(result.data.cover.arguments.arguments.data[1].data.lhs.tag == expr.LEFT_HAND_SIDE_EXPR_NEW);
+    std.debug.assert(result.data.cover.arguments.arguments.data[1].data.lhs.data.new.tag == expr.NEW_EXPR_MEMBER);
+    std.debug.assert(result.data.cover.arguments.arguments.data[1].data.lhs.data.new.data.member.tag == expr.MEMBER_EXPR_PRIMARY);
+    std.debug.assert(result.data.cover.arguments.arguments.data[1].data.lhs.data.new.data.member.data.primary.tag == expr.PRIMARY_EXPR_IDENTIFIER);
 
     std.debug.assert(testing.are_equal_strings(
-        result.data.cover.arguments.arguments.data[1].data.primary.data.identifier.data.identifier.name,
+        result.data.cover.arguments.arguments.data[1].data.lhs.data.new.data.member.data.primary.data.identifier.data.identifier.name,
         testing.u8_array_to_string(@ptrCast(@constCast("args")), 4),
     ));
 
@@ -1381,10 +1549,6 @@ test "parse member expr" {
 
     const result = (try parse_member_expression(&parser)).*;
 
-    const obj_str = testing.u8_array_to_string(@ptrCast(@constCast("obj")), 3);
-    const prop_str = testing.u8_array_to_string(@ptrCast(@constCast("prop")), 4);
-    const expr_str = testing.u8_array_to_string(@ptrCast(@constCast("expr")), 4);
-
     std.debug.assert(result.tag == expr.MEMBER_EXPR_MEMBER);
     std.debug.assert(result.data.member.object.tag == expr.MEMBER_EXPR_PROPERTY);
     std.debug.assert(result.data.member.object.data.property.object.tag == expr.MEMBER_EXPR_PRIMARY);
@@ -1392,20 +1556,23 @@ test "parse member expr" {
 
     std.debug.assert(testing.are_equal_strings(
         result.data.member.object.data.property.object.data.primary.data.identifier.data.identifier.name,
-        obj_str,
+        testing.u8_array_to_string(@ptrCast(@constCast("obj")), 3),
     ));
 
     std.debug.assert(testing.are_equal_strings(
         result.data.member.object.data.property.property.name,
-        prop_str,
+        testing.u8_array_to_string(@ptrCast(@constCast("prop")), 4),
     ));
 
-    std.debug.assert(result.data.member.expr.data[0].tag == expr.ASSIGNMENT_EXPR_PRIMARY);
-    std.debug.assert(result.data.member.expr.data[0].data.primary.tag == expr.PRIMARY_EXPR_IDENTIFIER);
+    std.debug.assert(result.data.member.expr.data[0].tag == expr.ASSIGNMENT_EXPR_LHS);
+    std.debug.assert(result.data.member.expr.data[0].data.lhs.tag == expr.LEFT_HAND_SIDE_EXPR_NEW);
+    std.debug.assert(result.data.member.expr.data[0].data.lhs.data.new.tag == expr.NEW_EXPR_MEMBER);
+    std.debug.assert(result.data.member.expr.data[0].data.lhs.data.new.data.member.tag == expr.MEMBER_EXPR_PRIMARY);
+    std.debug.assert(result.data.member.expr.data[0].data.lhs.data.new.data.member.data.primary.tag == expr.PRIMARY_EXPR_IDENTIFIER);
 
     std.debug.assert(testing.are_equal_strings(
-        result.data.member.expr.data[0].data.primary.data.identifier.data.identifier.name,
-        expr_str,
+        result.data.member.expr.data[0].data.lhs.data.new.data.member.data.primary.data.identifier.data.identifier.name,
+        testing.u8_array_to_string(@ptrCast(@constCast("expr")), 4),
     ));
 
     _text.free_string(str);
@@ -1585,16 +1752,22 @@ test "parse primary expr array literal" {
     std.debug.assert(result.data.array.elements.len == 2);
 
     std.debug.assert(result.data.array.elements.data[0].tag == expr.ARRAY_ELEMENT_EXPR);
-    std.debug.assert(result.data.array.elements.data[0].data.expression.tag == expr.ASSIGNMENT_EXPR_PRIMARY);
-    std.debug.assert(result.data.array.elements.data[0].data.expression.data.primary.tag == expr.PRIMARY_EXPR_LITERAL);
-    std.debug.assert(result.data.array.elements.data[0].data.expression.data.primary.data.literal.tag == expr.LITERAL_NUMBER);
-    std.debug.assert(result.data.array.elements.data[0].data.expression.data.primary.data.literal.data.number.value == 1.0);
+    std.debug.assert(result.data.array.elements.data[0].data.expression.tag == expr.ASSIGNMENT_EXPR_LHS);
+    std.debug.assert(result.data.array.elements.data[0].data.expression.data.lhs.tag == expr.LEFT_HAND_SIDE_EXPR_NEW);
+    std.debug.assert(result.data.array.elements.data[0].data.expression.data.lhs.data.new.tag == expr.NEW_EXPR_MEMBER);
+    std.debug.assert(result.data.array.elements.data[0].data.expression.data.lhs.data.new.data.member.tag == expr.MEMBER_EXPR_PRIMARY);
+    std.debug.assert(result.data.array.elements.data[0].data.expression.data.lhs.data.new.data.member.data.primary.tag == expr.PRIMARY_EXPR_LITERAL);
+    std.debug.assert(result.data.array.elements.data[0].data.expression.data.lhs.data.new.data.member.data.primary.data.literal.tag == expr.LITERAL_NUMBER);
+    std.debug.assert(result.data.array.elements.data[0].data.expression.data.lhs.data.new.data.member.data.primary.data.literal.data.number.value == 1.0);
 
     std.debug.assert(result.data.array.elements.data[1].tag == expr.ARRAY_ELEMENT_EXPR);
-    std.debug.assert(result.data.array.elements.data[1].data.expression.tag == expr.ASSIGNMENT_EXPR_PRIMARY);
-    std.debug.assert(result.data.array.elements.data[1].data.expression.data.primary.tag == expr.PRIMARY_EXPR_LITERAL);
-    std.debug.assert(result.data.array.elements.data[1].data.expression.data.primary.data.literal.tag == expr.LITERAL_NUMBER);
-    std.debug.assert(result.data.array.elements.data[1].data.expression.data.primary.data.literal.data.number.value == 2.0);
+    std.debug.assert(result.data.array.elements.data[1].data.expression.tag == expr.ASSIGNMENT_EXPR_LHS);
+    std.debug.assert(result.data.array.elements.data[1].data.expression.data.lhs.tag == expr.LEFT_HAND_SIDE_EXPR_NEW);
+    std.debug.assert(result.data.array.elements.data[1].data.expression.data.lhs.data.new.tag == expr.NEW_EXPR_MEMBER);
+    std.debug.assert(result.data.array.elements.data[1].data.expression.data.lhs.data.new.data.member.tag == expr.MEMBER_EXPR_PRIMARY);
+    std.debug.assert(result.data.array.elements.data[1].data.expression.data.lhs.data.new.data.member.data.primary.tag == expr.PRIMARY_EXPR_LITERAL);
+    std.debug.assert(result.data.array.elements.data[1].data.expression.data.lhs.data.new.data.member.data.primary.data.literal.tag == expr.LITERAL_NUMBER);
+    std.debug.assert(result.data.array.elements.data[1].data.expression.data.lhs.data.new.data.member.data.primary.data.literal.data.number.value == 2.0);
 
     deinit(&parser);
 }
@@ -1619,16 +1792,22 @@ test "parse primary expr from string" {
     std.debug.assert(result.data.array.elements.len == 2);
 
     std.debug.assert(result.data.array.elements.data[0].tag == expr.ARRAY_ELEMENT_EXPR);
-    std.debug.assert(result.data.array.elements.data[0].data.expression.tag == expr.ASSIGNMENT_EXPR_PRIMARY);
-    std.debug.assert(result.data.array.elements.data[0].data.expression.data.primary.tag == expr.PRIMARY_EXPR_LITERAL);
-    std.debug.assert(result.data.array.elements.data[0].data.expression.data.primary.data.literal.tag == expr.LITERAL_NUMBER);
-    std.debug.assert(result.data.array.elements.data[0].data.expression.data.primary.data.literal.data.number.value == 1.0);
+    std.debug.assert(result.data.array.elements.data[0].data.expression.tag == expr.ASSIGNMENT_EXPR_LHS);
+    std.debug.assert(result.data.array.elements.data[0].data.expression.data.lhs.tag == expr.LEFT_HAND_SIDE_EXPR_NEW);
+    std.debug.assert(result.data.array.elements.data[0].data.expression.data.lhs.data.new.tag == expr.NEW_EXPR_MEMBER);
+    std.debug.assert(result.data.array.elements.data[0].data.expression.data.lhs.data.new.data.member.tag == expr.MEMBER_EXPR_PRIMARY);
+    std.debug.assert(result.data.array.elements.data[0].data.expression.data.lhs.data.new.data.member.data.primary.tag == expr.PRIMARY_EXPR_LITERAL);
+    std.debug.assert(result.data.array.elements.data[0].data.expression.data.lhs.data.new.data.member.data.primary.data.literal.tag == expr.LITERAL_NUMBER);
+    std.debug.assert(result.data.array.elements.data[0].data.expression.data.lhs.data.new.data.member.data.primary.data.literal.data.number.value == 1.0);
 
     std.debug.assert(result.data.array.elements.data[1].tag == expr.ARRAY_ELEMENT_EXPR);
-    std.debug.assert(result.data.array.elements.data[1].data.expression.tag == expr.ASSIGNMENT_EXPR_PRIMARY);
-    std.debug.assert(result.data.array.elements.data[1].data.expression.data.primary.tag == expr.PRIMARY_EXPR_LITERAL);
-    std.debug.assert(result.data.array.elements.data[1].data.expression.data.primary.data.literal.tag == expr.LITERAL_NUMBER);
-    std.debug.assert(result.data.array.elements.data[1].data.expression.data.primary.data.literal.data.number.value == 2.0);
+    std.debug.assert(result.data.array.elements.data[1].data.expression.tag == expr.ASSIGNMENT_EXPR_LHS);
+    std.debug.assert(result.data.array.elements.data[1].data.expression.data.lhs.tag == expr.LEFT_HAND_SIDE_EXPR_NEW);
+    std.debug.assert(result.data.array.elements.data[1].data.expression.data.lhs.data.new.tag == expr.NEW_EXPR_MEMBER);
+    std.debug.assert(result.data.array.elements.data[1].data.expression.data.lhs.data.new.data.member.tag == expr.MEMBER_EXPR_PRIMARY);
+    std.debug.assert(result.data.array.elements.data[1].data.expression.data.lhs.data.new.data.member.data.primary.tag == expr.PRIMARY_EXPR_LITERAL);
+    std.debug.assert(result.data.array.elements.data[1].data.expression.data.lhs.data.new.data.member.data.primary.data.literal.tag == expr.LITERAL_NUMBER);
+    std.debug.assert(result.data.array.elements.data[1].data.expression.data.lhs.data.new.data.member.data.primary.data.literal.data.number.value == 2.0);
 
     _text.free_string(str);
     _text.free_token_seq(tokens);

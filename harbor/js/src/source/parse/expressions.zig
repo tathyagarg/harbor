@@ -226,6 +226,7 @@ pub const AssignmentExpression = EXTERN_UNION(
         binary: *BinaryExpression,
         unary: *UnaryExpression,
         primary: *PrimaryExpression,
+        lhs: *LeftHandSideExpression,
     },
 );
 
@@ -238,6 +239,7 @@ pub const ASSIGNMENT_EXPR_TERNARY = 4;
 pub const ASSIGNMENT_EXPR_BINARY = 5;
 pub const ASSIGNMENT_EXPR_UNARY = 6;
 pub const ASSIGNMENT_EXPR_PRIMARY = 7;
+pub const ASSIGNMENT_EXPR_LHS = 8;
 
 pub const AssignmentOperator = enum(u8) {
     Star = 0,
@@ -255,6 +257,8 @@ pub const AssignmentOperator = enum(u8) {
     ShortCircuitLogicalAnd = 12,
     ShortCircuitLogicalOr = 13,
     NullishCoalescing = 14,
+
+    Raw = 15,
 };
 
 // deprecated
@@ -329,7 +333,7 @@ pub const BinaryOperator = enum(u8) {
 };
 
 pub const UnaryExpression = extern struct {
-    operator: *UnaryOperator,
+    operator: UnaryOperator,
     operand: *UnaryExpressionOrLHS,
 };
 

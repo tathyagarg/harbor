@@ -753,6 +753,8 @@ pub enum AssignmentOperator {
     ShortCircuitLogicalAnd = 12,
     ShortCircuitLogicalOr = 13,
     NullishCoalescing = 14,
+
+    Raw = 15,
 }
 
 #[repr(C)]
@@ -1290,6 +1292,7 @@ pub union AssignmentExpressionData {
     binary: *const BinaryExpression,
     unary: *const UnaryExpression,
     primary: *const PrimaryExpression,
+    lhs: *const LeftHandSideExpression,
 }
 
 pub const ASSIGNMENT_EXPR_CONDITIONAL: u8 = 0;
@@ -1300,6 +1303,7 @@ pub const ASSIGNMENT_EXPR_TERNARY: u8 = 4;
 pub const ASSIGNMENT_EXPR_BINARY: u8 = 5;
 pub const ASSIGNMENT_EXPR_UNARY: u8 = 6;
 pub const ASSIGNMENT_EXPR_PRIMARY: u8 = 7;
+pub const ASSIGNMENT_EXPR_LHS: u8 = 8;
 
 impl Debug for AssignmentExpression {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
