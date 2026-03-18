@@ -39,7 +39,7 @@ jobs:
       - name: Setup Zig
         uses: mlugg/setup-zig@v2
         with:
-          version: 0.11.0
+          version: 0.15.0
 
       - name: Build binary
         uses: houseabsolute/actions-rust-cross@v1
