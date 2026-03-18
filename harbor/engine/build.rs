@@ -13,7 +13,18 @@ fn rerun_if_changed(root: &PathBuf) {
 }
 
 fn main() {
-    let is_windows = cfg!(target_os = "windows");
+    let target = env::var("TARGET").unwrap();
+    let zig_target = if target.contains("windows") && target.contains("msvc") {
+        "x86_64-windows-msvc"
+    } else if target.contains("windows") {
+        "x86_64-windows-gnu"
+    } else if target.contains("apple") {
+        "x86_64-macos"
+    } else if target.contains("linux") {
+        "x86_64-linux-gnu"
+    } else {
+        panic!("Unsupported target: {}", target);
+    };
 
     let root = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let zig_dir = root.parent().unwrap().join("js");
@@ -21,7 +32,11 @@ fn main() {
     let zig_src_dir = zig_dir.join("src");
 
     let out = PathBuf::from(env::var("OUT_DIR").unwrap());
-    let lib_fname = if is_windows { "js.lib" } else { "libjs.a" };
+    let lib_fname = if target.contains("msvc") {
+        "js.lib"
+    } else {
+        "libjs.a"
+    };
     let lib = out.join(lib_fname);
 
     rerun_if_changed(&zig_src_dir);
@@ -36,6 +51,8 @@ fn main() {
             "--name",
             "js",
             "-static",
+            "-target",
+            zig_target,
         ])
         .status()
         .expect("Failed to execute zig");

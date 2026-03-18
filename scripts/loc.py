@@ -1,3 +1,27 @@
+"""
+This script calculates the lines of code (LOC) for a project, excluding certain file types and directories. It is intended to be used with this script in the `pre-commit` git hook:
+
+```sh
+#!/bin/sh
+
+git ls-files \
+| xargs wc -l \
+| python scripts/loc.py \
+    -- '{
+      "css": "harbor/engine/src/css",
+      "js": ["harbor/engine/src/js", "harbor/js"],
+      "html": "harbor/engine/src/html5",
+      "http": "harbor/engine/src/http",
+      "font": "harbor/engine/src/font",
+      "render": "harbor/engine/src/render"
+    }' \
+> .github/lines.json
+
+echo "Updated lines.json"
+git add .github/lines.json
+```
+"""
+
 import sys
 import json
 from typing import Any
