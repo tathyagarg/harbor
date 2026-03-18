@@ -28,7 +28,7 @@ jobs:
             target: x86_64-pc-windows-msvc
 
           - os-name: macOS-x86_64
-            runs-on: macOS-latest
+            runs-on: macos-latest
             target: x86_64-apple-darwin
 
     runs-on: ${{ matrix.platform.runs-on }}
@@ -48,9 +48,15 @@ jobs:
           target: ${{ matrix.platform.target }}
           args: "--locked --release --manifest-path harbor/engine/Cargo.toml"
           strip: true
+        env:
+          CC_x86_64_unknown_linux_musl: zig cc -target x86_64-linux-musl
+          CXX_x86_64_unknown_linux_musl: zig c++ -target x86_64-linux-musl
+
+          CC_aarch64_unknown_linux_musl: zig cc -target aarch64-linux-musl
+          CXX_aarch64_unknown_linux_musl: zig c++ -target aarch64-linux-musl
 
       - name: Publish artifacts and release
         uses: houseabsolute/actions-rust-release@v0
         with:
-          executable-name: ubi
+          executable-name: harbor
           target: ${{ matrix.platform.target }}
