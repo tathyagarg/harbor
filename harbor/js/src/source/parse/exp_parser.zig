@@ -12,150 +12,10 @@ const IdentifierNameData = _text.IdentifierNameData;
 
 const expr = @import("expressions.zig");
 
-pub const Parser = struct {
-    tokens: TokenSeq,
-    curr: usize,
+const p = @import("parser.zig");
+const Parser = p.Parser;
 
-    arena: std.heap.ArenaAllocator,
-    allocator: std.mem.Allocator,
-};
-
-pub fn init(tokens: TokenSeq) Parser {
-    var parser = Parser{
-        .tokens = tokens,
-        .curr = 0,
-        .arena = std.heap.ArenaAllocator.init(std.heap.page_allocator),
-        .allocator = undefined,
-    };
-
-    parser.allocator = parser.arena.allocator();
-
-    return parser;
-}
-
-pub fn deinit(parser: *Parser) void {
-    parser.arena.deinit();
-}
-
-pub fn next(parser: *Parser) ?Token {
-    if (parser.curr >= parser.tokens.len) {
-        return null;
-    }
-    const token = parser.tokens.data[parser.curr];
-    parser.curr += 1;
-    return token;
-}
-
-pub fn peek(parser: *Parser) ?Token {
-    if (parser.curr >= parser.tokens.len) {
-        return null;
-    }
-    return parser.tokens.data[parser.curr];
-}
-
-pub fn expect(parser: *Parser, expected: Token) !void {
-    const token = peek(parser) orelse return error.UnexpectedEndOfTokens;
-
-    if (token.kind != expected.kind) {
-        return error.UnexpectedToken;
-    }
-
-    if (token.kind == .CommonToken) {
-        const token_data: *CommonTokenData = @ptrFromInt(token.data);
-        const expected_data: *CommonTokenData = @ptrFromInt(expected.data);
-
-        if (token_data.common_token_kind != expected_data.common_token_kind) {
-            return error.UnexpectedToken;
-        }
-
-        switch (token_data.common_token_kind) {
-            .IdentifierName => {
-                const token_idtfr_data: *IdentifierNameData = @ptrFromInt(token_data.data);
-                const expected_idtfr_data: *IdentifierNameData = @ptrFromInt(expected_data.data);
-
-                if (!testing.are_equal_strings(token_idtfr_data.name, expected_idtfr_data.name)) {
-                    return error.UnexpectedToken;
-                }
-            },
-            .NumericLiteral => {
-                const token_num_data: *expr.NumericLiteralData = @ptrFromInt(token_data.data);
-                const expected_num_data: *expr.NumericLiteralData = @ptrFromInt(expected_data.data);
-
-                if (token_num_data.value != expected_num_data.value) {
-                    return error.UnexpectedToken;
-                }
-            },
-            .StringLiteral => {
-                const token_str_data: *_text.StringLiteralData = @ptrFromInt(token_data.data);
-                const expected_str_data: *_text.StringLiteralData = @ptrFromInt(expected_data.data);
-
-                if (!testing.are_equal_strings(token_str_data.value, expected_str_data.value)) {
-                    return error.UnexpectedToken;
-                }
-            },
-            .Punctuator => {
-                if (token_data.data != expected_data.data) {
-                    return error.UnexpectedToken;
-                }
-            },
-            else => {
-                return error.UnexpectedToken;
-            },
-        }
-    }
-}
-
-pub fn expect_skip_whitespace(parser: *Parser, expected: Token) !void {
-    const initial_position = parser.curr;
-
-    while (true) {
-        const token = peek(parser) orelse return error.UnexpectedEndOfTokens;
-
-        if (token.kind == .Whitespace or token.kind == .LineTerminator) {
-            _ = next(parser);
-            continue;
-        }
-
-        break;
-    }
-
-    expect(parser, expected) catch |err| {
-        reset_to(parser, initial_position);
-        return err;
-    };
-}
-
-pub fn skip_whitespace(parser: *Parser) void {
-    while (true) {
-        const token = peek(parser) orelse break;
-
-        if (token.kind == .Whitespace or token.kind == .LineTerminator) {
-            _ = next(parser);
-            continue;
-        }
-
-        break;
-    }
-}
-
-pub fn match(parser: *Parser, expected: Token) bool {
-    const token = peek(parser);
-
-    if (token == null) {
-        return false;
-    }
-
-    if (!testing.are_equal_tokens(token.?, expected)) {
-        return false;
-    }
-
-    _ = next(parser);
-    return true;
-}
-
-pub fn reset_to(parser: *Parser, position: usize) void {
-    parser.curr = position;
-}
+const get_parse_result = @import("mod.zig").get_parse_result;
 
 pub const MemberExpressionStarter = enum {
     Dot,
@@ -248,9 +108,54 @@ fn coerce_to_lhs(expression: *expr.AssignmentExpression, parser: *Parser) error{
     };
 }
 
+pub fn parse_expression(parser: *Parser) error{ OutOfMemory, UnexpectedToken, UnexpectedEndOfTokens }!*expr.Expression {
+    var exprs = std.ArrayList(expr.AssignmentExpression).empty;
+
+    const first_assignment_expr = try parse_assignment_expression(parser);
+
+    try exprs.append(parser.allocator, first_assignment_expr.*);
+
+    while (p.match(parser, Token{
+        .kind = .CommonToken,
+        .data = @intFromPtr(&CommonTokenData{
+            .common_token_kind = .Punctuator,
+            .data = @intFromEnum(_text.PunctuatorKind.Comma),
+        }),
+    })) {
+        p.skip_whitespace(parser);
+        const assignment_expr = try parse_assignment_expression(parser);
+
+        try exprs.append(parser.allocator, assignment_expr.*);
+    }
+
+    const expression = parser.allocator.create(expr.Expression) catch return error.OutOfMemory;
+
+    const exprs_slice = exprs.toOwnedSlice(parser.allocator) catch return error.OutOfMemory;
+
+    expression.* = .{
+        .data = exprs_slice.ptr,
+        .len = exprs_slice.len,
+    };
+
+    return expression;
+}
+
+test "parse simple expression" {
+    const res = get_parse_result(expr.Expression, parse_expression, "a + b") catch |err| {
+        std.debug.print("Error parsing expression: {any}\n", .{err});
+        return;
+    };
+
+    std.debug.assert(res.len == 1);
+    std.debug.assert(res.data[0].tag == expr.ASSIGNMENT_EXPR_BINARY);
+    std.debug.assert(res.data[0].data.binary.operator == .Plus);
+
+    // If we get this much, we're probs fine
+}
+
 pub fn parse_assignment_expression(parser: *Parser) error{ OutOfMemory, UnexpectedToken, UnexpectedEndOfTokens }!*expr.AssignmentExpression {
     const left = try parse_binary_expression(parser, 0);
-    skip_whitespace(parser);
+    p.skip_whitespace(parser);
 
     const left_assignment = parser.allocator.create(expr.AssignmentExpression) catch return error.OutOfMemory;
 
@@ -279,11 +184,11 @@ pub fn parse_assignment_expression(parser: *Parser) error{ OutOfMemory, Unexpect
         };
     }
 
-    const tok = peek(parser) orelse return left_assignment;
+    const tok = p.peek(parser) orelse return left_assignment;
 
     if (is_assignment_operator(tok)) |op| {
-        _ = next(parser);
-        skip_whitespace(parser);
+        _ = p.next(parser);
+        p.skip_whitespace(parser);
 
         const right = try parse_assignment_expression(parser);
 
@@ -334,7 +239,7 @@ pub fn parse_assignment_expression(parser: *Parser) error{ OutOfMemory, Unexpect
 }
 
 pub fn parse_primary_expression(parser: *Parser) error{ UnexpectedEndOfTokens, OutOfMemory, UnexpectedToken }!*expr.PrimaryExpression {
-    const token = peek(parser) orelse return error.UnexpectedEndOfTokens;
+    const token = p.peek(parser) orelse return error.UnexpectedEndOfTokens;
 
     const res = switch (token.kind) {
         .CommonToken => com: {
@@ -344,7 +249,7 @@ pub fn parse_primary_expression(parser: *Parser) error{ UnexpectedEndOfTokens, O
                 .IdentifierName => idtfr: {
                     const identifier_data: *IdentifierNameData = @ptrFromInt(common_token_data.data);
 
-                    _ = next(parser);
+                    _ = p.next(parser);
 
                     const identifier_reference = parser.allocator.create(expr.IdentifierReference) catch return error.OutOfMemory;
 
@@ -365,7 +270,7 @@ pub fn parse_primary_expression(parser: *Parser) error{ UnexpectedEndOfTokens, O
                 .NumericLiteral => num: {
                     const numeric_literal_data: *expr.NumericLiteralData = @ptrFromInt(common_token_data.data);
 
-                    _ = next(parser);
+                    _ = p.next(parser);
 
                     const literal = parser.allocator.create(expr.Literal) catch return error.OutOfMemory;
 
@@ -386,7 +291,7 @@ pub fn parse_primary_expression(parser: *Parser) error{ UnexpectedEndOfTokens, O
                 .StringLiteral => str: {
                     const string_literal_data: *_text.StringLiteralData = @ptrFromInt(common_token_data.data);
 
-                    _ = next(parser);
+                    _ = p.next(parser);
 
                     const literal = parser.allocator.create(expr.Literal) catch return error.OutOfMemory;
 
@@ -409,11 +314,11 @@ pub fn parse_primary_expression(parser: *Parser) error{ UnexpectedEndOfTokens, O
 
                     const res = switch (punctuator_kind) {
                         .OpenParen => paren: {
-                            _ = next(parser);
+                            _ = p.next(parser);
 
                             const inner = try parse_primary_expression(parser);
 
-                            try expect_skip_whitespace(parser, Token{
+                            try p.expect_skip_whitespace(parser, Token{
                                 .kind = .CommonToken,
                                 .data = @intFromPtr(&CommonTokenData{
                                     .common_token_kind = .Punctuator,
@@ -424,16 +329,16 @@ pub fn parse_primary_expression(parser: *Parser) error{ UnexpectedEndOfTokens, O
                             break :paren inner.*;
                         },
                         .OpenBracket => bracket: {
-                            _ = next(parser);
+                            _ = p.next(parser);
 
                             var elems = std.ArrayList(expr.ArrayElement).empty;
                             defer elems.deinit(parser.allocator);
 
                             while (true) {
-                                const next_token = peek(parser) orelse break;
+                                const next_token = p.peek(parser) orelse break;
 
                                 if (next_token.kind == .Whitespace or next_token.kind == .LineTerminator) {
-                                    _ = next(parser);
+                                    _ = p.next(parser);
                                     continue;
                                 }
 
@@ -447,10 +352,10 @@ pub fn parse_primary_expression(parser: *Parser) error{ UnexpectedEndOfTokens, O
                                     const next_punctuator_kind: _text.PunctuatorKind = @enumFromInt(next_common_token_data.data);
 
                                     if (next_punctuator_kind == .CloseBracket) {
-                                        _ = next(parser);
+                                        _ = p.next(parser);
                                         break;
                                     } else if (next_punctuator_kind == .Comma) {
-                                        _ = next(parser);
+                                        _ = p.next(parser);
 
                                         const ellision = parser.allocator.create(expr.ArrayElement) catch return error.OutOfMemory;
 
@@ -462,7 +367,7 @@ pub fn parse_primary_expression(parser: *Parser) error{ UnexpectedEndOfTokens, O
                                         try elems.append(parser.allocator, ellision.*);
                                         continue;
                                     } else if (next_punctuator_kind == .Ellipsis) {
-                                        _ = next(parser);
+                                        _ = p.next(parser);
 
                                         const array_element = parser.allocator.create(expr.ArrayElement) catch return error.OutOfMemory;
 
@@ -475,7 +380,7 @@ pub fn parse_primary_expression(parser: *Parser) error{ UnexpectedEndOfTokens, O
 
                                         try elems.append(parser.allocator, array_element.*);
 
-                                        try expect_skip_whitespace(parser, Token{
+                                        try p.expect_skip_whitespace(parser, Token{
                                             .kind = .CommonToken,
                                             .data = @intFromPtr(&CommonTokenData{
                                                 .common_token_kind = .Punctuator,
@@ -497,13 +402,13 @@ pub fn parse_primary_expression(parser: *Parser) error{ UnexpectedEndOfTokens, O
 
                                     try elems.append(parser.allocator, array_elem.*);
 
-                                    expect_skip_whitespace(parser, Token{
+                                    p.expect_skip_whitespace(parser, Token{
                                         .kind = .CommonToken,
                                         .data = @intFromPtr(&CommonTokenData{
                                             .common_token_kind = .Punctuator,
                                             .data = @intFromEnum(_text.PunctuatorKind.Comma),
                                         }),
-                                    }) catch try expect_skip_whitespace(parser, Token{
+                                    }) catch try p.expect_skip_whitespace(parser, Token{
                                         .kind = .CommonToken,
                                         .data = @intFromPtr(&CommonTokenData{
                                             .common_token_kind = .Punctuator,
@@ -511,7 +416,7 @@ pub fn parse_primary_expression(parser: *Parser) error{ UnexpectedEndOfTokens, O
                                         }),
                                     });
 
-                                    _ = next(parser);
+                                    _ = p.next(parser);
                                 }
                             }
 
@@ -538,6 +443,7 @@ pub fn parse_primary_expression(parser: *Parser) error{ UnexpectedEndOfTokens, O
                             };
                         },
                         else => {
+                            std.debug.print("Unexpected punctuator in primary expression: {any}\n", .{punctuator_kind});
                             return error.UnexpectedToken;
                         },
                     };
@@ -588,15 +494,15 @@ pub fn parse_member_expression(parser: *Parser) error{ OutOfMemory, UnexpectedTo
         },
     };
 
-    while (peek(parser) != null) {
-        const token = peek(parser).?;
+    while (p.peek(parser) != null) {
+        const token = p.peek(parser).?;
         const member_expr_start = token_is_member_expr_start(token) orelse break;
 
         switch (member_expr_start) {
             .Dot => {
-                _ = next(parser);
+                _ = p.next(parser);
 
-                const property_token = peek(parser) orelse return error.UnexpectedEndOfTokens;
+                const property_token = p.peek(parser) orelse return error.UnexpectedEndOfTokens;
 
                 if (property_token.kind != .CommonToken) {
                     return error.UnexpectedToken;
@@ -610,7 +516,7 @@ pub fn parse_member_expression(parser: *Parser) error{ OutOfMemory, UnexpectedTo
 
                 const property_identifier_data: *IdentifierNameData = @ptrFromInt(property_common_token_data.data);
 
-                _ = next(parser);
+                _ = p.next(parser);
 
                 const member_expr_clone = parser.allocator.create(expr.MemberExpression) catch return error.OutOfMemory;
                 member_expr_clone.* = member_expr.*;
@@ -626,7 +532,7 @@ pub fn parse_member_expression(parser: *Parser) error{ OutOfMemory, UnexpectedTo
                 };
             },
             .OpenBracket => {
-                _ = next(parser);
+                _ = p.next(parser);
 
                 const property_expr = try parse_assignment_expression(parser);
 
@@ -641,7 +547,7 @@ pub fn parse_member_expression(parser: *Parser) error{ OutOfMemory, UnexpectedTo
                     .len = 1,
                 };
 
-                try expect_skip_whitespace(parser, Token{
+                try p.expect_skip_whitespace(parser, Token{
                     .kind = .CommonToken,
                     .data = @intFromPtr(&CommonTokenData{
                         .common_token_kind = .Punctuator,
@@ -669,11 +575,11 @@ pub fn parse_member_expression(parser: *Parser) error{ OutOfMemory, UnexpectedTo
 }
 
 pub fn parse_new_expression(parser: *Parser) error{ OutOfMemory, UnexpectedToken, UnexpectedEndOfTokens }!*expr.NewExpression {
-    if (peek(parser) == null) {
+    if (p.peek(parser) == null) {
         return error.UnexpectedEndOfTokens;
     }
 
-    const token = peek(parser).?;
+    const token = p.peek(parser).?;
 
     if (token.kind == .CommonToken) {
         const common_token_data: *CommonTokenData = @ptrFromInt(token.data);
@@ -682,10 +588,7 @@ pub fn parse_new_expression(parser: *Parser) error{ OutOfMemory, UnexpectedToken
             const identifier_data: *IdentifierNameData = @ptrFromInt(common_token_data.data);
 
             if (testing.are_equal_strings(identifier_data.name, testing.u8_array_to_string(@ptrCast(@constCast("new")), 3))) {
-                _ = next(parser);
-
-                // skip whitespace after 'new' keyword
-                _ = next(parser);
+                _ = p.next(parser);
 
                 const inner_expr = try parse_new_expression(parser);
 
@@ -716,7 +619,7 @@ pub fn parse_new_expression(parser: *Parser) error{ OutOfMemory, UnexpectedToken
 }
 
 pub fn parse_arguments(parser: *Parser) !*expr.Arguments {
-    if (!match(parser, Token{
+    if (!p.match(parser, Token{
         .kind = .CommonToken,
         .data = @intFromPtr(&CommonTokenData{
             .common_token_kind = .Punctuator,
@@ -732,17 +635,17 @@ pub fn parse_arguments(parser: *Parser) !*expr.Arguments {
     var is_spread = std.ArrayList(bool).empty;
     defer is_spread.deinit(parser.allocator);
 
-    while (!match(parser, Token{
+    while (!p.match(parser, Token{
         .kind = .CommonToken,
         .data = @intFromPtr(&CommonTokenData{
             .common_token_kind = .Punctuator,
             .data = @intFromEnum(_text.PunctuatorKind.CloseParen),
         }),
     })) {
-        const next_token = peek(parser) orelse return error.UnexpectedEndOfTokens;
+        const next_token = p.peek(parser) orelse return error.UnexpectedEndOfTokens;
 
         if (next_token.kind == .Whitespace or next_token.kind == .LineTerminator) {
-            _ = next(parser);
+            _ = p.next(parser);
             continue;
         }
 
@@ -753,7 +656,7 @@ pub fn parse_arguments(parser: *Parser) !*expr.Arguments {
                 const next_punctuator_kind: _text.PunctuatorKind = @enumFromInt(next_common_token_data.data);
 
                 if (next_punctuator_kind == .Comma) {
-                    _ = next(parser);
+                    _ = p.next(parser);
                     continue;
                 }
             }
@@ -762,7 +665,7 @@ pub fn parse_arguments(parser: *Parser) !*expr.Arguments {
                 const next_punctuator_kind: _text.PunctuatorKind = @enumFromInt(next_common_token_data.data);
 
                 if (next_punctuator_kind == .Ellipsis) {
-                    _ = next(parser);
+                    _ = p.next(parser);
                     try is_spread.append(parser.allocator, true);
                 } else {
                     try is_spread.append(parser.allocator, false);
@@ -771,7 +674,7 @@ pub fn parse_arguments(parser: *Parser) !*expr.Arguments {
                 try is_spread.append(parser.allocator, false);
             }
 
-            skip_whitespace(parser);
+            p.skip_whitespace(parser);
 
             const arg_expr = try parse_assignment_expression(parser);
             try args.append(parser.allocator, arg_expr.*);
@@ -798,7 +701,7 @@ pub fn parse_arguments(parser: *Parser) !*expr.Arguments {
 
 pub fn parse_call_expression(parser: *Parser) !*expr.CallExpression {
     const member_expr = try parse_member_expression(parser);
-    skip_whitespace(parser);
+    p.skip_whitespace(parser);
 
     const arguments = try parse_arguments(parser);
 
@@ -828,10 +731,10 @@ pub fn parse_lhs_expression(parser: *Parser) error{ OutOfMemory, UnexpectedToken
         },
     };
 
-    skip_whitespace(parser);
+    p.skip_whitespace(parser);
 
-    while (peek(parser) != null) {
-        const token = peek(parser).?;
+    while (p.peek(parser) != null) {
+        const token = p.peek(parser).?;
 
         if (token.kind == .CommonToken) {
             const common_token_data: *CommonTokenData = @ptrFromInt(token.data);
@@ -937,11 +840,11 @@ pub fn is_unary_operator(token: Token, is_prefix: bool) ?expr.UnaryOperator {
 }
 
 pub fn parse_unary_expression(parser: *Parser) error{ OutOfMemory, UnexpectedToken, UnexpectedEndOfTokens }!*expr.UnaryExpression {
-    const next_token = peek(parser).?;
+    const next_token = p.peek(parser).?;
 
     if (is_unary_operator(next_token, true)) |unary_op| {
-        _ = next(parser);
-        skip_whitespace(parser);
+        _ = p.next(parser);
+        p.skip_whitespace(parser);
 
         const operand = try parse_unary_expression(parser);
 
@@ -967,9 +870,9 @@ pub fn parse_unary_expression(parser: *Parser) error{ OutOfMemory, UnexpectedTok
     const unary_expr_or_lhs = parser.allocator.create(expr.UnaryExpressionOrLHS) catch return error.OutOfMemory;
     const unary_expr = parser.allocator.create(expr.UnaryExpression) catch return error.OutOfMemory;
 
-    if (peek(parser)) |token| {
+    if (p.peek(parser)) |token| {
         if (is_unary_operator(token, false)) |operator| {
-            _ = next(parser);
+            _ = p.next(parser);
 
             unary_expr_or_lhs.* = .{
                 .tag = expr.UNARY_EXPR_OR_LHS_LHS,
@@ -1092,7 +995,7 @@ pub fn parse_binary_expression(parser: *Parser, min_precedence: u8) error{ OutOf
         .right = unary_or_null,
     };
 
-    while (peek(parser)) |token| {
+    while (p.peek(parser)) |token| {
         const operator = is_binary_operator(token) orelse break;
 
         const precedence = precedence_of_binop(operator);
@@ -1101,11 +1004,11 @@ pub fn parse_binary_expression(parser: *Parser, min_precedence: u8) error{ OutOf
             break;
         }
 
-        _ = next(parser);
-        skip_whitespace(parser);
+        _ = p.next(parser);
+        p.skip_whitespace(parser);
 
         const right = try parse_unary_expression(parser);
-        skip_whitespace(parser);
+        p.skip_whitespace(parser);
 
         const right_or_null = parser.allocator.create(expr.UnaryExpressionOrNull) catch return error.OutOfMemory;
         right_or_null.* = .{
@@ -1136,28 +1039,6 @@ pub fn parse_binary_expression(parser: *Parser, min_precedence: u8) error{ OutOf
     }
 
     return binary;
-}
-
-fn get_parse_result(
-    T: type,
-    f: fn (*Parser) error{ OutOfMemory, UnexpectedToken, UnexpectedEndOfTokens }!*T,
-    text: []const u8,
-) !T {
-    const str = testing.u8_array_to_string(@ptrCast(@constCast(text)), text.len);
-
-    const tokens = try _text.parse_text_string(str, .InputElementHashbangOrRegExp);
-
-    var parser = Parser{
-        .tokens = tokens,
-        .curr = 0,
-        .arena = std.heap.ArenaAllocator.init(std.heap.page_allocator),
-        .allocator = undefined,
-    };
-    parser.allocator = parser.arena.allocator();
-
-    const result = try f(&parser);
-
-    return result.*;
 }
 
 test "parse assignment (raw)" {
@@ -1615,7 +1496,7 @@ test "parse primary expr identifier" {
     ));
 
     _text.free_string(str);
-    deinit(&parser);
+    p.deinit(&parser);
 }
 
 test "parse primary expr numeric literal" {
@@ -1633,7 +1514,7 @@ test "parse primary expr numeric literal" {
         },
     };
 
-    var parser = init(TokenSeq{
+    var parser = p.init(TokenSeq{
         .data = &tokens,
         .len = 1,
     });
@@ -1644,7 +1525,7 @@ test "parse primary expr numeric literal" {
     std.debug.assert(result.data.literal.tag == expr.LITERAL_NUMBER);
     std.debug.assert(result.data.literal.data.number.value == 42.0);
 
-    deinit(&parser);
+    p.deinit(&parser);
 }
 
 test "parse primary expr string literal" {
@@ -1663,7 +1544,7 @@ test "parse primary expr string literal" {
         },
     };
 
-    var parser = init(TokenSeq{
+    var parser = p.init(TokenSeq{
         .data = &tokens,
         .len = 1,
     });
@@ -1679,7 +1560,7 @@ test "parse primary expr string literal" {
     ));
 
     _text.free_string(str);
-    deinit(&parser);
+    p.deinit(&parser);
 }
 
 test "parse primary expr array literal" {
@@ -1764,7 +1645,7 @@ test "parse primary expr array literal" {
     std.debug.assert(result.data.array.elements.data[1].data.expression.data.lhs.data.new.data.member.data.primary.data.literal.tag == expr.LITERAL_NUMBER);
     std.debug.assert(result.data.array.elements.data[1].data.expression.data.lhs.data.new.data.member.data.primary.data.literal.data.number.value == 2.0);
 
-    deinit(&parser);
+    p.deinit(&parser);
 }
 
 test "parse primary expr from string" {
@@ -1806,5 +1687,5 @@ test "parse primary expr from string" {
 
     _text.free_string(str);
     _text.free_token_seq(tokens);
-    deinit(&parser);
+    p.deinit(&parser);
 }

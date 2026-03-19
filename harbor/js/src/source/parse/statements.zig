@@ -13,11 +13,13 @@ pub const MaybeExpression = MAYBE(expr.Expression);
 pub const MaybeAssignmentExpression = MAYBE(expr.AssignmentExpression);
 pub const MaybeBlock = MAYBE(BlockStatement);
 
+const Seq = @import("../text.zig").Seq;
+
 pub const Statement = EXTERN_UNION(
     extern union {
         block_statement: *BlockStatement,
         var_statement: *VarStatement,
-        empty_statement: *void,
+        empty_statement: void,
         expr_statement: *expr.Expression,
         if_statement: *IfStatement,
         breakable_statement: *BreakableStatement,
@@ -28,7 +30,7 @@ pub const Statement = EXTERN_UNION(
         labelled_statement: *LabelledStatement,
         throw_statement: *expr.Expression,
         try_statement: *TryStatement,
-        debugger_statement: *void,
+        debugger_statement: void,
     },
 );
 
@@ -86,7 +88,7 @@ pub const FormalParameter = extern struct {
 
 pub const HoistableDeclaration = extern struct {
     name: *MaybeIdentifier,
-    params: []FormalParameter,
+    params: Seq(FormalParameter),
     body: *BlockStatement,
 };
 
@@ -99,16 +101,16 @@ pub const LexicalBinding = extern struct {
 };
 
 pub const LexicalDeclaration = extern struct {
-    is_const: *bool,
-    declarations: []LexicalBinding,
+    is_const: bool,
+    declarations: Seq(LexicalBinding),
 };
 
 pub const BlockStatement = extern struct {
-    body: []StatementOrDeclaration,
+    body: Seq(StatementOrDeclaration),
 };
 
 pub const VarStatement = extern struct {
-    declarations: []LexicalBinding,
+    declarations: Seq(LexicalDeclaration),
 };
 
 pub const IfStatement = extern struct {

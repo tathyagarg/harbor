@@ -4,10 +4,15 @@ pub const testing = @import("testing.zig");
 
 const source_text = @import("source/text.zig");
 const expr = @import("source/parse/expressions.zig");
-const _parser = @import("source/parse/exp_parser.zig");
+const exp_parser = @import("source/parse/exp_parser.zig");
+const p = @import("source/parse/parser.zig");
 
 test {
     _ = @import("source/parse/exp_parser.zig");
+}
+
+test {
+    _ = @import("source/parse/stmt_parser.zig");
 }
 
 test {
@@ -77,14 +82,14 @@ pub export fn free_token_seq(seq: source_text.TokenSeq) void {
 pub export fn temp_unsafe_parse_primary_expr(tokens: source_text.TokenSeq) expr.PrimaryExpression {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
 
-    var parser = _parser.Parser{
+    var parser = p.Parser{
         .tokens = tokens,
         .curr = 0,
         .arena = arena,
         .allocator = arena.allocator(),
     };
 
-    const res = _parser.parse_primary_expression(&parser) catch |err| {
+    const res = exp_parser.parse_primary_expression(&parser) catch |err| {
         // panic
         std.debug.print("Error parsing primary expression: {any}\n", .{err});
         return expr.PrimaryExpression{

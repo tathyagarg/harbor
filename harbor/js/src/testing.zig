@@ -50,6 +50,20 @@ pub fn are_equal_strings_raw(actual: String, expected: [*]u8, expected_len: usiz
     return true;
 }
 
+pub fn are_equal_strings_pure(actual: String, expected: []const u8) bool {
+    if (actual.len != expected.len) {
+        return false;
+    }
+
+    for (actual.data, 0..actual.len) |a, i| {
+        if (a != @as(u16, @intCast(expected[i]))) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 pub fn are_equal_tokens(actual: Token, expected: Token) bool {
     if (actual.kind != expected.kind) {
         return false;
