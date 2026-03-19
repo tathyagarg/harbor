@@ -113,3 +113,10 @@ pub fn are_equal_tokens(actual: Token, expected: Token) bool {
         },
     }
 }
+
+pub fn print_string(str: String) void {
+    std.debug.print("String(len={d}): ", .{str.len});
+    for (str.data, 0..str.len) |c, _| {
+        std.debug.print("{c}", .{@as(u8, @intCast(c))});
+    }
+}

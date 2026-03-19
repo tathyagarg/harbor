@@ -80,6 +80,7 @@ pub fn parse_statement(parser: *Parser) error{ UnexpectedEndOfTokens, OutOfMemor
                     .data = @intFromEnum(_text.PunctuatorKind.Semicolon),
                 }),
             }) catch return error.UnexpectedEndOfTokens;
+            _ = p.next(parser);
 
             const statement = try parser.allocator.create(stmt.Statement);
             statement.* = stmt.Statement{
@@ -116,6 +117,7 @@ pub fn parse_expression_statement(parser: *Parser) error{UnexpectedEndOfTokens}!
             .data = @intFromEnum(_text.PunctuatorKind.Semicolon),
         }),
     }) catch return error.UnexpectedEndOfTokens;
+    _ = p.next(parser);
 
     return expression;
 }
@@ -159,6 +161,7 @@ pub fn parse_block_statement(parser: *Parser) error{ UnexpectedEndOfTokens, OutO
             .data = @intFromEnum(_text.PunctuatorKind.OpenBrace),
         }),
     }) catch return error.UnexpectedEndOfTokens;
+    _ = p.next(parser);
 
     var items = std.ArrayList(stmt.StatementOrDeclaration).empty;
     defer items.deinit(parser.allocator);
@@ -185,6 +188,22 @@ pub fn parse_block_statement(parser: *Parser) error{ UnexpectedEndOfTokens, OutO
     };
 
     return block;
+}
+
+test "parse block statement" {
+    const result = try get_parse_result(stmt.Statement, parse_statement, "{ let a; }");
+
+    std.debug.assert(result.tag == stmt.STATEMENT_BLOCK_STATEMENT);
+    std.debug.assert(result.data.block_statement.body.len == 1);
+    std.debug.assert(result.data.block_statement.body.data[0].tag == stmt.STATEMENT_OR_DECLARATION_DECLARATION);
+    std.debug.assert(result.data.block_statement.body.data[0].data.declaration.tag == stmt.DECLARATION_LEXICAL_DECLARATION);
+    std.debug.assert(result.data.block_statement.body.data[0].data.declaration.data.lexical_declaration.is_const == false);
+    std.debug.assert(result.data.block_statement.body.data[0].data.declaration.data.lexical_declaration.declarations.len == 1);
+    std.debug.assert(testing.are_equal_strings(
+        result.data.block_statement.body.data[0].data.declaration.data.lexical_declaration.declarations.data[0].name.name,
+        testing.u8_array_to_string(@ptrCast(@constCast("a")), 1),
+    ));
+    std.debug.assert(result.data.block_statement.body.data[0].data.declaration.data.lexical_declaration.declarations.data[0].initializer.has_value == false);
 }
 
 fn is_declaration_start(token: _text.Token) bool {
@@ -311,6 +330,7 @@ pub fn parse_lexical_declaration(parser: *Parser) error{ UnexpectedEndOfTokens, 
             .data = @intFromEnum(_text.PunctuatorKind.Semicolon),
         }),
     }) catch return error.UnexpectedEndOfTokens;
+    _ = p.next(parser);
 
     const lexical_declaration = try parser.allocator.create(stmt.LexicalDeclaration);
     const slice = try declarations.toOwnedSlice(parser.allocator);
