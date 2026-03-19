@@ -47,7 +47,7 @@
 
 <div class="h-[50vh] bg-(--accent-text) relative overflow-hidden">
   <div
-    class="w-[80%] mx-auto flex flex-col gap-4 h-full text-(--baltic-blue) py-12"
+    class="w-[80%] mx-auto flex flex-col gap-4 h-full text-baltic-blue py-12"
   >
     <div class="pb-4">
       <h1 class="text-6xl font-bold">Harbor Browser</h1>

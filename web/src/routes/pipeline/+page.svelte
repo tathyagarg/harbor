@@ -104,7 +104,7 @@
 
   <div
     bind:this={panel}
-    class="bg-(--cerulean)/25 rounded-lg relative animate h-full"
+    class="bg-cerulean/25 rounded-lg relative animate h-full"
   >
     <span class="absolute top-2 left-2 text-2xl"
       >Step {selected_step + 1}: <b>{steps[selected_step]}</b></span
@@ -134,7 +134,7 @@
   </div>
 </div>
 
-<div class="bg-(--celadon) text-black p-4 rounded-lg my-8 animate">
+<div class="bg-celadon text-black p-4 rounded-lg my-8 animate">
   <h1 class="text-4xl font-bold">A confession</h1>
   <hr />
 

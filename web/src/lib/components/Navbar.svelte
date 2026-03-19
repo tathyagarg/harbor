@@ -6,7 +6,7 @@
         alt="harbor browser logo"
         class="w-16 mr-2"
       />
-      <span class="text-[calc(var(--spacing)*8)] font-bold text-(--celadon)"
+      <span class="text-[calc(var(--spacing)*8)] font-bold text-celadon"
         >Harbor Browser</span
       >
     </span>

@@ -77,7 +77,7 @@
 >
   <div class="font-serif text-9xl text-center text-(white/80) my-4">
     <h1 class="animate">welcome to</h1>
-    <h1 class="italic text-(--celadon) animate">harbor browser</h1>
+    <h1 class="italic text-celadon animate">harbor browser</h1>
   </div>
   <h2 class="text-center animate">
     A web browser written completely from scratch.<br />Every service
@@ -85,17 +85,17 @@
   </h2>
   <div class="flex gap-4 my-4">
     <a
-      class="bg-(--baltic-blue) p-4 rounded-xl animate"
+      class="bg-baltic-blue shadow-lg shadow-baltic-blue/90 p-4 rounded-full animate"
       href="https://github.com/tathyagarg/harbor/releases"
     >
-      Alpha is now available!
+      Alpha available!
     </a>
     <a
       href="https://github.com/tathyagarg/harbor"
-      class="text-(--dark-deep-space-blue) bg-(--celadon) p-4 rounded-xl animate"
+      class="border-1 border-cerulean p-4 rounded-full animate"
     >
       <Icon icon="mdi:github" class="inline-block" />
-      GitHub
+      View Source
     </a>
   </div>
   <div class="w-[80%] rounded-lg">
@@ -107,7 +107,7 @@
   </div>
 </div>
 
-<hr class="border-(--celadon)" />
+<hr class="border-cerulean" />
 
 <div class="flex justify-around py-16">
   <Stat title="Lines of Code" value={data.total} />
@@ -115,7 +115,7 @@
   <Stat title="Core Modules" value="6" />
 </div>
 
-<hr class="border-(--celadon)" />
+<hr class="border-cerulean" />
 
 <div class="py-16">
   <h1 class="text-6xl text-center py-4">Core Components</h1>

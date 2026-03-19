@@ -1,15 +1,17 @@
 @import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&display=swap');
 @import 'tailwindcss';
 
-:root {
-  --deep-space-blue: #13293d;
-  --dark-deep-space-blue: #0e1f2e;
-  
-  --baltic-blue: #006494;
-  --cerulean: #247ba0;
-  --celadon: #a1cca5;
-  --muted-teal: #8fb996;
+@theme {
+  --color-deep-space-blue: #13293d;
+  --color-dark-deep-space-blue: #0e1f2e;
 
+  --color-baltic-blue: #006494;
+  --color-cerulean: #247ba0;
+  --color-celadon: #a1cca5;
+  --color-muted-teal: #8fb996;
+}
+
+:root {
   --text: #E6F1F7;
   --sec-text: #C7DDE8;
   --accent-text: #D7F0DA;
@@ -20,7 +22,7 @@ html, body {
   padding: 0;
   font-family: 'Arial', sans-serif;
 
-  background-color: color-mix(in srgb, var(--dark-deep-space-blue) 80%, black 20%);
+  background-color: color-mix(in srgb, var(--color-dark-deep-space-blue) 80%, black 20%);
   color: var(--text);
 
   font-family: 'Bricolage Grotesque', sans-serif;

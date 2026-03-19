@@ -45,10 +45,10 @@
 <li class="animate min-w-full" bind:this={step}>
   <button
     on:click={onClick}
-    class:bg-(--cerulean)={selected}
-    class:bg-(--deep-space-blue)={!selected}
-    class="py-2 border-1 border-(--celadon)
-    rounded-lg relative cursor-pointer hover:bg-(--cerulean)/75
+    class:bg-cerulean={selected}
+    class:bg-deep-space-blue={!selected}
+    class="py-2 border-1 border-celadon
+    rounded-lg relative cursor-pointer hover:bg-cerulean/75
     transition-colors duration-200 text-center w-full h-full text-2xl font-bold"
     type="button"
     tabindex="0"

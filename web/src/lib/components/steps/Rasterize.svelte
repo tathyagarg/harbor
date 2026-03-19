@@ -71,7 +71,7 @@
   <div class="w-[40%]">
     <h1 class="text-2xl text-center my-2 font-bold">Glyph Data</h1>
     <hr class="my-2" />
-    <div class="bg-(--celadon) text-black p-4 rounded-lg">
+    <div class="bg-celadon text-black p-4 rounded-lg">
       <h2 class="text-xl font-bold">{glyphData.name}</h2>
       <p>Unicode: {glyphData.unicode}</p>
       <p>Advance Width: {glyphData.advanceWidth}</p>
@@ -82,7 +82,7 @@
       </p>
       <p>Contours:</p>
       <ol class="list-decimal pl-6">
-        {#each glyphData.contours as contour, i}
+        {#each glyphData.contours as contour}
           <li>
             <ul class="list-disc pl-6">
               {#each contour as point}
