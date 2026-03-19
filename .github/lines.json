@@ -1,6 +1,5 @@
 {
     ".github/lines.json": 0,
-    ".github/workflows/deploy.yml": 42,
     ".github/workflows/release.yml": 62,
     ".gitignore": 12,
     "LICENSE": 7,
@@ -183,8 +182,8 @@
     "web/svelte.config.js": 15,
     "web/tsconfig.json": 20,
     "web/vite.config.ts": 5,
-    ".github": 104,
-    ".github/workflows": 104,
+    ".github": 62,
+    ".github/workflows": 62,
     "assets/css": 21,
     "assets": 358,
     "assets/html": 337,
@@ -273,7 +272,7 @@
     "web/src/routes/pipeline": 149,
     "web/src/routes/version": 16,
     "web/static": 3,
-    "total": 36951,
+    "total": 36909,
     "ALIASES": {
         "css": 7220,
         "js": 5821,
