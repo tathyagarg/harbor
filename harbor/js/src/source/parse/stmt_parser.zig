@@ -52,8 +52,6 @@ pub fn parse_statement(parser: *Parser) error{ UnexpectedEndOfTokens, OutOfMemor
         // if (is_keyword(name, "break")) return parse_break_statement(parser);
         // if (is_keyword(name, "continue")) return parse_continue_statement(parser);
         // if (is_keyword(name, "var")) return parse_var_statement(parser);
-        // if (is_keyword(name, "let") or is_keyword(name, "const")) return parse_lexical_declaration(parser);
-        // if (is_keyword(name, "throw")) return parse_throw_statement(parser);
         // if (is_keyword(name, "try")) return parse_try_statement(parser);
         // if (is_keyword(name, "with")) return parse_with_statement(parser);
 
@@ -304,14 +302,6 @@ pub fn parse_lexical_declaration(parser: *Parser) error{ UnexpectedEndOfTokens, 
         })) {
             break;
         }
-
-        p.expect_skip_whitespace(parser, _text.Token{
-            .kind = .CommonToken,
-            .data = @intFromPtr(&CommonTokenData{
-                .common_token_kind = .Punctuator,
-                .data = @intFromEnum(_text.PunctuatorKind.Comma),
-            }),
-        }) catch return error.UnexpectedEndOfTokens;
     }
 
     p.expect_skip_whitespace(parser, _text.Token{
@@ -334,6 +324,71 @@ pub fn parse_lexical_declaration(parser: *Parser) error{ UnexpectedEndOfTokens, 
     };
 
     return lexical_declaration;
+}
+
+test "parse lexical declaration (basic)" {
+    const result = try get_parse_result(stmt.Declaration, parse_declaration, "let a;");
+
+    std.debug.assert(result.tag == stmt.DECLARATION_LEXICAL_DECLARATION);
+    std.debug.assert(result.data.lexical_declaration.is_const == false);
+    std.debug.assert(result.data.lexical_declaration.declarations.len == 1);
+    std.debug.assert(testing.are_equal_strings(
+        result.data.lexical_declaration.declarations.data[0].name.name,
+        testing.u8_array_to_string(@ptrCast(@constCast("a")), 1),
+    ));
+}
+
+test "parse lexical declaration (with initializer)" {
+    const result = try get_parse_result(stmt.Declaration, parse_declaration, "const a = 42;");
+
+    std.debug.assert(result.tag == stmt.DECLARATION_LEXICAL_DECLARATION);
+    std.debug.assert(result.data.lexical_declaration.is_const == true);
+    std.debug.assert(result.data.lexical_declaration.declarations.len == 1);
+    std.debug.assert(testing.are_equal_strings(
+        result.data.lexical_declaration.declarations.data[0].name.name,
+        testing.u8_array_to_string(@ptrCast(@constCast("a")), 1),
+    ));
+    std.debug.assert(result.data.lexical_declaration.declarations.data[0].initializer.has_value == true);
+    std.debug.assert(result.data.lexical_declaration.declarations.data[0].initializer.value.value.tag == expr.ASSIGNMENT_EXPR_LHS);
+    std.debug.assert(result.data.lexical_declaration.declarations.data[0].initializer.value.value.data.lhs.tag == expr.LEFT_HAND_SIDE_EXPR_NEW);
+    std.debug.assert(result.data.lexical_declaration.declarations.data[0].initializer.value.value.data.lhs.data.new.tag == expr.NEW_EXPR_MEMBER);
+    std.debug.assert(result.data.lexical_declaration.declarations.data[0].initializer.value.value.data.lhs.data.new.data.member.tag == expr.MEMBER_EXPR_PRIMARY);
+    std.debug.assert(result.data.lexical_declaration.declarations.data[0].initializer.value.value.data.lhs.data.new.data.member.data.primary.tag == expr.PRIMARY_EXPR_LITERAL);
+    std.debug.assert(result.data.lexical_declaration.declarations.data[0].initializer.value.value.data.lhs.data.new.data.member.data.primary.data.literal.tag == expr.LITERAL_NUMBER);
+    std.debug.assert(result.data.lexical_declaration.declarations.data[0].initializer.value.value.data.lhs.data.new.data.member.data.primary.data.literal.data.number.value == 42);
+}
+
+test "parse lexical declaration (multiple)" {
+    const result = try get_parse_result(stmt.Declaration, parse_declaration, "let a, b = 42;");
+
+    std.debug.assert(result.tag == stmt.DECLARATION_LEXICAL_DECLARATION);
+    std.debug.assert(result.data.lexical_declaration.is_const == false);
+    std.debug.assert(result.data.lexical_declaration.declarations.len == 2);
+
+    std.debug.assert(testing.are_equal_strings(
+        result.data.lexical_declaration.declarations.data[0].name.name,
+        testing.u8_array_to_string(@ptrCast(@constCast("a")), 1),
+    ));
+    std.debug.assert(result.data.lexical_declaration.declarations.data[0].initializer.has_value == false);
+
+    std.debug.assert(testing.are_equal_strings(
+        result.data.lexical_declaration.declarations.data[1].name.name,
+        testing.u8_array_to_string(@ptrCast(@constCast("b")), 1),
+    ));
+    std.debug.assert(result.data.lexical_declaration.declarations.data[1].initializer.has_value == true);
+    std.debug.assert(result.data.lexical_declaration.declarations.data[1].initializer.value.value.tag == expr.ASSIGNMENT_EXPR_LHS);
+    std.debug.assert(result.data.lexical_declaration.declarations.data[1].initializer.value.value.data.lhs.tag == expr.LEFT_HAND_SIDE_EXPR_NEW);
+    std.debug.assert(result.data.lexical_declaration.declarations.data[1].initializer.value.value.data.lhs.data.new.tag == expr.NEW_EXPR_MEMBER);
+    std.debug.assert(result.data.lexical_declaration.declarations.data[1].initializer.value.value.data.lhs.data.new.data.member.tag == expr.MEMBER_EXPR_PRIMARY);
+    std.debug.assert(result.data.lexical_declaration.declarations.data[1].initializer.value.value.data.lhs.data.new.data.member.data.primary.tag == expr.PRIMARY_EXPR_LITERAL);
+    std.debug.assert(result.data.lexical_declaration.declarations.data[1].initializer.value.value.data.lhs.data.new.data.member.data.primary.data.literal.tag == expr.LITERAL_NUMBER);
+    std.debug.assert(result.data.lexical_declaration.declarations.data[1].initializer.value.value.data.lhs.data.new.data.member.data.primary.data.literal.data.number.value == 42);
+}
+
+test "parse lexical declaration (missing semicolon)" {
+    const result = get_parse_result(stmt.Declaration, parse_declaration, "let a");
+
+    std.debug.assert(result == error.UnexpectedEndOfTokens);
 }
 
 pub fn parse_lexical_binding(parser: *Parser) error{ UnexpectedEndOfTokens, OutOfMemory }!*stmt.LexicalBinding {
