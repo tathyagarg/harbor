@@ -45,7 +45,19 @@ pub fn parse_statement(parser: *Parser) error{ UnexpectedEndOfTokens, OutOfMemor
     const data: *CommonTokenData = @ptrFromInt(token.data);
 
     if (data.common_token_kind == .IdentifierName) {
-        if (is_keyword(data, "if")) return parse_if_statement(parser);
+        if (is_keyword(data, "if")) {
+            const if_stmt = try parse_if_statement(parser);
+
+            const statement = try parser.allocator.create(stmt.Statement);
+            statement.* = stmt.Statement{
+                .tag = stmt.STATEMENT_IF_STATEMENT,
+                .data = .{
+                    .if_statement = if_stmt,
+                },
+            };
+
+            return statement;
+        }
         // if (is_keyword(name, "while")) return parse_while_statement(parser);
         // if (is_keyword(name, "for")) return parse_for_statement(parser);
         // if (is_keyword(name, "return")) return parse_return_statement(parser);
@@ -204,6 +216,40 @@ test "parse block statement" {
         testing.u8_array_to_string(@ptrCast(@constCast("a")), 1),
     ));
     std.debug.assert(result.data.block_statement.body.data[0].data.declaration.data.lexical_declaration.declarations.data[0].initializer.has_value == false);
+}
+
+test "parse block statement (empty)" {
+    const result = try get_parse_result(stmt.Statement, parse_statement, "{ }");
+
+    std.debug.assert(result.tag == stmt.STATEMENT_BLOCK_STATEMENT);
+    std.debug.assert(result.data.block_statement.body.len == 0);
+}
+
+test "parse block statement (multiple statements)" {
+    const result = try get_parse_result(stmt.Statement, parse_statement, "{ let a; let b; }");
+
+    std.debug.assert(result.tag == stmt.STATEMENT_BLOCK_STATEMENT);
+    std.debug.assert(result.data.block_statement.body.len == 2);
+
+    std.debug.assert(result.data.block_statement.body.data[0].tag == stmt.STATEMENT_OR_DECLARATION_DECLARATION);
+    std.debug.assert(result.data.block_statement.body.data[0].data.declaration.tag == stmt.DECLARATION_LEXICAL_DECLARATION);
+    std.debug.assert(result.data.block_statement.body.data[0].data.declaration.data.lexical_declaration.is_const == false);
+    std.debug.assert(result.data.block_statement.body.data[0].data.declaration.data.lexical_declaration.declarations.len == 1);
+    std.debug.assert(testing.are_equal_strings(
+        result.data.block_statement.body.data[0].data.declaration.data.lexical_declaration.declarations.data[0].name.name,
+        testing.u8_array_to_string(@ptrCast(@constCast("a")), 1),
+    ));
+    std.debug.assert(result.data.block_statement.body.data[0].data.declaration.data.lexical_declaration.declarations.data[0].initializer.has_value == false);
+
+    std.debug.assert(result.data.block_statement.body.data[1].tag == stmt.STATEMENT_OR_DECLARATION_DECLARATION);
+    std.debug.assert(result.data.block_statement.body.data[1].data.declaration.tag == stmt.DECLARATION_LEXICAL_DECLARATION);
+    std.debug.assert(result.data.block_statement.body.data[1].data.declaration.data.lexical_declaration.is_const == false);
+    std.debug.assert(result.data.block_statement.body.data[1].data.declaration.data.lexical_declaration.declarations.len == 1);
+    std.debug.assert(testing.are_equal_strings(
+        result.data.block_statement.body.data[1].data.declaration.data.lexical_declaration.declarations.data[0].name.name,
+        testing.u8_array_to_string(@ptrCast(@constCast("b")), 1),
+    ));
+    std.debug.assert(result.data.block_statement.body.data[1].data.declaration.data.lexical_declaration.declarations.data[0].initializer.has_value == false);
 }
 
 fn is_declaration_start(token: _text.Token) bool {
@@ -456,8 +502,199 @@ pub fn parse_lexical_binding(parser: *Parser) error{ UnexpectedEndOfTokens, OutO
     return binding;
 }
 
-pub fn parse_if_statement(parser: *Parser) error{UnexpectedEndOfTokens}!*stmt.Statement {
-    _ = .{parser};
+pub fn parse_if_statement(parser: *Parser) error{ UnexpectedEndOfTokens, OutOfMemory }!*stmt.IfStatement {
+    p.expect_skip_whitespace(parser, _text.Token{
+        .kind = .CommonToken,
+        .data = @intFromPtr(&CommonTokenData{
+            .common_token_kind = .IdentifierName,
+            .data = @intFromPtr(&IdentifierNameData{
+                .name = testing.u8_array_to_string(@ptrCast(@constCast("if")), 2),
+            }),
+        }),
+    }) catch return error.UnexpectedEndOfTokens;
+    _ = p.next(parser);
 
-    return error.UnexpectedEndOfTokens;
+    p.expect_skip_whitespace(parser, _text.Token{
+        .kind = .CommonToken,
+        .data = @intFromPtr(&CommonTokenData{
+            .common_token_kind = .Punctuator,
+            .data = @intFromEnum(_text.PunctuatorKind.OpenParen),
+        }),
+    }) catch return error.UnexpectedEndOfTokens;
+    _ = p.next(parser);
+
+    const test_expr = exp_parser.parse_expression(parser) catch return error.UnexpectedEndOfTokens;
+
+    p.expect_skip_whitespace(parser, _text.Token{
+        .kind = .CommonToken,
+        .data = @intFromPtr(&CommonTokenData{
+            .common_token_kind = .Punctuator,
+            .data = @intFromEnum(_text.PunctuatorKind.CloseParen),
+        }),
+    }) catch return error.UnexpectedEndOfTokens;
+    _ = p.next(parser);
+
+    const consequent_stmt = try parse_statement(parser);
+
+    const if_stmt = try parser.allocator.create(stmt.IfStatement);
+    const maybe_stmt = try parser.allocator.create(stmt.MaybeStatement);
+
+    maybe_stmt.* = stmt.MaybeStatement{
+        .has_value = false,
+        .value = .{
+            .none = {},
+        },
+    };
+
+    if_stmt.* = .{
+        .test_ = &test_expr.*,
+        .consequent = &consequent_stmt.*,
+        .alternate = &maybe_stmt.*,
+    };
+
+    if (p.match(parser, _text.Token{
+        .kind = .CommonToken,
+        .data = @intFromPtr(&CommonTokenData{
+            .common_token_kind = .IdentifierName,
+            .data = @intFromPtr(&IdentifierNameData{
+                .name = testing.u8_array_to_string(@ptrCast(@constCast("else")), 4),
+            }),
+        }),
+    })) {
+        p.skip_whitespace(parser);
+
+        const alternate_stmt = try parse_statement(parser);
+
+        maybe_stmt.* = stmt.MaybeStatement{
+            .has_value = true,
+            .value = .{
+                .value = alternate_stmt.*,
+            },
+        };
+
+        if_stmt.*.alternate = maybe_stmt;
+    }
+
+    return if_stmt;
+}
+
+test "parse if statement (without else)" {
+    const result = try get_parse_result(stmt.Statement, parse_statement, "if (a) { let b; }");
+
+    std.debug.assert(result.tag == stmt.STATEMENT_IF_STATEMENT);
+    std.debug.assert(result.data.if_statement.test_.len == 1);
+    std.debug.assert(result.data.if_statement.test_.data[0].tag == expr.ASSIGNMENT_EXPR_LHS);
+    std.debug.assert(result.data.if_statement.test_.data[0].data.lhs.tag == expr.LEFT_HAND_SIDE_EXPR_NEW);
+    std.debug.assert(result.data.if_statement.test_.data[0].data.lhs.data.new.tag == expr.NEW_EXPR_MEMBER);
+    std.debug.assert(result.data.if_statement.test_.data[0].data.lhs.data.new.data.member.tag == expr.MEMBER_EXPR_PRIMARY);
+    std.debug.assert(testing.are_equal_strings(
+        result.data.if_statement.test_.data[0].data.lhs.data.new.data.member.data.primary.data.identifier.data.identifier.name,
+        testing.u8_array_to_string(@ptrCast(@constCast("a")), 1),
+    ));
+
+    std.debug.assert(result.data.if_statement.consequent.tag == stmt.STATEMENT_BLOCK_STATEMENT);
+    std.debug.assert(result.data.if_statement.consequent.data.block_statement.body.len == 1);
+    std.debug.assert(result.data.if_statement.consequent.data.block_statement.body.data[0].tag == stmt.STATEMENT_OR_DECLARATION_DECLARATION);
+    std.debug.assert(result.data.if_statement.consequent.data.block_statement.body.data[0].data.declaration.tag == stmt.DECLARATION_LEXICAL_DECLARATION);
+    std.debug.assert(result.data.if_statement.consequent.data.block_statement.body.data[0].data.declaration.data.lexical_declaration.is_const == false);
+    std.debug.assert(result.data.if_statement.consequent.data.block_statement.body.data[0].data.declaration.data.lexical_declaration.declarations.len == 1);
+    std.debug.assert(testing.are_equal_strings(
+        result.data.if_statement.consequent.data.block_statement.body.data[0].data.declaration.data.lexical_declaration.declarations.data[0].name.name,
+        testing.u8_array_to_string(@ptrCast(@constCast("b")), 1),
+    ));
+    std.debug.assert(result.data.if_statement.consequent.data.block_statement.body.data[0].data.declaration.data.lexical_declaration.declarations.data[0].initializer.has_value == false);
+
+    std.debug.assert(result.data.if_statement.alternate.has_value == false);
+}
+
+test "parse if statement (with else)" {
+    const result = try get_parse_result(stmt.Statement, parse_statement, "if (a) { let b; } else { let c; }");
+
+    std.debug.assert(result.tag == stmt.STATEMENT_IF_STATEMENT);
+    std.debug.assert(result.data.if_statement.test_.len == 1);
+    std.debug.assert(result.data.if_statement.test_.data[0].tag == expr.ASSIGNMENT_EXPR_LHS);
+    std.debug.assert(result.data.if_statement.test_.data[0].data.lhs.tag == expr.LEFT_HAND_SIDE_EXPR_NEW);
+    std.debug.assert(result.data.if_statement.test_.data[0].data.lhs.data.new.tag == expr.NEW_EXPR_MEMBER);
+    std.debug.assert(result.data.if_statement.test_.data[0].data.lhs.data.new.data.member.tag == expr.MEMBER_EXPR_PRIMARY);
+    std.debug.assert(testing.are_equal_strings(
+        result.data.if_statement.test_.data[0].data.lhs.data.new.data.member.data.primary.data.identifier.data.identifier.name,
+        testing.u8_array_to_string(@ptrCast(@constCast("a")), 1),
+    ));
+
+    std.debug.assert(result.data.if_statement.consequent.tag == stmt.STATEMENT_BLOCK_STATEMENT);
+    std.debug.assert(result.data.if_statement.consequent.data.block_statement.body.len == 1);
+    std.debug.assert(result.data.if_statement.consequent.data.block_statement.body.data[0].tag == stmt.STATEMENT_OR_DECLARATION_DECLARATION);
+    std.debug.assert(result.data.if_statement.consequent.data.block_statement.body.data[0].data.declaration.tag == stmt.DECLARATION_LEXICAL_DECLARATION);
+    std.debug.assert(result.data.if_statement.consequent.data.block_statement.body.data[0].data.declaration.data.lexical_declaration.is_const == false);
+    std.debug.assert(result.data.if_statement.consequent.data.block_statement.body.data[0].data.declaration.data.lexical_declaration.declarations.len == 1);
+    std.debug.assert(testing.are_equal_strings(
+        result.data.if_statement.consequent.data.block_statement.body.data[0].data.declaration.data.lexical_declaration.declarations.data[0].name.name,
+        testing.u8_array_to_string(@ptrCast(@constCast("b")), 1),
+    ));
+    std.debug.assert(result.data.if_statement.consequent.data.block_statement.body.data[0].data.declaration.data.lexical_declaration.declarations.data[0].initializer.has_value == false);
+
+    std.debug.assert(result.data.if_statement.alternate.has_value == true);
+    std.debug.assert(result.data.if_statement.alternate.value.value.tag == stmt.STATEMENT_BLOCK_STATEMENT);
+    std.debug.assert(result.data.if_statement.alternate.value.value.data.block_statement.body.len == 1);
+    std.debug.assert(result.data.if_statement.alternate.value.value.data.block_statement.body.data[0].tag == stmt.STATEMENT_OR_DECLARATION_DECLARATION);
+    std.debug.assert(result.data.if_statement.alternate.value.value.data.block_statement.body.data[0].data.declaration.tag == stmt.DECLARATION_LEXICAL_DECLARATION);
+    std.debug.assert(result.data.if_statement.alternate.value.value.data.block_statement.body.data[0].data.declaration.data.lexical_declaration.is_const == false);
+    std.debug.assert(result.data.if_statement.alternate.value.value.data.block_statement.body.data[0].data.declaration.data.lexical_declaration.declarations.len == 1);
+    std.debug.assert(testing.are_equal_strings(
+        result.data.if_statement.alternate.value.value.data.block_statement.body.data[0].data.declaration.data.lexical_declaration.declarations.data[0].name.name,
+        testing.u8_array_to_string(@ptrCast(@constCast("c")), 1),
+    ));
+
+    std.debug.assert(result.data.if_statement.alternate.value.value.data.block_statement.body.data[0].data.declaration.data.lexical_declaration.declarations.data[0].initializer.has_value == false);
+}
+
+test "parse if statement (with else if)" {
+    const result = try get_parse_result(stmt.Statement, parse_statement, "if (a) { let b; } else if (c) { let d; }");
+
+    std.debug.assert(result.tag == stmt.STATEMENT_IF_STATEMENT);
+    std.debug.assert(result.data.if_statement.test_.len == 1);
+    std.debug.assert(result.data.if_statement.test_.data[0].tag == expr.ASSIGNMENT_EXPR_LHS);
+    std.debug.assert(result.data.if_statement.test_.data[0].data.lhs.tag == expr.LEFT_HAND_SIDE_EXPR_NEW);
+    std.debug.assert(result.data.if_statement.test_.data[0].data.lhs.data.new.tag == expr.NEW_EXPR_MEMBER);
+    std.debug.assert(result.data.if_statement.test_.data[0].data.lhs.data.new.data.member.tag == expr.MEMBER_EXPR_PRIMARY);
+    std.debug.assert(testing.are_equal_strings(
+        result.data.if_statement.test_.data[0].data.lhs.data.new.data.member.data.primary.data.identifier.data.identifier.name,
+        testing.u8_array_to_string(@ptrCast(@constCast("a")), 1),
+    ));
+
+    std.debug.assert(result.data.if_statement.consequent.tag == stmt.STATEMENT_BLOCK_STATEMENT);
+    std.debug.assert(result.data.if_statement.consequent.data.block_statement.body.len == 1);
+    std.debug.assert(result.data.if_statement.consequent.data.block_statement.body.data[0].tag == stmt.STATEMENT_OR_DECLARATION_DECLARATION);
+    std.debug.assert(result.data.if_statement.consequent.data.block_statement.body.data[0].data.declaration.tag == stmt.DECLARATION_LEXICAL_DECLARATION);
+    std.debug.assert(result.data.if_statement.consequent.data.block_statement.body.data[0].data.declaration.data.lexical_declaration.is_const == false);
+    std.debug.assert(result.data.if_statement.consequent.data.block_statement.body.data[0].data.declaration.data.lexical_declaration.declarations.len == 1);
+    std.debug.assert(testing.are_equal_strings(
+        result.data.if_statement.consequent.data.block_statement.body.data[0].data.declaration.data.lexical_declaration.declarations.data[0].name.name,
+        testing.u8_array_to_string(@ptrCast(@constCast("b")), 1),
+    ));
+    std.debug.assert(result.data.if_statement.consequent.data.block_statement.body.data[0].data.declaration.data.lexical_declaration.declarations.data[0].initializer.has_value == false);
+
+    std.debug.assert(result.data.if_statement.alternate.has_value == true);
+    std.debug.assert(result.data.if_statement.alternate.value.value.tag == stmt.STATEMENT_IF_STATEMENT);
+    std.debug.assert(result.data.if_statement.alternate.value.value.data.if_statement.test_.len == 1);
+    std.debug.assert(result.data.if_statement.alternate.value.value.data.if_statement.test_.data[0].tag == expr.ASSIGNMENT_EXPR_LHS);
+    std.debug.assert(result.data.if_statement.alternate.value.value.data.if_statement.test_.data[0].data.lhs.tag == expr.LEFT_HAND_SIDE_EXPR_NEW);
+    std.debug.assert(result.data.if_statement.alternate.value.value.data.if_statement.test_.data[0].data.lhs.data.new.tag == expr.NEW_EXPR_MEMBER);
+    std.debug.assert(result.data.if_statement.alternate.value.value.data.if_statement.test_.data[0].data.lhs.data.new.data.member.tag == expr.MEMBER_EXPR_PRIMARY);
+    std.debug.assert(testing.are_equal_strings(
+        result.data.if_statement.alternate.value.value.data.if_statement.test_.data[0].data.lhs.data.new.data.member.data.primary.data.identifier.data.identifier.name,
+        testing.u8_array_to_string(@ptrCast(@constCast("c")), 1),
+    ));
+
+    std.debug.assert(result.data.if_statement.alternate.value.value.data.if_statement.consequent.tag == stmt.STATEMENT_BLOCK_STATEMENT);
+    std.debug.assert(result.data.if_statement.alternate.value.value.data.if_statement.consequent.data.block_statement.body.len == 1);
+    std.debug.assert(result.data.if_statement.alternate.value.value.data.if_statement.consequent.data.block_statement.body.data[0].tag == stmt.STATEMENT_OR_DECLARATION_DECLARATION);
+    std.debug.assert(result.data.if_statement.alternate.value.value.data.if_statement.consequent.data.block_statement.body.data[0].data.declaration.tag == stmt.DECLARATION_LEXICAL_DECLARATION);
+    std.debug.assert(result.data.if_statement.alternate.value.value.data.if_statement.consequent.data.block_statement.body.data[0].data.declaration.data.lexical_declaration.is_const == false);
+    std.debug.assert(result.data.if_statement.alternate.value.value.data.if_statement.consequent.data.block_statement.body.data[0].data.declaration.data.lexical_declaration.declarations.len == 1);
+    std.debug.assert(testing.are_equal_strings(
+        result.data.if_statement.alternate.value.value.data.if_statement.consequent.data.block_statement.body.data[0].data.declaration.data.lexical_declaration.declarations.data[0].name.name,
+        testing.u8_array_to_string(@ptrCast(@constCast("d")), 1),
+    ));
+    std.debug.assert(result.data.if_statement.alternate.value.value.data.if_statement.consequent.data.block_statement.body.data[0].data.declaration.data.lexical_declaration.declarations.data[0].initializer.has_value == false);
 }
