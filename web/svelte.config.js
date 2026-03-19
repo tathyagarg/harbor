@@ -1,4 +1,4 @@
-import adapter from '@sveltejs/adapter-static';
+import adapter from '@sveltejs/adapter-vercel';
 
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
@@ -9,9 +9,6 @@ const config = {
     adapter: adapter({
       fallback: 'index.html',
     }),
-    paths: {
-      base: process.argv.includes('dev') ? '' : '/harbor',
-    }
   }
 };
 

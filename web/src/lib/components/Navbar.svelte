@@ -1,8 +1,8 @@
 <div class="flex flex-row gap-8 items-center justify-between w-full h-full">
-  <a href="https://arson.dev/harbor">
+  <a href="/">
     <span class="flex items-center py-4">
       <img
-        src="https://arson.dev/harbor/assets/favicon.png"
+        src="/assets/favicon.png"
         alt="harbor browser logo"
         class="w-16 mr-2"
       />
@@ -12,7 +12,7 @@
     </span>
   </a>
 
-  <a href="https://arson.dev/harbor/pipeline">
+  <a href="/pipeline">
     <span class="flex items-center py-4">
       <span
         class="text-[calc(var(--spacing)*6)] font-bold text-(--accent-text) underline text-shadow-white text-shadow-lg/15"

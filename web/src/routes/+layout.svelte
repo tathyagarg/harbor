@@ -37,7 +37,7 @@
 <svelte:head>
   <title>Harbor Browser</title>
 
-  <link rel="icon" href="https://arson.dev/harbor/assets/favicon.png" />
+  <link rel="icon" href="/assets/favicon.png" />
 </svelte:head>
 
 <div class="w-[80%] mx-auto">
@@ -69,7 +69,7 @@
   </div>
 
   <img
-    src="https://arson.dev/harbor/assets/favicon.png"
+    src="/assets/favicon.png"
     alt="Harbor Browser Logo"
     class="w-128 absolute -bottom-32 -right-32"
   />
