@@ -85,14 +85,14 @@
   </h2>
   <div class="flex gap-4 my-4">
     <a
-      class="bg-baltic-blue shadow-lg shadow-baltic-blue/90 p-4 rounded-full animate"
+      class="bg-baltic-blue shadow-md shadow-baltic-blue/90 py-4 px-8 rounded-full animate text-lg"
       href="https://github.com/tathyagarg/harbor/releases"
     >
       Alpha available!
     </a>
     <a
       href="https://github.com/tathyagarg/harbor"
-      class="border-1 border-cerulean p-4 rounded-full animate"
+      class="border-1 border-cerulean py-4 px-8 rounded-full animate text-lg"
     >
       <Icon icon="mdi:github" class="inline-block" />
       View Source

@@ -4,10 +4,10 @@ pub const testing = @import("testing.zig");
 
 const source_text = @import("source/text.zig");
 const expr = @import("source/parse/expressions.zig");
-const _parser = @import("source/parse/parser.zig");
+const _parser = @import("source/parse/exp_parser.zig");
 
 test {
-    _ = @import("source/parse/parser.zig");
+    _ = @import("source/parse/exp_parser.zig");
 }
 
 test {

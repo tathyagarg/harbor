@@ -2,14 +2,9 @@ pub const String = @import("../text.zig").String;
 pub const NumericLiteralData = @import("../text.zig").NumericLiteralData;
 pub const IdentifierNameData = @import("../text.zig").IdentifierNameData;
 
-const Seq = @import("../text.zig").Seq;
+pub const EXTERN_UNION = @import("mod.zig").EXTERN_UNION;
 
-pub fn EXTERN_UNION(comptime T: type) type {
-    return extern struct {
-        tag: u8,
-        data: T,
-    };
-}
+const Seq = @import("../text.zig").Seq;
 
 pub const Expression = Seq(AssignmentExpression);
 

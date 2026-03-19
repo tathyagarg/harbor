@@ -17,7 +17,7 @@
 
     for (let i = 0; i < (data?.length ?? 0); i += 4) {
       const shade_range = Math.random();
-      const shade = (shade_range > 0.5 ? 255 : 0) * Math.random() * 0.75;
+      const shade = (shade_range > 0.5 ? 255 : 0) * Math.random() * 0.25;
 
       if (data) {
         data[i] = shade;
