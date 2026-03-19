@@ -27,6 +27,7 @@
 	},
 	"dependencies": {
 		"@friendofsvelte/mermaid": "^0.0.4",
+		"@vercel/speed-insights": "^2.0.0",
 		"animejs": "^4.3.6",
 		"mermaid": "^11.13.0"
 	}
