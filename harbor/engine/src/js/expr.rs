@@ -188,10 +188,21 @@ impl Display for CodePointSeq {
 }
 
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Copy, Clone)]
 pub struct Expression {
     pub data: *const AssignmentExpression,
     pub len: usize,
+}
+
+impl Debug for Expression {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let slice = unsafe { std::slice::from_raw_parts(self.data, self.len) };
+        for expr in slice {
+            write!(f, "{:?} ", *expr)?;
+        }
+
+        Ok(())
+    }
 }
 
 #[repr(C)]
@@ -199,6 +210,26 @@ pub struct Expression {
 pub struct LeftHandSideExpression {
     pub tag: u8,
     pub data: LeftHandSideExpressionData,
+}
+
+impl Debug for LeftHandSideExpression {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.tag {
+            LEFT_HAND_SIDE_EXPR_NEW => {
+                let new_expr = unsafe { self.data.new };
+                write!(f, "NewExpression({:?})", unsafe { *new_expr })
+            }
+            LEFT_HAND_SIDE_EXPR_CALL => {
+                let call_expr = unsafe { self.data.call };
+                write!(f, "CallExpression({:?})", unsafe { *call_expr })
+            }
+            LEFT_HAND_SIDE_EXPR_OPTIONAL => {
+                let optional_expr = unsafe { self.data.optional };
+                write!(f, "OptionalExpression({:?})", unsafe { *optional_expr })
+            }
+            _ => write!(f, "UnknownLeftHandSideExpression"),
+        }
+    }
 }
 
 #[repr(C)]
@@ -218,6 +249,22 @@ pub const LEFT_HAND_SIDE_EXPR_OPTIONAL: u8 = 2;
 pub struct OptionalExpression {
     pub tag: u8,
     pub data: OptionalExpressionData,
+}
+
+impl Debug for OptionalExpression {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.tag {
+            OPTIONAL_EXPR_MEMBER => {
+                let member_expr = unsafe { self.data.kind.member };
+                write!(f, "OptionalMemberExpression({:?})", unsafe { *member_expr })
+            }
+            OPTIONAL_EXPR_CALL => {
+                let call_expr = unsafe { self.data.kind.call };
+                write!(f, "OptionalCallExpression({:?})", unsafe { *call_expr })
+            }
+            _ => write!(f, "UnknownOptionalExpression"),
+        }
+    }
 }
 
 #[repr(C)]
@@ -299,6 +346,22 @@ pub struct NewExpression {
     pub data: NewExpressionData,
 }
 
+impl Debug for NewExpression {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.tag {
+            NEW_EXPR_MEMBER => {
+                let member_expr = unsafe { self.data.member };
+                write!(f, "NewMemberExpression({:?})", unsafe { *member_expr })
+            }
+            NEW_EXPR_NEW => {
+                let new_expr = unsafe { self.data.new };
+                write!(f, "NewExpression({:?})", unsafe { *new_expr })
+            }
+            _ => write!(f, "UnknownNewExpression"),
+        }
+    }
+}
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub union NewExpressionData {
@@ -314,6 +377,57 @@ pub const NEW_EXPR_NEW: u8 = 1;
 pub struct MemberExpression {
     pub tag: u8,
     pub data: MemberExpressionData,
+}
+
+impl Debug for MemberExpression {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.tag {
+            MEMBER_EXPR_PRIMARY => {
+                let primary_expr = unsafe { self.data.primary };
+                write!(f, "PrimaryExpression({:?})", unsafe { *primary_expr })
+            }
+            MEMBER_EXPR_MEMBER => {
+                let member_data = unsafe { self.data.member };
+                write!(
+                    f,
+                    "MemberExpression(object={:?}, expr={:?})",
+                    unsafe { *member_data.object },
+                    unsafe { *member_data.expr }
+                )
+            }
+            MEMBER_EXPR_PROPERTY => {
+                let property_data = unsafe { self.data.property };
+                write!(
+                    f,
+                    "MemberExpression(object={:?}, property={:?})",
+                    unsafe { *property_data.object },
+                    unsafe { *property_data.property }
+                )
+            }
+            MEMBER_EXPR_SUPER => {
+                let super_data = unsafe { self.data._super };
+                write!(f, "SuperProperty({:?})", unsafe { *super_data })
+            }
+            MEMBER_EXPR_IMPORT_META => {
+                let import_meta = unsafe { self.data.import_meta };
+                write!(f, "ImportMeta({:?})", import_meta)
+            }
+            MEMBER_EXPR_NEW => {
+                let new_member_data = unsafe { self.data.new };
+                write!(f, "NewMemberExpression({:?})", new_member_data)
+            }
+            MEMBER_EXPR_PRIVATE_PROPERTY => {
+                let private_member_data = unsafe { self.data.private_property };
+                write!(
+                    f,
+                    "PrivateMemberExpression(object={:?}, property={:?})",
+                    unsafe { *private_member_data.object },
+                    unsafe { *private_member_data.property }
+                )
+            }
+            _ => write!(f, "UnknownMemberExpression"),
+        }
+    }
 }
 
 #[repr(C)]
@@ -614,6 +728,22 @@ pub struct SuperProperty {
     pub data: SuperPropertyData,
 }
 
+impl Debug for SuperProperty {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.tag {
+            SUPER_PROPERTY_MEMBER => {
+                let member = unsafe { self.data.member };
+                write!(f, "SuperMemberExpression({:?})", unsafe { *member })
+            }
+            SUPER_PROPERTY_PROPERTY => {
+                let property = unsafe { self.data.property };
+                write!(f, "SuperProperty({:?})", unsafe { *property })
+            }
+            _ => write!(f, "UnknownSuperProperty"),
+        }
+    }
+}
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub union SuperPropertyData {
@@ -638,10 +768,32 @@ pub struct NewMemberExpressionData {
     pub arguments: *const Arguments,
 }
 
+impl Debug for NewMemberExpressionData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "NewMemberExpression(callee={:?}, arguments={:?})",
+            unsafe { *self.callee },
+            unsafe { *self.arguments }
+        )
+    }
+}
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct Arguments {
     pub arguments: AssignmentExpressionSeq,
+}
+
+impl Debug for Arguments {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let args = unsafe { std::slice::from_raw_parts(self.arguments.data, self.arguments.len) };
+        write!(f, "Arguments(")?;
+        for arg in args {
+            write!(f, "{:?} ", *arg)?;
+        }
+        write!(f, ")")
+    }
 }
 
 #[repr(C)]
@@ -665,6 +817,79 @@ pub struct CallExpression {
     pub data: CallExpressionData,
 }
 
+impl Debug for CallExpression {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.tag {
+            CALL_EXPR_SUPER => {
+                let super_call = unsafe { self.data._super };
+                write!(f, "SuperCall({:?})", unsafe { *super_call })
+            }
+            CALL_EXPR_IMPORT => {
+                let import_call = unsafe { self.data.import };
+                write!(
+                    f,
+                    "ImportCall(data={:?}, len={})",
+                    unsafe { (*import_call).data },
+                    unsafe { (*import_call).len }
+                )
+            }
+            CALL_EXPR_CALL => {
+                let call_data = unsafe { self.data.call };
+                write!(
+                    f,
+                    "CallExpression(callee={:?}, arguments={:?})",
+                    unsafe { *call_data.callee },
+                    unsafe { *call_data.arguments }
+                )
+            }
+            CALL_EXPR_MEMBER => {
+                let member_call_data = unsafe { self.data.member };
+                write!(
+                    f,
+                    "MemberCallExpression(object={:?}, expr={:?})",
+                    unsafe { *member_call_data.object },
+                    unsafe { *member_call_data.expr }
+                )
+            }
+            CALL_EXPR_PROPERTY => {
+                let property_call_data = unsafe { self.data.property };
+                write!(
+                    f,
+                    "PropertyCallExpression(object={:?}, property={:?})",
+                    unsafe { *property_call_data.object },
+                    unsafe { *property_call_data.property }
+                )
+            }
+            CALL_EXPR_PRIVATE_PROPERTY => {
+                let private_property_call_data = unsafe { self.data.private_property };
+                write!(
+                    f,
+                    "PrivatePropertyCallExpression(object={:?}, property={:?})",
+                    unsafe { *private_property_call_data.object },
+                    unsafe { *private_property_call_data.property }
+                )
+            }
+            CALL_EXPR_COVER => {
+                let cover_call = unsafe { self.data.cover };
+                write!(
+                    f,
+                    "CoverCallExpression(callee={:?}, arguments={:?})",
+                    unsafe { *cover_call.callee },
+                    unsafe { *cover_call.arguments }
+                )
+            }
+            _ => write!(f, "UnknownCallExpression"),
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct CoverCallExpression {
+    pub callee: *const MemberExpression,
+    pub arguments: *const Arguments,
+}
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub union CallExpressionData {
@@ -674,6 +899,7 @@ pub union CallExpressionData {
     member: MemberCallExpressionData,
     property: PropertyCallExpressionData,
     private_property: PrivateCallExpressionData,
+    cover: CoverCallExpression,
 }
 
 pub const CALL_EXPR_SUPER: u8 = 0;
@@ -682,6 +908,7 @@ pub const CALL_EXPR_CALL: u8 = 2;
 pub const CALL_EXPR_MEMBER: u8 = 3;
 pub const CALL_EXPR_PROPERTY: u8 = 4;
 pub const CALL_EXPR_PRIVATE_PROPERTY: u8 = 5;
+pub const CALL_EXPR_COVER: u8 = 6;
 
 pub type SuperCall = Arguments;
 
@@ -765,7 +992,32 @@ pub struct TernaryExpression {
 }
 
 #[repr(C)]
-pub union BinaryOrUnaryExpression {
+#[derive(Copy, Clone)]
+pub struct BinaryOrUnaryExpression {
+    pub tag: u8,
+    pub data: BinaryOrUnaryExpressionData,
+}
+
+impl Debug for BinaryOrUnaryExpression {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.tag {
+            BINARY_OR_UNARY_EXPR_BINARY => {
+                let binary_expr = unsafe { self.data.binary };
+                write!(f, "BinaryExpression({:?})", unsafe { *binary_expr })
+            }
+            BINARY_OR_UNARY_EXPR_UNARY => {
+                let unary_expr = unsafe { self.data.unary };
+                write!(f, "UnaryExpression({:?})", unsafe { *unary_expr })
+            }
+            BINARY_OR_UNARY_EXPR_NONE => write!(f, "None"),
+            _ => write!(f, "UnknownBinaryOrUnaryExpression"),
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union BinaryOrUnaryExpressionData {
     binary: *const BinaryExpression,
     unary: *const UnaryExpression,
     none: (),
@@ -773,9 +1025,31 @@ pub union BinaryOrUnaryExpression {
 
 pub const BINARY_OR_UNARY_EXPR_BINARY: u8 = 0;
 pub const BINARY_OR_UNARY_EXPR_UNARY: u8 = 1;
+pub const BINARY_OR_UNARY_EXPR_NONE: u8 = 2;
 
 #[repr(C)]
-pub union UnaryExpressionOrNull {
+#[derive(Copy, Clone)]
+pub struct UnaryExpressionOrNull {
+    pub tag: u8,
+    pub data: UnaryExpressionOrNullData,
+}
+
+impl Debug for UnaryExpressionOrNull {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.tag {
+            UNARY_EXPR_OR_NULL_UNARY => {
+                let unary_expr = unsafe { self.data.unary };
+                write!(f, "UnaryExpression({:?})", unsafe { *unary_expr })
+            }
+            UNARY_EXPR_OR_NULL_NONE => write!(f, "None"),
+            _ => write!(f, "UnknownUnaryExpressionOrNull"),
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union UnaryExpressionOrNullData {
     unary: *const UnaryExpression,
     none: (),
 }
@@ -784,10 +1058,23 @@ pub const UNARY_EXPR_OR_NULL_UNARY: u8 = 0;
 pub const UNARY_EXPR_OR_NULL_NONE: u8 = 1;
 
 #[repr(C)]
+#[derive(Copy, Clone)]
 pub struct BinaryExpression {
     pub left: *const BinaryOrUnaryExpression,
     pub operator: BinaryOperator,
     pub right: *const UnaryExpressionOrNull,
+}
+
+impl Debug for BinaryExpression {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "BinaryExpression(left={:?}, operator={:?}, right={:?})",
+            unsafe { *self.left },
+            self.operator,
+            unsafe { *self.right }
+        )
+    }
 }
 
 #[repr(u8)]
@@ -1183,9 +1470,21 @@ pub const EXPONENTIATION_EXPR_UNARY: u8 = 0;
 pub const EXPONENTIATION_EXPR_EXPONENTIATION: u8 = 1;
 
 #[repr(C)]
+#[derive(Copy, Clone)]
 pub struct UnaryExpression {
     pub operator: UnaryOperator,
     pub operand: *const UnaryExpressionOrLHS,
+}
+
+impl Debug for UnaryExpression {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "UnaryExpression(operator={:?}, operand={:?})",
+            self.operator,
+            unsafe { *self.operand },
+        )
+    }
 }
 
 #[repr(C)]
@@ -1193,6 +1492,25 @@ pub struct UnaryExpression {
 pub struct UnaryExpressionOrLHS {
     pub tag: u8,
     pub data: UnaryExpressionOrLHSData,
+}
+
+const UNARY_EXPR_OR_LHS_UNARY: u8 = 0;
+const UNARY_EXPR_OR_LHS_LHS: u8 = 1;
+
+impl Debug for UnaryExpressionOrLHS {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.tag {
+            UNARY_EXPR_OR_LHS_UNARY => {
+                let unary_expr = unsafe { *self.data.unary };
+                write!(f, "UnaryExpression({:?})", unary_expr)
+            }
+            UNARY_EXPR_OR_LHS_LHS => {
+                let lhs_expr = unsafe { self.data.lhs };
+                write!(f, "LeftHandSideExpression({:?})", unsafe { *lhs_expr })
+            }
+            _ => write!(f, "UnknownUnaryExpressionOrLHS"),
+        }
+    }
 }
 
 #[repr(C)]
@@ -1340,10 +1658,10 @@ impl Debug for AssignmentExpression {
                 let binary = unsafe { self.data.binary };
                 write!(
                     f,
-                    "BinaryExpression(left: {:p}, operator: {:?}, right: {:p})",
-                    unsafe { (*binary).left },
+                    "BinaryExpression(left: {:?}, operator: {:?}, right: {:?})",
+                    unsafe { *(*binary).left },
                     unsafe { (*binary).operator },
-                    unsafe { (*binary).right },
+                    unsafe { *(*binary).right },
                 )
             }
             ASSIGNMENT_EXPR_UNARY => {
@@ -1357,6 +1675,9 @@ impl Debug for AssignmentExpression {
             }
             ASSIGNMENT_EXPR_PRIMARY => {
                 write!(f, "PrimaryExpression({:?})", unsafe { *self.data.primary })
+            }
+            ASSIGNMENT_EXPR_LHS => {
+                write!(f, "LeftHandSideExpression({:?})", unsafe { *self.data.lhs })
             }
             _ => write!(f, "UnknownAssignmentExpression(tag: {})", self.tag),
         }

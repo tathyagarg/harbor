@@ -152,7 +152,9 @@ impl Display for Statement {
                 self.data.var.as_ref().unwrap()
             },),
             STATEMENT_EMPTY_STATEMENT => write!(f, "EmptyStatement"),
-            STATEMENT_EXPR_STATEMENT => write!(f, "ExpressionStatement {{ }}"),
+            STATEMENT_EXPR_STATEMENT => write!(f, "ExpressionStatement {:?}", unsafe {
+                self.data.expression.as_ref().unwrap()
+            },),
             STATEMENT_IF_STATEMENT => write!(f, "IfStatement { }", unsafe {
                 self.data.if_stmt.as_ref().unwrap()
             },),
