@@ -102,7 +102,54 @@ pub fn parse_statement(parser: *Parser) error{ UnexpectedEndOfTokens, OutOfMemor
         }
 
         // if (is_keyword(name, "for")) return parse_for_statement(parser);
-        // if (is_keyword(name, "return")) return parse_return_statement(parser);
+        if (is_keyword(data, "return")) {
+            _ = p.next(parser);
+            const value_data = try parser.allocator.create(stmt.MaybeExpression);
+            value_data.* = stmt.MaybeExpression{
+                .has_value = false,
+                .value = .{
+                    .none = {},
+                },
+            };
+
+            if (!p.match(parser, _text.Token{
+                .kind = .CommonToken,
+                .data = @intFromPtr(&CommonTokenData{
+                    .common_token_kind = .Punctuator,
+                    .data = @intFromEnum(_text.PunctuatorKind.Semicolon),
+                }),
+            })) {
+                const ret_expr = exp_parser.parse_expression(parser) catch return error.UnexpectedEndOfTokens;
+
+                value_data.* = stmt.MaybeExpression{
+                    .has_value = true,
+                    .value = .{
+                        .value = ret_expr.*,
+                    },
+                };
+
+                if (!p.match(parser, _text.Token{
+                    .kind = .CommonToken,
+                    .data = @intFromPtr(&CommonTokenData{
+                        .common_token_kind = .Punctuator,
+                        .data = @intFromEnum(_text.PunctuatorKind.Semicolon),
+                    }),
+                })) {
+                    return error.UnexpectedEndOfTokens;
+                }
+
+                _ = p.next(parser);
+            }
+
+            statement.* = stmt.Statement{
+                .tag = stmt.STATEMENT_RETURN_STATEMENT,
+                .data = .{
+                    .return_statement = value_data,
+                },
+            };
+
+            return statement;
+        }
         // if (is_keyword(name, "break")) return parse_break_statement(parser);
         // if (is_keyword(name, "continue")) return parse_continue_statement(parser);
         // if (is_keyword(name, "var")) return parse_var_statement(parser);
@@ -157,6 +204,20 @@ pub fn parse_statement(parser: *Parser) error{ UnexpectedEndOfTokens, OutOfMemor
     };
 
     return statement;
+}
+
+test "parse return statement (with value)" {
+    const result = try get_parse_result(stmt.Statement, parse_statement, "return 42;");
+
+    std.debug.assert(result.tag == stmt.STATEMENT_RETURN_STATEMENT);
+    std.debug.assert(result.data.return_statement.has_value == true);
+    std.debug.assert(result.data.return_statement.value.value.data[0].tag == expr.ASSIGNMENT_EXPR_LHS);
+    std.debug.assert(result.data.return_statement.value.value.data[0].data.lhs.tag == expr.LEFT_HAND_SIDE_EXPR_NEW);
+    std.debug.assert(result.data.return_statement.value.value.data[0].data.lhs.data.new.tag == expr.NEW_EXPR_MEMBER);
+    std.debug.assert(result.data.return_statement.value.value.data[0].data.lhs.data.new.data.member.tag == expr.MEMBER_EXPR_PRIMARY);
+    std.debug.assert(result.data.return_statement.value.value.data[0].data.lhs.data.new.data.member.data.primary.tag == expr.PRIMARY_EXPR_LITERAL);
+    std.debug.assert(result.data.return_statement.value.value.data[0].data.lhs.data.new.data.member.data.primary.data.literal.tag == expr.LITERAL_NUMBER);
+    std.debug.assert(result.data.return_statement.value.value.data[0].data.lhs.data.new.data.member.data.primary.data.literal.data.number.value == 42);
 }
 
 pub fn parse_expression_statement(parser: *Parser) error{UnexpectedEndOfTokens}!*expr.Expression {
