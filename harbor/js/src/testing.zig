@@ -119,4 +119,43 @@ pub fn print_string(str: String) void {
     for (str.data, 0..str.len) |c, _| {
         std.debug.print("{c}", .{@as(u8, @intCast(c))});
     }
+    std.debug.print("\n", .{});
+}
+
+pub fn print_token(token: Token) void {
+    std.debug.print("Token(kind={d}): ", .{token.kind});
+    switch (token.kind) {
+        .CommonToken => {
+            const token_data: *lex.CommonTokenData = @ptrFromInt(token.data);
+            std.debug.print("CommonToken(kind={d}): ", .{token_data.common_token_kind});
+            switch (token_data.common_token_kind) {
+                .IdentifierName => {
+                    const identifier_name_data: *lex.IdentifierNameData = @ptrFromInt(token_data.data);
+                    std.debug.print("IdentifierName: ", .{});
+                    print_string(identifier_name_data.name);
+                },
+                .StringLiteral => {
+                    const string_literal_data: *lex.StringLiteralData = @ptrFromInt(token_data.data);
+                    print_string(string_literal_data.value);
+                },
+                .NumericLiteral => {
+                    const numeric_literal_data: *lex.NumericLiteralData = @ptrFromInt(token_data.data);
+                    std.debug.print("NumericLiteral(value={d})\n", .{numeric_literal_data.value});
+                },
+                .Punctuator => {
+                    const punc_kind: lex.PunctuatorKind = @enumFromInt(token_data.data);
+                    std.debug.print("Punctuator(kind={any})\n", .{punc_kind});
+                },
+                else => {
+                    std.debug.print("Unknown CommonToken kind\n", .{});
+                },
+            }
+        },
+        .Whitespace => {
+            std.debug.print("Whitespace\n", .{});
+        },
+        else => {
+            std.debug.print("Unknown Token kind\n", .{});
+        },
+    }
 }

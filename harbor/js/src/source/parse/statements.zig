@@ -15,6 +15,10 @@ pub const MaybeBlock = MAYBE(BlockStatement);
 
 const Seq = @import("../text.zig").Seq;
 
+pub const Script = extern struct {
+    body: Seq(StatementOrDeclaration),
+};
+
 pub const Statement = EXTERN_UNION(
     extern union {
         block_statement: *BlockStatement,
@@ -22,7 +26,10 @@ pub const Statement = EXTERN_UNION(
         empty_statement: void,
         expr_statement: *expr.Expression,
         if_statement: *IfStatement,
+
+        // WARN: deprecated
         breakable_statement: *BreakableStatement,
+
         continue_statement: *MaybeIdentifier,
         break_statement: *MaybeIdentifier,
         return_statement: *MaybeExpression,
@@ -31,6 +38,10 @@ pub const Statement = EXTERN_UNION(
         throw_statement: *expr.Expression,
         try_statement: *TryStatement,
         debugger_statement: void,
+
+        do_while: *WhileStatement,
+        while_: *WhileStatement,
+        for_: *ForStatement,
     },
 );
 
@@ -39,6 +50,7 @@ pub const STATEMENT_VAR_STATEMENT = 1;
 pub const STATEMENT_EMPTY_STATEMENT = 2;
 pub const STATEMENT_EXPR_STATEMENT = 3;
 pub const STATEMENT_IF_STATEMENT = 4;
+// WARN: deprecated
 pub const STATEMENT_BREAKABLE_STATEMENT = 5;
 pub const STATEMENT_CONTINUE_STATEMENT = 6;
 pub const STATEMENT_BREAK_STATEMENT = 7;
@@ -48,6 +60,9 @@ pub const STATEMENT_LABELLED_STATEMENT = 10;
 pub const STATEMENT_THROW_STATEMENT = 11;
 pub const STATEMENT_TRY_STATEMENT = 12;
 pub const STATEMENT_DEBUGGER_STATEMENT = 13;
+pub const STATEMENT_DO_WHILE = 14;
+pub const STATEMENT_WHILE = 15;
+pub const STATEMENT_FOR = 16;
 
 pub const StatementOrDeclaration = EXTERN_UNION(
     extern union {
@@ -83,7 +98,7 @@ pub const DECLARATION_LEXICAL_DECLARATION = 5;
 pub const FormalParameter = extern struct {
     name: *IdentifierNameData,
     initializer: *MaybeAssignmentExpression,
-    is_rest: *bool,
+    is_rest: bool,
 };
 
 pub const HoistableDeclaration = extern struct {

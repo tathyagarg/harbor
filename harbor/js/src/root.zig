@@ -5,6 +5,8 @@ pub const testing = @import("testing.zig");
 const source_text = @import("source/text.zig");
 const expr = @import("source/parse/expressions.zig");
 const exp_parser = @import("source/parse/exp_parser.zig");
+const stmt = @import("source/parse/statements.zig");
+const stmt_parser = @import("source/parse/stmt_parser.zig");
 const p = @import("source/parse/parser.zig");
 
 test {
@@ -79,24 +81,52 @@ pub export fn free_token_seq(seq: source_text.TokenSeq) void {
     source_text.free_token_seq(seq);
 }
 
-pub export fn temp_unsafe_parse_primary_expr(tokens: source_text.TokenSeq) expr.PrimaryExpression {
-    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+pub export fn parse_script(text: source_text.String) stmt.Script {
+    const tokens = parse_text_string(text, .InputElementHashbangOrRegExp);
 
     var parser = p.Parser{
         .tokens = tokens,
         .curr = 0,
-        .arena = arena,
-        .allocator = arena.allocator(),
+        .arena = std.heap.ArenaAllocator.init(std.heap.page_allocator),
+        .allocator = undefined,
     };
+    parser.allocator = parser.arena.allocator();
 
-    const res = exp_parser.parse_primary_expression(&parser) catch |err| {
-        // panic
-        std.debug.print("Error parsing primary expression: {any}\n", .{err});
-        return expr.PrimaryExpression{
-            .tag = 0,
-            .data = .{ .this = {} },
+    std.debug.print("Starting to parse script\n", .{});
+
+    const result = stmt_parser.parse_script(&parser) catch {
+        const script = parser.allocator.create(stmt.Script) catch {
+            std.debug.print("Failed to allocate script\n", .{});
+            return stmt.Script{
+                .body = .{
+                    .data = &[_]stmt.StatementOrDeclaration{},
+                    .len = 0,
+                },
+            };
         };
+        const seq = parser.allocator.create(source_text.Seq(stmt.StatementOrDeclaration)) catch {
+            std.debug.print("Failed to allocate statement sequence\n", .{});
+            return stmt.Script{
+                .body = .{
+                    .data = &[_]stmt.StatementOrDeclaration{},
+                    .len = 0,
+                },
+            };
+        };
+
+        seq.* = .{
+            .data = &[_]stmt.StatementOrDeclaration{},
+            .len = 0,
+        };
+
+        script.* = .{
+            .body = seq.*,
+        };
+
+        return script.*;
     };
 
-    return res.*;
+    std.debug.print("Parsed script successfully: {d} statements\n", .{result.body.len});
+
+    return result.*;
 }

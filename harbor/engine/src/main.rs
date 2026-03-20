@@ -15,19 +15,38 @@ pub mod render;
 fn main() {
     env_logger::init();
 
-    let ua = Agent::new();
-    let mut app = App::new(
-        render::WindowOptions {
-            use_transparent: true,
-            background_color: wgpu::Color {
-                r: 1.0,
-                g: 1.0,
-                b: 1.0,
-                a: 1.0,
-            },
-        },
-        Some(Rc::clone(&ua)),
-    );
+    let text = "if (x > 0) { console.log('positive'); } else { console.log('non-positive'); }";
+    let text_utf16: Vec<u16> = text.encode_utf16().collect();
 
-    app.run();
+    let zig_string = js::expr::ZigString {
+        data: text_utf16.as_ptr(),
+        len: text.len(),
+    };
+
+    unsafe {
+        let script = js::parse_script(zig_string);
+
+        let slice = std::slice::from_raw_parts(script.body.items, script.body.len);
+        for statement in slice {
+            println!("{}", statement);
+        }
+
+        js::free_string(zig_string);
+    }
+
+    // let ua = Agent::new();
+    // let mut app = App::new(
+    //     render::WindowOptions {
+    //         use_transparent: true,
+    //         background_color: wgpu::Color {
+    //             r: 1.0,
+    //             g: 1.0,
+    //             b: 1.0,
+    //             a: 1.0,
+    //         },
+    //     },
+    //     Some(Rc::clone(&ua)),
+    // );
+
+    // app.run();
 }

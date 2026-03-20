@@ -18,6 +18,8 @@ fn main() {
         "x86_64-windows-msvc"
     } else if target.contains("windows") {
         "x86_64-windows-gnu"
+    } else if target.contains("apple") && target.contains("aarch64") {
+        "aarch64-macos"
     } else if target.contains("apple") {
         "x86_64-macos"
     } else if target.contains("linux") {
@@ -38,6 +40,8 @@ fn main() {
         "libjs.a"
     };
     let lib = out.join(lib_fname);
+
+    println!("Building Zig library to out: {}", lib.display());
 
     rerun_if_changed(&zig_src_dir);
 

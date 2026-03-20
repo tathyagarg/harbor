@@ -25,6 +25,47 @@ fn is_keyword(data: *CommonTokenData, keyword: []const u8) bool {
         testing.are_equal_strings_pure(identifier_data.name, keyword);
 }
 
+pub fn parse_script(parser: *Parser) error{ UnexpectedEndOfTokens, OutOfMemory }!*stmt.Script {
+    var body = std.ArrayList(stmt.StatementOrDeclaration).empty;
+    defer body.deinit(parser.allocator);
+
+    while (p.peek(parser) != null) {
+        std.debug.print("Parsing statement or declaration at token index {d}\n", .{parser.curr});
+        const statement_or_declaration = try parse_statement_or_declaration(parser);
+        try body.append(parser.allocator, statement_or_declaration.*);
+    }
+
+    const script = try parser.allocator.create(stmt.Script);
+    const slice = try body.toOwnedSlice(parser.allocator);
+
+    const body_data = try parser.allocator.create(_text.Seq(stmt.StatementOrDeclaration));
+    body_data.* = _text.Seq(stmt.StatementOrDeclaration){
+        .data = slice.ptr,
+        .len = slice.len,
+    };
+
+    script.* = stmt.Script{
+        .body = body_data.*,
+    };
+
+    return script;
+}
+
+test "parse basic script" {
+    const result = try get_parse_result(stmt.Script, parse_script, "let a;");
+
+    std.debug.assert(result.body.len == 1);
+    std.debug.assert(result.body.data[0].tag == stmt.STATEMENT_OR_DECLARATION_DECLARATION);
+    std.debug.assert(result.body.data[0].data.declaration.tag == stmt.DECLARATION_LEXICAL_DECLARATION);
+    std.debug.assert(result.body.data[0].data.declaration.data.lexical_declaration.is_const == false);
+    std.debug.assert(result.body.data[0].data.declaration.data.lexical_declaration.declarations.len == 1);
+    std.debug.assert(testing.are_equal_strings(
+        result.body.data[0].data.declaration.data.lexical_declaration.declarations.data[0].name.name,
+        testing.u8_array_to_string(@ptrCast(@constCast("a")), 1),
+    ));
+    std.debug.assert(result.body.data[0].data.declaration.data.lexical_declaration.declarations.data[0].initializer.has_value == false);
+}
+
 pub fn parse_statement(parser: *Parser) error{ UnexpectedEndOfTokens, OutOfMemory }!*stmt.Statement {
     p.skip_whitespace(parser);
 
@@ -47,6 +88,7 @@ pub fn parse_statement(parser: *Parser) error{ UnexpectedEndOfTokens, OutOfMemor
     if (data.common_token_kind == .IdentifierName) {
         const statement = try parser.allocator.create(stmt.Statement);
         if (is_keyword(data, "if")) {
+            std.debug.print("Parsing if statement at token index {d}\n", .{parser.curr});
             const if_stmt = try parse_if_statement(parser);
 
             statement.* = stmt.Statement{
@@ -61,19 +103,19 @@ pub fn parse_statement(parser: *Parser) error{ UnexpectedEndOfTokens, OutOfMemor
 
         if (is_keyword(data, "while")) {
             const while_stmt = try parse_while_statement(parser);
-            const breakable_statement = try parser.allocator.create(stmt.BreakableStatement);
+            // const breakable_statement = try parser.allocator.create(stmt.BreakableStatement);
 
-            breakable_statement.* = stmt.BreakableStatement{
-                .tag = stmt.BREAKABLE_STATEMENT_WHILE,
-                .data = .{
-                    .while_ = while_stmt,
-                },
-            };
+            // breakable_statement.* = stmt.BreakableStatement{
+            //     .tag = stmt.BREAKABLE_STATEMENT_WHILE,
+            //     .data = .{
+            //         .while_ = while_stmt,
+            //     },
+            // };
 
             statement.* = stmt.Statement{
-                .tag = stmt.STATEMENT_BREAKABLE_STATEMENT,
+                .tag = stmt.STATEMENT_WHILE,
                 .data = .{
-                    .breakable_statement = breakable_statement,
+                    .while_ = while_stmt,
                 },
             };
 
@@ -82,19 +124,19 @@ pub fn parse_statement(parser: *Parser) error{ UnexpectedEndOfTokens, OutOfMemor
 
         if (is_keyword(data, "do")) {
             const do_while_stmt = try parse_do_while_statement(parser);
-            const breakable_statement = try parser.allocator.create(stmt.BreakableStatement);
+            // const breakable_statement = try parser.allocator.create(stmt.BreakableStatement);
 
-            breakable_statement.* = stmt.BreakableStatement{
-                .tag = stmt.BREAKABLE_STATEMENT_DO_WHILE,
-                .data = .{
-                    .do_while = do_while_stmt,
-                },
-            };
+            // breakable_statement.* = stmt.BreakableStatement{
+            //     .tag = stmt.BREAKABLE_STATEMENT_DO_WHILE,
+            //     .data = .{
+            //         .do_while = do_while_stmt,
+            //     },
+            // };
 
             statement.* = stmt.Statement{
-                .tag = stmt.STATEMENT_BREAKABLE_STATEMENT,
+                .tag = stmt.STATEMENT_DO_WHILE,
                 .data = .{
-                    .breakable_statement = breakable_statement,
+                    .do_while = do_while_stmt,
                 },
             };
 
@@ -195,6 +237,7 @@ pub fn parse_statement(parser: *Parser) error{ UnexpectedEndOfTokens, OutOfMemor
         }
     }
 
+    std.debug.print("Parsing expression statement at token index {d}\n", .{parser.curr});
     const statement = try parser.allocator.create(stmt.Statement);
     statement.* = stmt.Statement{
         .tag = stmt.STATEMENT_EXPR_STATEMENT,
@@ -290,6 +333,8 @@ pub fn parse_block_statement(parser: *Parser) error{ UnexpectedEndOfTokens, OutO
     })) {
         const statement = try parse_statement_or_declaration(parser);
         try items.append(parser.allocator, statement.*);
+
+        p.skip_whitespace(parser);
     }
 
     const block = try parser.allocator.create(stmt.BlockStatement);
@@ -372,31 +417,30 @@ fn is_declaration_start(token: _text.Token) bool {
 }
 
 pub fn parse_statement_or_declaration(parser: *Parser) error{ UnexpectedEndOfTokens, OutOfMemory }!*stmt.StatementOrDeclaration {
+    const statement_or_declaration = try parser.allocator.create(stmt.StatementOrDeclaration);
+
     if (is_declaration_start(p.peek(parser) orelse return error.UnexpectedEndOfTokens)) {
         const declaration = try parse_declaration(parser);
 
-        const statement_or_declaration = try parser.allocator.create(stmt.StatementOrDeclaration);
         statement_or_declaration.* = stmt.StatementOrDeclaration{
             .tag = stmt.STATEMENT_OR_DECLARATION_DECLARATION,
             .data = .{
                 .declaration = declaration,
             },
         };
-
-        return statement_or_declaration;
     } else {
+        std.debug.print("Parsing statement at token index {d}\n", .{parser.curr});
         const statement = try parse_statement(parser);
 
-        const statement_or_declaration = try parser.allocator.create(stmt.StatementOrDeclaration);
         statement_or_declaration.* = stmt.StatementOrDeclaration{
             .tag = stmt.STATEMENT_OR_DECLARATION_STATEMENT,
             .data = .{
                 .statement = statement,
             },
         };
-
-        return statement_or_declaration;
     }
+
+    return statement_or_declaration;
 }
 
 pub fn parse_declaration(parser: *Parser) error{ UnexpectedEndOfTokens, OutOfMemory }!*stmt.Declaration {
@@ -623,7 +667,10 @@ pub fn parse_if_statement(parser: *Parser) error{ UnexpectedEndOfTokens, OutOfMe
     }) catch return error.UnexpectedEndOfTokens;
     _ = p.next(parser);
 
+    std.debug.print("Parsing if statement test expression at token index {d}\n", .{parser.curr});
     const test_expr = exp_parser.parse_expression(parser) catch return error.UnexpectedEndOfTokens;
+    std.debug.print("Parsed if statement test expression: {any}\n", .{test_expr.*});
+    std.debug.print("Expecting closing parenthesis for if statement at token index {d}\n", .{parser.curr});
 
     p.expect_skip_whitespace(parser, _text.Token{
         .kind = .CommonToken,
@@ -634,12 +681,14 @@ pub fn parse_if_statement(parser: *Parser) error{ UnexpectedEndOfTokens, OutOfMe
     }) catch return error.UnexpectedEndOfTokens;
     _ = p.next(parser);
 
+    std.debug.print("Parsing if statement consequent at token index {d}\n", .{parser.curr});
     const consequent_stmt = try parse_statement(parser);
+    std.debug.print("Parsed if statement consequent: {any}\n", .{consequent_stmt.*.data.block_statement});
 
     const if_stmt = try parser.allocator.create(stmt.IfStatement);
     const maybe_stmt = try parser.allocator.create(stmt.MaybeStatement);
 
-    maybe_stmt.* = stmt.MaybeStatement{
+    maybe_stmt.* = .{
         .has_value = false,
         .value = .{
             .none = {},
@@ -652,28 +701,32 @@ pub fn parse_if_statement(parser: *Parser) error{ UnexpectedEndOfTokens, OutOfMe
         .alternate = &maybe_stmt.*,
     };
 
-    if (p.match(parser, _text.Token{
-        .kind = .CommonToken,
-        .data = @intFromPtr(&CommonTokenData{
-            .common_token_kind = .IdentifierName,
-            .data = @intFromPtr(&IdentifierNameData{
-                .name = testing.u8_array_to_string(@ptrCast(@constCast("else")), 4),
-            }),
-        }),
-    })) {
-        p.skip_whitespace(parser);
+    std.debug.print("Checking for else clause in if statement at token index {d}\n", .{parser.curr});
 
-        const alternate_stmt = try parse_statement(parser);
+    const next_token = p.peek(parser) orelse return if_stmt;
+    if (next_token.kind == .CommonToken) {
+        const next_data: *CommonTokenData = @ptrFromInt(next_token.data);
+        if (is_keyword(next_data, "else")) {
+            _ = p.next(parser);
 
-        maybe_stmt.* = stmt.MaybeStatement{
-            .has_value = true,
-            .value = .{
-                .value = alternate_stmt.*,
-            },
-        };
+            const alternate_stmt = try parse_statement(parser);
 
-        if_stmt.*.alternate = maybe_stmt;
+            maybe_stmt.* = stmt.MaybeStatement{
+                .has_value = true,
+                .value = .{
+                    .value = alternate_stmt.*,
+                },
+            };
+
+            if_stmt.*.alternate = maybe_stmt;
+        }
     }
+
+    // std.debug.print("Parsed if statement with test: {any}, consequent: {any}, alternate: {any}\n", .{
+    //     test_expr.*,
+    //     consequent_stmt.*,
+    //     maybe_stmt.*,
+    // });
 
     return if_stmt;
 }
@@ -842,29 +895,28 @@ pub fn parse_while_statement(parser: *Parser) error{ UnexpectedEndOfTokens, OutO
 test "parse while statement" {
     const result = try get_parse_result(stmt.Statement, parse_statement, "while (a) { let b; }");
 
-    std.debug.assert(result.tag == stmt.STATEMENT_BREAKABLE_STATEMENT);
-    std.debug.assert(result.data.breakable_statement.tag == stmt.BREAKABLE_STATEMENT_WHILE);
-    std.debug.assert(result.data.breakable_statement.data.while_.test_.len == 1);
-    std.debug.assert(result.data.breakable_statement.data.while_.test_.data[0].tag == expr.ASSIGNMENT_EXPR_LHS);
-    std.debug.assert(result.data.breakable_statement.data.while_.test_.data[0].data.lhs.tag == expr.LEFT_HAND_SIDE_EXPR_NEW);
-    std.debug.assert(result.data.breakable_statement.data.while_.test_.data[0].data.lhs.data.new.tag == expr.NEW_EXPR_MEMBER);
-    std.debug.assert(result.data.breakable_statement.data.while_.test_.data[0].data.lhs.data.new.data.member.tag == expr.MEMBER_EXPR_PRIMARY);
+    std.debug.assert(result.tag == stmt.STATEMENT_WHILE);
+    std.debug.assert(result.data.while_.test_.len == 1);
+    std.debug.assert(result.data.while_.test_.data[0].tag == expr.ASSIGNMENT_EXPR_LHS);
+    std.debug.assert(result.data.while_.test_.data[0].data.lhs.tag == expr.LEFT_HAND_SIDE_EXPR_NEW);
+    std.debug.assert(result.data.while_.test_.data[0].data.lhs.data.new.tag == expr.NEW_EXPR_MEMBER);
+    std.debug.assert(result.data.while_.test_.data[0].data.lhs.data.new.data.member.tag == expr.MEMBER_EXPR_PRIMARY);
     std.debug.assert(testing.are_equal_strings(
-        result.data.breakable_statement.data.while_.test_.data[0].data.lhs.data.new.data.member.data.primary.data.identifier.data.identifier.name,
+        result.data.while_.test_.data[0].data.lhs.data.new.data.member.data.primary.data.identifier.data.identifier.name,
         testing.u8_array_to_string(@ptrCast(@constCast("a")), 1),
     ));
 
-    std.debug.assert(result.data.breakable_statement.data.while_.body.tag == stmt.STATEMENT_BLOCK_STATEMENT);
-    std.debug.assert(result.data.breakable_statement.data.while_.body.data.block_statement.body.len == 1);
-    std.debug.assert(result.data.breakable_statement.data.while_.body.data.block_statement.body.data[0].tag == stmt.STATEMENT_OR_DECLARATION_DECLARATION);
-    std.debug.assert(result.data.breakable_statement.data.while_.body.data.block_statement.body.data[0].data.declaration.tag == stmt.DECLARATION_LEXICAL_DECLARATION);
-    std.debug.assert(result.data.breakable_statement.data.while_.body.data.block_statement.body.data[0].data.declaration.data.lexical_declaration.is_const == false);
-    std.debug.assert(result.data.breakable_statement.data.while_.body.data.block_statement.body.data[0].data.declaration.data.lexical_declaration.declarations.len == 1);
+    std.debug.assert(result.data.while_.body.tag == stmt.STATEMENT_BLOCK_STATEMENT);
+    std.debug.assert(result.data.while_.body.data.block_statement.body.len == 1);
+    std.debug.assert(result.data.while_.body.data.block_statement.body.data[0].tag == stmt.STATEMENT_OR_DECLARATION_DECLARATION);
+    std.debug.assert(result.data.while_.body.data.block_statement.body.data[0].data.declaration.tag == stmt.DECLARATION_LEXICAL_DECLARATION);
+    std.debug.assert(result.data.while_.body.data.block_statement.body.data[0].data.declaration.data.lexical_declaration.is_const == false);
+    std.debug.assert(result.data.while_.body.data.block_statement.body.data[0].data.declaration.data.lexical_declaration.declarations.len == 1);
     std.debug.assert(testing.are_equal_strings(
-        result.data.breakable_statement.data.while_.body.data.block_statement.body.data[0].data.declaration.data.lexical_declaration.declarations.data[0].name.name,
+        result.data.while_.body.data.block_statement.body.data[0].data.declaration.data.lexical_declaration.declarations.data[0].name.name,
         testing.u8_array_to_string(@ptrCast(@constCast("b")), 1),
     ));
-    std.debug.assert(result.data.breakable_statement.data.while_.body.data.block_statement.body.data[0].data.declaration.data.lexical_declaration.declarations.data[0].initializer.has_value == false);
+    std.debug.assert(result.data.while_.body.data.block_statement.body.data[0].data.declaration.data.lexical_declaration.declarations.data[0].initializer.has_value == false);
 }
 
 pub fn parse_do_while_statement(parser: *Parser) error{ UnexpectedEndOfTokens, OutOfMemory }!*stmt.WhileStatement {
@@ -916,28 +968,27 @@ pub fn parse_do_while_statement(parser: *Parser) error{ UnexpectedEndOfTokens, O
 test "parse do while statement" {
     const result = try get_parse_result(stmt.Statement, parse_statement, "do { let b; } while (a);");
 
-    std.debug.assert(result.tag == stmt.STATEMENT_BREAKABLE_STATEMENT);
-    std.debug.assert(result.data.breakable_statement.tag == stmt.BREAKABLE_STATEMENT_DO_WHILE);
-    std.debug.assert(result.data.breakable_statement.data.do_while.test_.len == 1);
-    std.debug.assert(result.data.breakable_statement.data.do_while.test_.data[0].tag == expr.ASSIGNMENT_EXPR_LHS);
-    std.debug.assert(result.data.breakable_statement.data.do_while.test_.data[0].data.lhs.tag == expr.LEFT_HAND_SIDE_EXPR_NEW);
-    std.debug.assert(result.data.breakable_statement.data.do_while.test_.data[0].data.lhs.data.new.tag == expr.NEW_EXPR_MEMBER);
-    std.debug.assert(result.data.breakable_statement.data.do_while.test_.data[0].data.lhs.data.new.data.member.tag == expr.MEMBER_EXPR_PRIMARY);
+    std.debug.assert(result.tag == stmt.STATEMENT_DO_WHILE);
+    std.debug.assert(result.data.do_while.test_.len == 1);
+    std.debug.assert(result.data.do_while.test_.data[0].tag == expr.ASSIGNMENT_EXPR_LHS);
+    std.debug.assert(result.data.do_while.test_.data[0].data.lhs.tag == expr.LEFT_HAND_SIDE_EXPR_NEW);
+    std.debug.assert(result.data.do_while.test_.data[0].data.lhs.data.new.tag == expr.NEW_EXPR_MEMBER);
+    std.debug.assert(result.data.do_while.test_.data[0].data.lhs.data.new.data.member.tag == expr.MEMBER_EXPR_PRIMARY);
     std.debug.assert(testing.are_equal_strings(
-        result.data.breakable_statement.data.do_while.test_.data[0].data.lhs.data.new.data.member.data.primary.data.identifier.data.identifier.name,
+        result.data.do_while.test_.data[0].data.lhs.data.new.data.member.data.primary.data.identifier.data.identifier.name,
         testing.u8_array_to_string(@ptrCast(@constCast("a")), 1),
     ));
 
-    std.debug.assert(result.data.breakable_statement.data.do_while.body.tag == stmt.STATEMENT_BLOCK_STATEMENT);
-    std.debug.assert(result.data.breakable_statement.data.do_while.body.data.block_statement.body.len == 1);
-    std.debug.assert(result.data.breakable_statement.data.do_while.body.data.block_statement.body.data[0].tag == stmt.STATEMENT_OR_DECLARATION_DECLARATION);
-    std.debug.assert(result.data.breakable_statement.data.do_while.body.data.block_statement.body.data[0].data.declaration.tag == stmt.DECLARATION_LEXICAL_DECLARATION);
-    std.debug.assert(result.data.breakable_statement.data.do_while.body.data.block_statement.body.data[0].data.declaration.data.lexical_declaration.is_const == false);
-    std.debug.assert(result.data.breakable_statement.data.do_while.body.data.block_statement.body.data[0].data.declaration.data.lexical_declaration.declarations.len == 1);
+    std.debug.assert(result.data.do_while.body.tag == stmt.STATEMENT_BLOCK_STATEMENT);
+    std.debug.assert(result.data.do_while.body.data.block_statement.body.len == 1);
+    std.debug.assert(result.data.do_while.body.data.block_statement.body.data[0].tag == stmt.STATEMENT_OR_DECLARATION_DECLARATION);
+    std.debug.assert(result.data.do_while.body.data.block_statement.body.data[0].data.declaration.tag == stmt.DECLARATION_LEXICAL_DECLARATION);
+    std.debug.assert(result.data.do_while.body.data.block_statement.body.data[0].data.declaration.data.lexical_declaration.is_const == false);
+    std.debug.assert(result.data.do_while.body.data.block_statement.body.data[0].data.declaration.data.lexical_declaration.declarations.len == 1);
     std.debug.assert(testing.are_equal_strings(
-        result.data.breakable_statement.data.do_while.body.data.block_statement.body.data[0].data.declaration.data.lexical_declaration.declarations.data[0].name.name,
+        result.data.do_while.body.data.block_statement.body.data[0].data.declaration.data.lexical_declaration.declarations.data[0].name.name,
         testing.u8_array_to_string(@ptrCast(@constCast("b")), 1),
     ));
 
-    std.debug.assert(result.data.breakable_statement.data.do_while.body.data.block_statement.body.data[0].data.declaration.data.lexical_declaration.declarations.data[0].initializer.has_value == false);
+    std.debug.assert(result.data.do_while.body.data.block_statement.body.data[0].data.declaration.data.lexical_declaration.declarations.data[0].initializer.has_value == false);
 }

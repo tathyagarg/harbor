@@ -618,6 +618,60 @@ pub fn parse_new_expression(parser: *Parser) error{ OutOfMemory, UnexpectedToken
     return new_expr;
 }
 
+test "parse new expr (member kind)" {
+    const res = get_parse_result(expr.NewExpression, parse_new_expression, "a.b") catch |err| {
+        std.debug.print("Error parsing new expression: {any}\n", .{err});
+        return;
+    };
+
+    std.debug.assert(res.tag == expr.NEW_EXPR_MEMBER);
+    std.debug.assert(res.data.member.tag == expr.MEMBER_EXPR_PROPERTY);
+    std.debug.assert(res.data.member.data.property.object.tag == expr.MEMBER_EXPR_PRIMARY);
+    std.debug.assert(res.data.member.data.property.object.data.primary.tag == expr.PRIMARY_EXPR_IDENTIFIER);
+    std.debug.assert(res.data.member.data.property.object.data.primary.data.identifier.tag == expr.IDENTIFIER_REF_IDENTIFIER);
+    std.debug.assert(
+        testing.are_equal_strings(
+            res.data.member.data.property.object.data.primary.data.identifier.data.identifier.name,
+            testing.u8_array_to_string(@ptrCast(@constCast("a")), 1),
+        ),
+    );
+    std.debug.assert(res.data.member.data.property.property.name.len == 1);
+    std.debug.assert(
+        testing.are_equal_strings(
+            res.data.member.data.property.property.name,
+            testing.u8_array_to_string(@ptrCast(@constCast("b")), 1),
+        ),
+    );
+}
+
+test "parse expr (console.log)" {
+    const res = get_parse_result(expr.Expression, parse_expression, "console.log") catch |err| {
+        std.debug.print("Error parsing expression: {any}\n", .{err});
+        return;
+    };
+
+    std.debug.assert(res.len == 1);
+    std.debug.assert(res.data[0].tag == expr.ASSIGNMENT_EXPR_LHS);
+    std.debug.assert(res.data[0].data.lhs.tag == expr.LEFT_HAND_SIDE_EXPR_NEW);
+    std.debug.assert(res.data[0].data.lhs.data.new.tag == expr.NEW_EXPR_MEMBER);
+    std.debug.assert(res.data[0].data.lhs.data.new.data.member.tag == expr.MEMBER_EXPR_PROPERTY);
+    std.debug.assert(res.data[0].data.lhs.data.new.data.member.data.property.object.tag == expr.MEMBER_EXPR_PRIMARY);
+    std.debug.assert(res.data[0].data.lhs.data.new.data.member.data.property.object.data.primary.tag == expr.PRIMARY_EXPR_IDENTIFIER);
+    std.debug.assert(
+        testing.are_equal_strings(
+            res.data[0].data.lhs.data.new.data.member.data.property.object.data.primary.data.identifier.data.identifier.name,
+            testing.u8_array_to_string(@ptrCast(@constCast("console")), 7),
+        ),
+    );
+    std.debug.assert(res.data[0].data.lhs.data.new.data.member.data.property.property.name.len == 3);
+    std.debug.assert(
+        testing.are_equal_strings(
+            res.data[0].data.lhs.data.new.data.member.data.property.property.name,
+            testing.u8_array_to_string(@ptrCast(@constCast("log")), 3),
+        ),
+    );
+}
+
 pub fn parse_arguments(parser: *Parser) !*expr.Arguments {
     if (!p.match(parser, Token{
         .kind = .CommonToken,
@@ -931,6 +985,10 @@ pub fn is_binary_operator(token: Token) ?expr.BinaryOperator {
             .NotEquals => .NotEqual,
             .StrictEquals => .StrictEqual,
             .StrictNotEquals => .StrictNotEqual,
+            .GreaterThan => .GreaterThan,
+            .GreaterThanEqual => .GreaterThanOrEqual,
+            .LessThan => .LessThan,
+            .LessThanEqual => .LessThanOrEqual,
             else => return null,
         };
     } else if (common_token_data.common_token_kind == .IdentifierName) {
@@ -967,6 +1025,7 @@ pub fn precedence_of_binop(operator: expr.BinaryOperator) u8 {
 
 pub fn parse_binary_expression(parser: *Parser, min_precedence: u8) error{ OutOfMemory, UnexpectedToken, UnexpectedEndOfTokens }!*expr.BinaryExpression {
     const left = try parse_unary_expression(parser);
+    p.skip_whitespace(parser);
 
     const binary_or_unary = parser.allocator.create(expr.BinaryOrUnaryExpression) catch return error.OutOfMemory;
     binary_or_unary.* = .{
@@ -996,6 +1055,8 @@ pub fn parse_binary_expression(parser: *Parser, min_precedence: u8) error{ OutOf
     };
 
     while (p.peek(parser)) |token| {
+        std.debug.print("Checking token for binary operator: {any}\n", .{token});
+        testing.print_token(token);
         const operator = is_binary_operator(token) orelse break;
 
         const precedence = precedence_of_binop(operator);
@@ -1004,8 +1065,8 @@ pub fn parse_binary_expression(parser: *Parser, min_precedence: u8) error{ OutOf
             break;
         }
 
+        // consume operator
         _ = p.next(parser);
-        p.skip_whitespace(parser);
 
         const right = try parse_unary_expression(parser);
         p.skip_whitespace(parser);
