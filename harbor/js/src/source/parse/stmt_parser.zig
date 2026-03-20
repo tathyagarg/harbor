@@ -992,3 +992,97 @@ test "parse do while statement" {
 
     std.debug.assert(result.data.do_while.body.data.block_statement.body.data[0].data.declaration.data.lexical_declaration.declarations.data[0].initializer.has_value == false);
 }
+
+test "parse example #1" {
+    const result = try get_parse_result(stmt.Statement, parse_statement, "if (x > 0) { console.log('positive'); } else { console.log('non-positive'); }");
+
+    std.debug.assert(result.tag == stmt.STATEMENT_IF_STATEMENT);
+    std.debug.assert(result.data.if_statement.test_.len == 1);
+    std.debug.assert(result.data.if_statement.test_.data[0].tag == expr.ASSIGNMENT_EXPR_BINARY);
+    std.debug.assert(result.data.if_statement.test_.data[0].data.binary.operator == .GreaterThan);
+    std.debug.assert(result.data.if_statement.test_.data[0].data.binary.left.tag == expr.BINARY_OR_UNARY_UNARY);
+    std.debug.assert(result.data.if_statement.test_.data[0].data.binary.left.data.unary.operator == .None);
+    std.debug.assert(result.data.if_statement.test_.data[0].data.binary.left.data.unary.operand.tag == expr.UNARY_EXPR_OR_LHS_LHS);
+    std.debug.assert(result.data.if_statement.test_.data[0].data.binary.left.data.unary.operand.data.left_hand_side.tag == expr.LEFT_HAND_SIDE_EXPR_NEW);
+    std.debug.assert(result.data.if_statement.test_.data[0].data.binary.left.data.unary.operand.data.left_hand_side.data.new.tag == expr.NEW_EXPR_MEMBER);
+    std.debug.assert(result.data.if_statement.test_.data[0].data.binary.left.data.unary.operand.data.left_hand_side.data.new.data.member.tag == expr.MEMBER_EXPR_PRIMARY);
+    std.debug.assert(testing.are_equal_strings(
+        result.data.if_statement.test_.data[0].data.binary.left.data.unary.operand.data.left_hand_side.data.new.data.member.data.primary.data.identifier.data.identifier.name,
+        testing.u8_array_to_string(@ptrCast(@constCast("x")), 1),
+    ));
+
+    std.debug.assert(result.data.if_statement.test_.data[0].data.binary.right.tag == expr.UNARY_EXPR_OR_NULL_UNARY);
+    std.debug.assert(result.data.if_statement.test_.data[0].data.binary.right.data.unary.operator == .None);
+    std.debug.assert(result.data.if_statement.test_.data[0].data.binary.right.data.unary.operand.tag == expr.UNARY_EXPR_OR_LHS_LHS);
+    std.debug.assert(result.data.if_statement.test_.data[0].data.binary.right.data.unary.operand.data.left_hand_side.tag == expr.LEFT_HAND_SIDE_EXPR_NEW);
+    std.debug.assert(result.data.if_statement.test_.data[0].data.binary.right.data.unary.operand.data.left_hand_side.data.new.tag == expr.NEW_EXPR_MEMBER);
+    std.debug.assert(result.data.if_statement.test_.data[0].data.binary.right.data.unary.operand.data.left_hand_side.data.new.data.member.tag == expr.MEMBER_EXPR_PRIMARY);
+    std.debug.assert(result.data.if_statement.test_.data[0].data.binary.right.data.unary.operand.data.left_hand_side.data.new.data.member.data.primary.tag == expr.PRIMARY_EXPR_LITERAL);
+    std.debug.assert(result.data.if_statement.test_.data[0].data.binary.right.data.unary.operand.data.left_hand_side.data.new.data.member.data.primary.data.literal.tag == expr.LITERAL_NUMBER);
+    std.debug.assert(result.data.if_statement.test_.data[0].data.binary.right.data.unary.operand.data.left_hand_side.data.new.data.member.data.primary.data.literal.data.number.value == 0);
+
+    std.debug.assert(result.data.if_statement.consequent.tag == stmt.STATEMENT_BLOCK_STATEMENT);
+    std.debug.assert(result.data.if_statement.consequent.data.block_statement.body.len == 1);
+    std.debug.assert(result.data.if_statement.consequent.data.block_statement.body.data[0].tag == stmt.STATEMENT_OR_DECLARATION_STATEMENT);
+    std.debug.assert(result.data.if_statement.consequent.data.block_statement.body.data[0].data.statement.tag == stmt.STATEMENT_EXPR_STATEMENT);
+    std.debug.assert(result.data.if_statement.consequent.data.block_statement.body.data[0].data.statement.data.expr_statement.len == 1);
+    std.debug.assert(result.data.if_statement.consequent.data.block_statement.body.data[0].data.statement.data.expr_statement.data[0].tag == expr.ASSIGNMENT_EXPR_LHS);
+    std.debug.assert(result.data.if_statement.consequent.data.block_statement.body.data[0].data.statement.data.expr_statement.data[0].data.lhs.tag == expr.LEFT_HAND_SIDE_EXPR_CALL);
+    std.debug.assert(result.data.if_statement.consequent.data.block_statement.body.data[0].data.statement.data.expr_statement.data[0].data.lhs.data.call.tag == expr.CALL_EXPR_COVER);
+    std.debug.assert(result.data.if_statement.consequent.data.block_statement.body.data[0].data.statement.data.expr_statement.data[0].data.lhs.data.call.data.cover.callee.tag == expr.MEMBER_EXPR_PROPERTY);
+    std.debug.assert(result.data.if_statement.consequent.data.block_statement.body.data[0].data.statement.data.expr_statement.data[0].data.lhs.data.call.data.cover.callee.data.property.object.tag == expr.MEMBER_EXPR_PRIMARY);
+    std.debug.assert(testing.are_equal_strings(
+        result.data.if_statement.consequent.data.block_statement.body.data[0].data.statement.data.expr_statement.data[0].data.lhs.data.call.data.cover.callee.data.property.object.data.primary.data.identifier.data.identifier.name,
+        testing.u8_array_to_string(@ptrCast(@constCast("console")), 7),
+    ));
+
+    std.debug.assert(testing.are_equal_strings(
+        result.data.if_statement.consequent.data.block_statement.body.data[0].data.statement.data.expr_statement.data[0].data.lhs.data.call.data.cover.callee.data.property.property.name,
+        testing.u8_array_to_string(@ptrCast(@constCast("log")), 3),
+    ));
+
+    std.debug.assert(result.data.if_statement.consequent.data.block_statement.body.data[0].data.statement.data.expr_statement.data[0].data.lhs.data.call.data.cover.arguments.arguments.len == 1);
+    std.debug.assert(result.data.if_statement.consequent.data.block_statement.body.data[0].data.statement.data.expr_statement.data[0].data.lhs.data.call.data.cover.arguments.arguments.data[0].tag == expr.ASSIGNMENT_EXPR_LHS);
+    std.debug.assert(result.data.if_statement.consequent.data.block_statement.body.data[0].data.statement.data.expr_statement.data[0].data.lhs.data.call.data.cover.arguments.arguments.data[0].data.lhs.tag == expr.LEFT_HAND_SIDE_EXPR_NEW);
+    std.debug.assert(result.data.if_statement.consequent.data.block_statement.body.data[0].data.statement.data.expr_statement.data[0].data.lhs.data.call.data.cover.arguments.arguments.data[0].data.lhs.data.new.tag == expr.NEW_EXPR_MEMBER);
+    std.debug.assert(result.data.if_statement.consequent.data.block_statement.body.data[0].data.statement.data.expr_statement.data[0].data.lhs.data.call.data.cover.arguments.arguments.data[0].data.lhs.data.new.data.member.tag == expr.MEMBER_EXPR_PRIMARY);
+    std.debug.assert(result.data.if_statement.consequent.data.block_statement.body.data[0].data.statement.data.expr_statement.data[0].data.lhs.data.call.data.cover.arguments.arguments.data[0].data.lhs.data.new.data.member.data.primary.tag == expr.PRIMARY_EXPR_LITERAL);
+    std.debug.assert(result.data.if_statement.consequent.data.block_statement.body.data[0].data.statement.data.expr_statement.data[0].data.lhs.data.call.data.cover.arguments.arguments.data[0].data.lhs.data.new.data.member.data.primary.data.literal.tag == expr.LITERAL_STRING);
+    std.debug.assert(testing.are_equal_strings(
+        result.data.if_statement.consequent.data.block_statement.body.data[0].data.statement.data.expr_statement.data[0].data.lhs.data.call.data.cover.arguments.arguments.data[0].data.lhs.data.new.data.member.data.primary.data.literal.data.string.*,
+        testing.u8_array_to_string(@ptrCast(@constCast("positive")), 8),
+    ));
+
+    std.debug.assert(result.data.if_statement.alternate.has_value == true);
+    std.debug.assert(result.data.if_statement.alternate.value.value.tag == stmt.STATEMENT_BLOCK_STATEMENT);
+    std.debug.assert(result.data.if_statement.alternate.value.value.data.block_statement.body.len == 1);
+    std.debug.assert(result.data.if_statement.alternate.value.value.data.block_statement.body.data[0].tag == stmt.STATEMENT_OR_DECLARATION_STATEMENT);
+    std.debug.assert(result.data.if_statement.alternate.value.value.data.block_statement.body.data[0].data.statement.tag == stmt.STATEMENT_EXPR_STATEMENT);
+    std.debug.assert(result.data.if_statement.alternate.value.value.data.block_statement.body.data[0].data.statement.data.expr_statement.len == 1);
+    std.debug.assert(result.data.if_statement.alternate.value.value.data.block_statement.body.data[0].data.statement.data.expr_statement.data[0].tag == expr.ASSIGNMENT_EXPR_LHS);
+    std.debug.assert(result.data.if_statement.alternate.value.value.data.block_statement.body.data[0].data.statement.data.expr_statement.data[0].data.lhs.tag == expr.LEFT_HAND_SIDE_EXPR_CALL);
+    std.debug.assert(result.data.if_statement.alternate.value.value.data.block_statement.body.data[0].data.statement.data.expr_statement.data[0].data.lhs.data.call.tag == expr.CALL_EXPR_COVER);
+    std.debug.assert(result.data.if_statement.alternate.value.value.data.block_statement.body.data[0].data.statement.data.expr_statement.data[0].data.lhs.data.call.data.cover.callee.tag == expr.MEMBER_EXPR_PROPERTY);
+    std.debug.assert(result.data.if_statement.alternate.value.value.data.block_statement.body.data[0].data.statement.data.expr_statement.data[0].data.lhs.data.call.data.cover.callee.data.property.object.tag == expr.MEMBER_EXPR_PRIMARY);
+    std.debug.assert(testing.are_equal_strings(
+        result.data.if_statement.alternate.value.value.data.block_statement.body.data[0].data.statement.data.expr_statement.data[0].data.lhs.data.call.data.cover.callee.data.property.object.data.primary.data.identifier.data.identifier.name,
+        testing.u8_array_to_string(@ptrCast(@constCast("console")), 7),
+    ));
+
+    std.debug.assert(testing.are_equal_strings(
+        result.data.if_statement.alternate.value.value.data.block_statement.body.data[0].data.statement.data.expr_statement.data[0].data.lhs.data.call.data.cover.callee.data.property.property.name,
+        testing.u8_array_to_string(@ptrCast(@constCast("log")), 3),
+    ));
+
+    std.debug.assert(result.data.if_statement.alternate.value.value.data.block_statement.body.data[0].data.statement.data.expr_statement.data[0].data.lhs.data.call.data.cover.arguments.arguments.len == 1);
+    std.debug.assert(result.data.if_statement.alternate.value.value.data.block_statement.body.data[0].data.statement.data.expr_statement.data[0].data.lhs.data.call.data.cover.arguments.arguments.data[0].tag == expr.ASSIGNMENT_EXPR_LHS);
+    std.debug.assert(result.data.if_statement.alternate.value.value.data.block_statement.body.data[0].data.statement.data.expr_statement.data[0].data.lhs.data.call.data.cover.arguments.arguments.data[0].data.lhs.tag == expr.LEFT_HAND_SIDE_EXPR_NEW);
+    std.debug.assert(result.data.if_statement.alternate.value.value.data.block_statement.body.data[0].data.statement.data.expr_statement.data[0].data.lhs.data.call.data.cover.arguments.arguments.data[0].data.lhs.data.new.tag == expr.NEW_EXPR_MEMBER);
+    std.debug.assert(result.data.if_statement.alternate.value.value.data.block_statement.body.data[0].data.statement.data.expr_statement.data[0].data.lhs.data.call.data.cover.arguments.arguments.data[0].data.lhs.data.new.data.member.tag == expr.MEMBER_EXPR_PRIMARY);
+    std.debug.assert(result.data.if_statement.alternate.value.value.data.block_statement.body.data[0].data.statement.data.expr_statement.data[0].data.lhs.data.call.data.cover.arguments.arguments.data[0].data.lhs.data.new.data.member.data.primary.tag == expr.PRIMARY_EXPR_LITERAL);
+    std.debug.assert(result.data.if_statement.alternate.value.value.data.block_statement.body.data[0].data.statement.data.expr_statement.data[0].data.lhs.data.call.data.cover.arguments.arguments.data[0].data.lhs.data.new.data.member.data.primary.data.literal.tag == expr.LITERAL_STRING);
+    std.debug.assert(testing.are_equal_strings(
+        result.data.if_statement.alternate.value.value.data.block_statement.body.data[0].data.statement.data.expr_statement.data[0].data.lhs.data.call.data.cover.arguments.arguments.data[0].data.lhs.data.new.data.member.data.primary.data.literal.data.string.*,
+        testing.u8_array_to_string(@ptrCast(@constCast("non-positive")), 12),
+    ));
+}
