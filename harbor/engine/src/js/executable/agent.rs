@@ -3,7 +3,7 @@ use std::{cell::RefCell, rc::Rc};
 use crate::js::executable::context::ExecutionContext;
 
 thread_local! {
-    static SURROUNDING_AGENT: RefCell<Option<Rc<RefCell<Agent>>>> = RefCell::new(None);
+    pub static SURROUNDING_AGENT: RefCell<Option<Rc<RefCell<Agent>>>> = RefCell::new(None);
 }
 
 pub type AgentSignifier = u64;
@@ -62,6 +62,17 @@ pub fn increment_module_async_evaluation_count() {
     SURROUNDING_AGENT.with_borrow_mut(|agent| {
         if let Some(agent) = agent.as_mut() {
             agent.borrow_mut().record.module_async_evaluation_count += 1;
+        } else {
+            panic!("No surrounding agent found");
+        }
+    })
+}
+
+pub fn running_execution_context() -> Option<ExecutionContext> {
+    SURROUNDING_AGENT.with_borrow(|agent| {
+        if let Some(agent) = agent.as_ref() {
+            let agent_borrow = agent.borrow();
+            agent_borrow.execution_context_stack.last().cloned()
         } else {
             panic!("No surrounding agent found");
         }

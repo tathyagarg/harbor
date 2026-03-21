@@ -1,7 +1,10 @@
 use crate::js::{
     collect_seq,
+    executable::context::resolve_binding,
     expr::{CodePoint, IdentifierNameTokenData},
     string_to_cps,
+    values::{Reference, string::JsString},
+    zs_to_js_string,
 };
 
 /// SS: IdentifierCodePoints
@@ -12,7 +15,14 @@ pub fn identifier_code_points(identifier: IdentifierNameTokenData) -> Vec<CodePo
 
 /// SS: StringValue
 /// https://tc39.es/ecma262/#sec-static-semantics-stringvalue
-pub fn string_value(identifier: IdentifierNameTokenData) -> String {
-    let cps = identifier_code_points(identifier);
-    String::from_utf16(&cps.iter().map(|cp| *cp as u16).collect::<Vec<u16>>()).unwrap()
+pub fn string_value(identifier: IdentifierNameTokenData) -> JsString {
+    zs_to_js_string(identifier.name)
+}
+
+/// RS: Evaluation
+/// https://tc39.es/ecma262/#sec-identifiers-runtime-semantics-evaluation
+pub fn evaluate(identifier: IdentifierNameTokenData) -> Reference {
+    resolve_binding(JsString(collect_seq(identifier.name)), None)
+        .unwrap()
+        .value
 }

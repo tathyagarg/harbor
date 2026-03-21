@@ -7,7 +7,7 @@ pub mod completion_record {
     pub enum CompletionRecordError {
         Unused,
 
-        ReferenceError(String),
+        ReferenceError,
         TypeError,
     }
 

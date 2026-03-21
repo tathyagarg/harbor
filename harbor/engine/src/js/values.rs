@@ -1,8 +1,12 @@
-use crate::js::values::{number::Number, string::JsString, symbol::Symbol};
+use crate::js::{
+    executable::environment::EnvironmentRecord,
+    values::{number::Number, string::JsString, symbol::Symbol},
+};
 
 pub mod string {
     use std::str::FromStr;
 
+    #[derive(Debug, Clone, Hash, Eq, PartialEq)]
     pub struct JsString(pub Vec<u16>);
 
     impl FromStr for JsString {
@@ -68,6 +72,7 @@ pub mod symbol {
 
     pub type SymbolId = u64;
 
+    #[derive(Debug, Clone)]
     pub struct Symbol {
         pub id: SymbolId,
         pub description: Option<JsString>,
@@ -208,6 +213,7 @@ pub mod number {
     }
 }
 
+#[derive(Clone, Debug)]
 pub enum Value {
     Undefined,
     Null,
@@ -216,4 +222,26 @@ pub enum Value {
     Symbol(Symbol),
     Number(Number),
     BigInt(()),
+    Object(()),
+}
+
+impl Value {
+    pub fn empty() -> Self {
+        Value::Undefined
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum ReferenceBase {
+    Value(Value),
+    EnvironmentRecord(EnvironmentRecord),
+    Unresolvable,
+}
+
+#[derive(Clone, Debug)]
+pub struct Reference {
+    pub base: ReferenceBase,
+    pub referenced_name: Value,
+    pub strict: bool,
+    pub this_value: Option<Value>,
 }

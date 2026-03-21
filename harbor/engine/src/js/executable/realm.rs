@@ -1,5 +1,6 @@
 use crate::js::executable::{agent::AgentSignifier, environment::EnvironmentRecord};
 
+#[derive(Debug, Clone)]
 pub struct Realm {
     pub agent_signifier: AgentSignifier,
 

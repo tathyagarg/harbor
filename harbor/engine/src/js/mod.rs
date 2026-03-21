@@ -8,7 +8,7 @@ pub mod values;
 
 use expr::{CodePoint, CodePointAtResult, CodePointSeq, TokenSeq, ZigString};
 
-use crate::js::expr::Seq;
+use crate::js::{expr::Seq, values::string::JsString};
 
 pub fn collect_seq<T: Seq>(seq: T) -> Vec<T::Item>
 where
@@ -119,4 +119,10 @@ pub fn parse_text_cps_rs(text: &[CodePoint], goal: u8) -> Vec<expr::Token> {
     let tokens_vec = unsafe { std::slice::from_raw_parts(tokens.data, tokens.len).to_vec() };
     unsafe { free_token_seq(tokens) };
     tokens_vec
+}
+
+pub fn zs_to_js_string(zs: ZigString) -> JsString {
+    let s = String::from_utf16(&collect_seq(zs)).unwrap();
+    unsafe { free_string(zs) };
+    JsString(s.encode_utf16().collect())
 }

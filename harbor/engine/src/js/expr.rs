@@ -577,10 +577,10 @@ pub struct Literal {
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub union LiteralData {
-    null: (),
-    boolean: bool,
-    string: *const ZigString,
-    numeric: *const NumericLiteralTokenData,
+    pub null: (),
+    pub boolean: bool,
+    pub string: *const ZigString,
+    pub numeric: *const NumericLiteralTokenData,
 }
 
 pub const LITERAL_NULL: u8 = 0;
