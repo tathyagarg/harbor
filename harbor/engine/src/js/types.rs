@@ -1,12 +1,17 @@
 pub mod completion_record {
+    use std::fmt::Debug;
+
     pub type UNUSED = ();
 
+    #[derive(Debug)]
     pub enum CompletionRecordError {
         Unused,
 
         ReferenceError(String),
+        TypeError,
     }
 
+    #[derive(Debug)]
     pub enum CompletionRecordKind {
         Normal,
         Return,
@@ -15,14 +20,15 @@ pub mod completion_record {
         Continue,
     }
 
-    pub struct CompletionRecord<T> {
+    #[derive(Debug)]
+    pub struct CompletionRecord<T: Debug> {
         pub kind: CompletionRecordKind,
         pub value: T,
         pub target: Option<String>,
     }
 
     #[allow(non_snake_case)]
-    pub fn CompletionRecordNormal<T>(value: T) -> CompletionRecord<T> {
+    pub fn CompletionRecordNormal<T: Debug>(value: T) -> CompletionRecord<T> {
         CompletionRecord {
             kind: CompletionRecordKind::Normal,
             value,
@@ -31,7 +37,7 @@ pub mod completion_record {
     }
 
     #[allow(non_snake_case)]
-    pub fn CompletionRecordThrow<T>(value: T) -> CompletionRecord<T> {
+    pub fn CompletionRecordThrow<T: Debug>(value: T) -> CompletionRecord<T> {
         CompletionRecord {
             kind: CompletionRecordKind::Throw,
             value,

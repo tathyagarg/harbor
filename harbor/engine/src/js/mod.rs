@@ -1,8 +1,10 @@
 pub mod executable;
 pub mod expr;
+pub mod operations;
 pub mod semantics;
 pub mod stmt;
 pub mod types;
+pub mod values;
 
 use expr::{CodePoint, CodePointAtResult, CodePointSeq, TokenSeq, ZigString};
 
