@@ -15,7 +15,13 @@ pub mod render;
 fn main() {
     env_logger::init();
 
-    let text = "if (x > 0) { console.log('positive'); } else { console.log('non-positive'); }";
+    let text = r#"if (x > 0) {
+    console.log("x is positive");
+    } else {
+    console.log("x is non-positive");
+    }
+    const y = 2;
+    "#;
     let text_utf16: Vec<u16> = text.encode_utf16().collect();
 
     let zig_string = js::expr::ZigString {

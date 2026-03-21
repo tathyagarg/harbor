@@ -77,7 +77,6 @@ pub fn expect(parser: *Parser, expected: Token) !void {
         const expected_data: *CommonTokenData = @ptrFromInt(expected.data);
 
         if (token_data.common_token_kind != expected_data.common_token_kind) {
-            std.debug.print("Expected common token kind {d}, but got {d}\n", .{ expected_data.common_token_kind, token_data.common_token_kind });
             return error.UnexpectedToken;
         }
 

@@ -30,7 +30,6 @@ pub fn parse_script(parser: *Parser) error{ UnexpectedEndOfTokens, OutOfMemory }
     defer body.deinit(parser.allocator);
 
     while (p.peek(parser) != null) {
-        std.debug.print("Parsing statement or declaration at token index {d}\n", .{parser.curr});
         const statement_or_declaration = try parse_statement_or_declaration(parser);
         try body.append(parser.allocator, statement_or_declaration.*);
     }
@@ -88,7 +87,6 @@ pub fn parse_statement(parser: *Parser) error{ UnexpectedEndOfTokens, OutOfMemor
     if (data.common_token_kind == .IdentifierName) {
         const statement = try parser.allocator.create(stmt.Statement);
         if (is_keyword(data, "if")) {
-            std.debug.print("Parsing if statement at token index {d}\n", .{parser.curr});
             const if_stmt = try parse_if_statement(parser);
 
             statement.* = stmt.Statement{
@@ -237,7 +235,6 @@ pub fn parse_statement(parser: *Parser) error{ UnexpectedEndOfTokens, OutOfMemor
         }
     }
 
-    std.debug.print("Parsing expression statement at token index {d}\n", .{parser.curr});
     const statement = try parser.allocator.create(stmt.Statement);
     statement.* = stmt.Statement{
         .tag = stmt.STATEMENT_EXPR_STATEMENT,
@@ -429,7 +426,6 @@ pub fn parse_statement_or_declaration(parser: *Parser) error{ UnexpectedEndOfTok
             },
         };
     } else {
-        std.debug.print("Parsing statement at token index {d}\n", .{parser.curr});
         const statement = try parse_statement(parser);
 
         statement_or_declaration.* = stmt.StatementOrDeclaration{
@@ -667,10 +663,7 @@ pub fn parse_if_statement(parser: *Parser) error{ UnexpectedEndOfTokens, OutOfMe
     }) catch return error.UnexpectedEndOfTokens;
     _ = p.next(parser);
 
-    std.debug.print("Parsing if statement test expression at token index {d}\n", .{parser.curr});
     const test_expr = exp_parser.parse_expression(parser) catch return error.UnexpectedEndOfTokens;
-    std.debug.print("Parsed if statement test expression: {any}\n", .{test_expr.*});
-    std.debug.print("Expecting closing parenthesis for if statement at token index {d}\n", .{parser.curr});
 
     p.expect_skip_whitespace(parser, _text.Token{
         .kind = .CommonToken,
@@ -681,9 +674,7 @@ pub fn parse_if_statement(parser: *Parser) error{ UnexpectedEndOfTokens, OutOfMe
     }) catch return error.UnexpectedEndOfTokens;
     _ = p.next(parser);
 
-    std.debug.print("Parsing if statement consequent at token index {d}\n", .{parser.curr});
     const consequent_stmt = try parse_statement(parser);
-    std.debug.print("Parsed if statement consequent: {any}\n", .{consequent_stmt.*.data.block_statement});
 
     const if_stmt = try parser.allocator.create(stmt.IfStatement);
     const maybe_stmt = try parser.allocator.create(stmt.MaybeStatement);
@@ -700,8 +691,6 @@ pub fn parse_if_statement(parser: *Parser) error{ UnexpectedEndOfTokens, OutOfMe
         .consequent = &consequent_stmt.*,
         .alternate = &maybe_stmt.*,
     };
-
-    std.debug.print("Checking for else clause in if statement at token index {d}\n", .{parser.curr});
 
     const next_token = p.peek(parser) orelse return if_stmt;
     if (next_token.kind == .CommonToken) {

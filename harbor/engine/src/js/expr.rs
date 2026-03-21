@@ -1,10 +1,29 @@
 use std::fmt::{Debug, Display};
 
+pub trait Seq {
+    type Item;
+
+    fn data(&self) -> *const Self::Item;
+    fn len(&self) -> usize;
+}
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct ZigString {
     pub data: *const u16,
     pub len: usize,
+}
+
+impl Seq for ZigString {
+    type Item = u16;
+
+    fn data(&self) -> *const Self::Item {
+        self.data
+    }
+
+    fn len(&self) -> usize {
+        self.len
+    }
 }
 
 impl Debug for ZigString {
@@ -29,6 +48,18 @@ pub struct CodePointAtResult {
 pub struct CodePointSeq {
     pub data: *const CodePoint,
     pub len: usize,
+}
+
+impl Seq for CodePointSeq {
+    type Item = CodePoint;
+
+    fn data(&self) -> *const Self::Item {
+        self.data
+    }
+
+    fn len(&self) -> usize {
+        self.len
+    }
 }
 
 #[repr(C)]
@@ -153,7 +184,7 @@ impl From<usize> for PunctuatorKind {
 }
 
 #[repr(u8)]
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub enum TokenKind {
     Whitespace = 0,
     LineTerminator = 1,
@@ -163,7 +194,7 @@ pub enum TokenKind {
 }
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Token {
     pub kind: TokenKind,
     pub value: usize,
@@ -1633,8 +1664,9 @@ impl Debug for AssignmentExpression {
                 let raw = unsafe { self.data.raw_assignment };
                 write!(
                     f,
-                    "RawAssignment(left: {:p}, right: {:p})",
-                    raw.left, raw.right
+                    "RawAssignment(left: {:?}, right: {:?})",
+                    unsafe { *raw.left },
+                    unsafe { *raw.right }
                 )
             }
             ASSIGNMENT_EXPR_OPERATOR => {
