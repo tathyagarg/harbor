@@ -11,7 +11,6 @@ use winit::window::{Window, WindowId};
 
 use wgpu::{self};
 
-use crate::agent::Agent;
 use crate::css::r#box::Box as CssBox;
 use crate::css::colors::UsedColor;
 use crate::css::layout::Layout;
@@ -23,6 +22,7 @@ use crate::globals::{
 use crate::html5::dom::Document;
 use crate::html5::elements::anchor::AnchorElement;
 use crate::render::state::{TabData, WindowState};
+use crate::user_agent::Agent;
 
 pub mod shapes;
 pub mod state;

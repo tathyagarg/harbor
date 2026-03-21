@@ -1055,7 +1055,6 @@ pub fn parse_binary_expression(parser: *Parser, min_precedence: u8) error{ OutOf
     };
 
     while (p.peek(parser)) |token| {
-        std.debug.print("Checking token for binary operator: {any}\n", .{token});
         testing.print_token(token);
         const operator = is_binary_operator(token) orelse break;
 

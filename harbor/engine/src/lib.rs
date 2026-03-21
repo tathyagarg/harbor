@@ -1,4 +1,3 @@
-pub mod agent;
 pub mod css;
 pub mod font;
 pub mod globals;
@@ -7,3 +6,5 @@ pub mod http;
 pub mod infra;
 pub mod js;
 pub mod render;
+pub mod user_agent;
+

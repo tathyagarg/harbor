@@ -1,8 +1,7 @@
 use std::rc::Rc;
 
-use crate::{agent::Agent, render::App};
+use crate::{render::App, user_agent::Agent};
 
-pub mod agent;
 pub mod css;
 pub mod font;
 pub mod globals;
@@ -11,6 +10,7 @@ pub mod http;
 pub mod infra;
 pub mod js;
 pub mod render;
+pub mod user_agent;
 
 fn main() {
     env_logger::init();
