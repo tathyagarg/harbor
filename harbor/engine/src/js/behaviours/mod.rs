@@ -78,12 +78,71 @@ fn ordinary_set_prototype_of(object: &mut Object, prototype: Option<Object>) -> 
     true
 }
 
-// fn ordinary_is_extensible(object: &Object) -> bool {}
-//
-// fn ordinary_prevent_extensions(object: &mut Object) -> bool {}
-//
-// fn ordinary_get_own_property(object: &Object, key: PropertyKey) -> Option<PropertyDescriptor> {}
-//
+pub fn ordinary_is_extensible(object: &Object) -> bool {
+    match object {
+        Object::Ordinary(OrdinaryObject { extensible, .. }) => *extensible,
+        Object::Array(ArrayObject { extensible, .. }) => *extensible,
+    }
+}
+
+pub fn ordinary_prevent_extensions(object: &mut Object) -> bool {
+    match object {
+        Object::Ordinary(OrdinaryObject { extensible, .. }) => {
+            *extensible = false;
+            true
+        }
+        Object::Array(ArrayObject { extensible, .. }) => {
+            *extensible = false;
+            true
+        }
+    }
+}
+
+pub fn ordinary_get_own_property(object: &Object, key: PropertyKey) -> Option<PropertyDescriptor> {
+    let ordinary = match object {
+        Object::Ordinary(ordinary) => ordinary,
+        _ => return None,
+    };
+
+    if !ordinary.properties.contains_key(&key) {
+        return None;
+    }
+
+    let x = ordinary.properties.get(&key).unwrap();
+
+    let desc = if let PropertyDescriptor::Data {
+        value,
+        writable,
+        enumerable,
+        configurable,
+    } = x
+    {
+        PropertyDescriptor::Data {
+            value: value.clone(),
+            writable: *writable,
+            enumerable: *enumerable,
+            configurable: *configurable,
+        }
+    } else if let PropertyDescriptor::Accessor {
+        get,
+        set,
+        enumerable,
+        configurable,
+    } = x
+    {
+        PropertyDescriptor::Accessor {
+            get: get.clone(),
+            set: set.clone(),
+            enumerable: *enumerable,
+            configurable: *configurable,
+        }
+    } else {
+        panic!()
+    };
+
+    Some(desc)
+}
+
 // fn ordinary_define_own_property(
 //     object: &mut Object,
 //     key: PropertyKey,
