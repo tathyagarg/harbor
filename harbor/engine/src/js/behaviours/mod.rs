@@ -1,7 +1,9 @@
 use std::{cell::RefCell, rc::Rc};
 
 use crate::js::{
-    types::completion_record::{CompletionRecord, CompletionRecordError},
+    types::completion_record::{
+        CompletionRecord, CompletionRecordError, CompletionRecordNormal, CompletionRecordThrow,
+    },
     values::{
         Value,
         object::{ArrayObject, Object, OrdinaryObject, PropertyDescriptor, PropertyKey},
@@ -143,29 +145,203 @@ pub fn ordinary_get_own_property(object: &Object, key: PropertyKey) -> Option<Pr
     Some(desc)
 }
 
-// fn ordinary_define_own_property(
-//     object: &mut Object,
-//     key: PropertyKey,
-//     desc: PropertyDescriptor,
-// ) -> Result<CompletionRecord<bool>, CompletionRecord<CompletionRecordError>> {
-// }
-//
-// fn is_compatible_property_descriptor(
-//     extensible: bool,
-//     desc: &PropertyDescriptor,
-//     current: Option<&PropertyDescriptor>,
-// ) -> bool {
-// }
-//
-// fn validate_and_apply_property_descriptor(
-//     object: Option<&mut Object>,
-//     key: PropertyKey,
-//     extensible: bool,
-//     desc: &PropertyDescriptor,
-//     current: Option<&PropertyDescriptor>,
-// ) -> bool {
-// }
-//
+fn ordinary_define_own_property(
+    object: &mut Object,
+    key: PropertyKey,
+    desc: PropertyDescriptor,
+) -> Result<CompletionRecord<bool>, CompletionRecord<CompletionRecordError>> {
+    let _current = ordinary_get_own_property(object, key.clone());
+    if let Some(current) = _current {
+        let extensible = ordinary_is_extensible(object);
+
+        Ok(CompletionRecordNormal(
+            validate_and_apply_property_descriptor(
+                Some(object),
+                key,
+                extensible,
+                &desc,
+                Some(&current),
+            ),
+        ))
+    } else {
+        Err(CompletionRecordThrow(CompletionRecordError::Misc(format!(
+            "Property {:?} does not exist on object",
+            key
+        ))))
+    }
+}
+
+fn is_compatible_property_descriptor(
+    extensible: bool,
+    desc: &PropertyDescriptor,
+    current: Option<&PropertyDescriptor>,
+) -> bool {
+    validate_and_apply_property_descriptor(None, PropertyKey::empty(), extensible, desc, current)
+}
+
+fn validate_and_apply_property_descriptor(
+    object: Option<&mut Object>,
+    key: PropertyKey,
+    extensible: bool,
+    desc: &PropertyDescriptor,
+    current: Option<&PropertyDescriptor>,
+) -> bool {
+    if current.is_none() {
+        if !extensible {
+            return false;
+        }
+
+        if object.is_none() {
+            return true;
+        }
+
+        let object = object.unwrap();
+        match object {
+            Object::Ordinary(ordinary) => {
+                ordinary.properties.insert(key, desc.clone());
+            }
+            _ => panic!(),
+        }
+
+        return true;
+    }
+
+    let current = current.unwrap();
+    if !current.configurable() {
+        if desc.field("configurable").is_some() && desc.configurable() {
+            return false;
+        }
+
+        if desc.field("enumerable").is_some() && (desc.enumerable() != current.enumerable()) {
+            return false;
+        }
+
+        if !desc.is_generic_descriptor()
+            && (desc.is_accessor_descriptor() != current.is_accessor_descriptor())
+        {
+            return false;
+        }
+
+        if current.is_accessor_descriptor() {
+            if (desc.field("get").is_some()
+                && !same_value(
+                    &desc.field("get").unwrap_or(Value::Undefined),
+                    &current.field("get").unwrap_or(Value::Undefined),
+                ))
+                || (desc.field("set").is_some()
+                    && !same_value(
+                        &desc.field("set").unwrap_or(Value::Undefined),
+                        &current.field("set").unwrap_or(Value::Undefined),
+                    ))
+            {
+                return false;
+            }
+        } else if same_value(
+            &current.field("writable").unwrap_or(Value::Undefined),
+            &Value::Boolean(false),
+        ) {
+            if desc.field("writable").is_some()
+                && same_value(
+                    &desc.field("writable").unwrap_or(Value::Undefined),
+                    &Value::Boolean(true),
+                )
+            {
+                return false;
+            }
+
+            if desc.field("value").is_some() {
+                return same_value(
+                    &desc.field("value").unwrap_or(Value::Undefined),
+                    &current.field("value").unwrap_or(Value::Undefined),
+                );
+            }
+        }
+    }
+
+    if object.is_some() {
+        if current.is_data_descriptor() && desc.is_accessor_descriptor() {
+            let configurable = (if desc.field("configurable").is_some() {
+                desc.field("configurable").unwrap_or(Value::Undefined)
+            } else {
+                Value::Boolean(current.configurable())
+            })
+            .unwrap_bool()
+            .unwrap();
+
+            let enumerable = (if desc.field("enumerable").is_some() {
+                desc.field("enumerable").unwrap_or(Value::Undefined)
+            } else {
+                Value::Boolean(current.enumerable())
+            })
+            .unwrap_bool()
+            .unwrap();
+
+            match object.unwrap() {
+                Object::Ordinary(ordinary) => {
+                    ordinary.properties.insert(
+                        key,
+                        PropertyDescriptor::Accessor {
+                            get: desc.field("get").unwrap_or(Value::Undefined),
+                            set: desc.field("set").unwrap_or(Value::Undefined),
+                            enumerable,
+                            configurable,
+                        },
+                    );
+                }
+                _ => panic!(),
+            }
+        } else if current.is_accessor_descriptor() && desc.is_data_descriptor() {
+            let configurable = (if desc.field("configurable").is_some() {
+                desc.field("configurable").unwrap_or(Value::Undefined)
+            } else {
+                Value::Boolean(current.configurable())
+            })
+            .unwrap_bool()
+            .unwrap();
+
+            let enumerable = (if desc.field("enumerable").is_some() {
+                desc.field("enumerable").unwrap_or(Value::Undefined)
+            } else {
+                Value::Boolean(current.enumerable())
+            })
+            .unwrap_bool()
+            .unwrap();
+
+            match object.unwrap() {
+                Object::Ordinary(ordinary) => {
+                    ordinary.properties.insert(
+                        key,
+                        PropertyDescriptor::Data {
+                            value: desc.field("value").unwrap_or(Value::Undefined),
+                            writable: desc
+                                .field("writable")
+                                .unwrap_or(Value::Boolean(false))
+                                .unwrap_bool()
+                                .unwrap(),
+                            enumerable,
+                            configurable,
+                        },
+                    );
+                }
+                _ => panic!(),
+            }
+        } else {
+            let ordinary = match object.unwrap() {
+                Object::Ordinary(ordinary) => ordinary,
+                _ => panic!(),
+            };
+
+            for field in desc.fields() {
+                ordinary
+                    .properties
+                    .insert(PropertyKey::from(field), desc.clone());
+            }
+        }
+    }
+
+    true
+}
+
 // fn ordinary_has_property(
 //     object: &Object,
 //     key: PropertyKey,

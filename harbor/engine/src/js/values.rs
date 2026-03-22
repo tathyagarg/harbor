@@ -263,6 +263,12 @@ pub mod object {
         Symbol(Symbol),
     }
 
+    impl PropertyKey {
+        pub fn empty() -> Self {
+            PropertyKey::String(JsString::from_str("").unwrap())
+        }
+    }
+
     impl From<String> for PropertyKey {
         fn from(value: String) -> Self {
             PropertyKey::String(JsString::from_str(&value).unwrap())
@@ -298,6 +304,99 @@ pub mod object {
             enumerable: bool,
             configurable: bool,
         },
+        NonGeneric {
+            fields: HashMap<String, Value>,
+        },
+    }
+
+    impl PropertyDescriptor {
+        pub fn fields(&self) -> Vec<String> {
+            match self {
+                PropertyDescriptor::Data { .. } => vec![
+                    "value".to_string(),
+                    "writable".to_string(),
+                    "enumerable".to_string(),
+                    "configurable".to_string(),
+                ],
+                PropertyDescriptor::Accessor { .. } => vec![
+                    "get".to_string(),
+                    "set".to_string(),
+                    "enumerable".to_string(),
+                    "configurable".to_string(),
+                ],
+                PropertyDescriptor::NonGeneric { fields } => fields.keys().cloned().collect(),
+            }
+        }
+
+        pub fn is_data_descriptor(&self) -> bool {
+            matches!(self, PropertyDescriptor::Data { .. })
+        }
+
+        pub fn is_accessor_descriptor(&self) -> bool {
+            matches!(self, PropertyDescriptor::Accessor { .. })
+        }
+
+        pub fn is_generic_descriptor(&self) -> bool {
+            !matches!(self, PropertyDescriptor::NonGeneric { .. })
+        }
+
+        pub fn enumerable(&self) -> bool {
+            match self {
+                PropertyDescriptor::Data { enumerable, .. } => *enumerable,
+                PropertyDescriptor::Accessor { enumerable, .. } => *enumerable,
+                PropertyDescriptor::NonGeneric { fields, .. } => {
+                    if let Some(Value::Boolean(enumerable)) = fields.get("enumerable") {
+                        *enumerable
+                    } else {
+                        false
+                    }
+                }
+            }
+        }
+
+        pub fn configurable(&self) -> bool {
+            match self {
+                PropertyDescriptor::Data { configurable, .. } => *configurable,
+                PropertyDescriptor::Accessor { configurable, .. } => *configurable,
+                PropertyDescriptor::NonGeneric { fields, .. } => {
+                    if let Some(Value::Boolean(configurable)) = fields.get("configurable") {
+                        *configurable
+                    } else {
+                        false
+                    }
+                }
+            }
+        }
+
+        pub fn field(&self, name: &str) -> Option<Value> {
+            match self {
+                PropertyDescriptor::Data {
+                    value,
+                    writable,
+                    enumerable,
+                    configurable,
+                } => match name {
+                    "value" => Some(value.clone()),
+                    "writable" => Some(Value::Boolean(*writable)),
+                    "enumerable" => Some(Value::Boolean(*enumerable)),
+                    "configurable" => Some(Value::Boolean(*configurable)),
+                    _ => None,
+                },
+                PropertyDescriptor::Accessor {
+                    get,
+                    set,
+                    enumerable,
+                    configurable,
+                } => match name {
+                    "get" => Some(get.clone()),
+                    "set" => Some(set.clone()),
+                    "enumerable" => Some(Value::Boolean(*enumerable)),
+                    "configurable" => Some(Value::Boolean(*configurable)),
+                    _ => None,
+                },
+                PropertyDescriptor::NonGeneric { fields } => fields.get(name).cloned(),
+            }
+        }
     }
 
     #[derive(Debug, Clone)]
@@ -391,6 +490,14 @@ pub enum Value {
 impl Value {
     pub fn empty() -> Self {
         Value::Undefined
+    }
+
+    pub fn unwrap_bool(&self) -> Option<bool> {
+        if let Value::Boolean(b) = self {
+            Some(*b)
+        } else {
+            None
+        }
     }
 }
 

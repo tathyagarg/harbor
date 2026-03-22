@@ -9,6 +9,8 @@ pub mod completion_record {
 
         ReferenceError,
         TypeError,
+
+        Misc(String),
     }
 
     #[derive(Debug)]
