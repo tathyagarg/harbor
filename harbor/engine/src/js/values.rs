@@ -253,7 +253,7 @@ pub mod number {
 }
 
 pub mod object {
-    use std::{collections::HashMap, str::FromStr};
+    use std::{cell::RefCell, collections::HashMap, rc::Rc, str::FromStr};
 
     use crate::js::values::{Value, string::JsString, symbol::Symbol};
 
@@ -302,20 +302,78 @@ pub mod object {
 
     #[derive(Debug, Clone)]
     pub struct ArrayObject {
+        pub extensible: bool,
+
         /// NOTE: This is stored as a property under Object, but is stored here for easier access
         /// and it also has slight performance benefits. Plus storing as an object property makes
         /// the length a Number (f64) instead of a u32, which is not ideal.
-        length: u32,
-        object: Box<Object>,
+        pub length: u32,
+        pub object: Box<Object>,
+    }
+
+    #[derive(Debug, Clone)]
+    pub struct OrdinaryObject {
+        pub prototype: Rc<RefCell<Option<Object>>>,
+        pub extensible: bool,
+
+        pub properties: HashMap<PropertyKey, PropertyDescriptor>,
     }
 
     #[derive(Debug, Clone)]
     pub enum Object {
-        Object {
-            properties: HashMap<PropertyKey, PropertyDescriptor>,
-        },
+        Ordinary(OrdinaryObject),
         Array(ArrayObject),
     }
+
+    // impl OrdinaryObject {
+    //     fn get_prototype_of(&self) -> CompletionRecord<Option<Object>>;
+
+    //     fn set_prototype_of(&mut self, prototype: Option<Object>) -> CompletionRecord<bool>;
+
+    //     fn is_extensible(&self) -> CompletionRecord<bool>;
+
+    //     fn prevent_extensions(&mut self) -> CompletionRecord<bool>;
+
+    //     fn get_own_property(
+    //         &self,
+    //         key: PropertyKey,
+    //     ) -> CompletionRecord<Option<PropertyDescriptor>>;
+
+    //     fn define_own_property(
+    //         &mut self,
+    //         key: PropertyKey,
+    //         desc: PropertyDescriptor,
+    //     ) -> Result<CompletionRecord<bool>, CompletionRecord<CompletionRecordError>>;
+
+    //     fn has_property(
+    //         &self,
+    //         key: PropertyKey,
+    //     ) -> Result<CompletionRecord<bool>, CompletionRecord<CompletionRecordError>>;
+
+    //     fn get(
+    //         &self,
+    //         key: PropertyKey,
+    //         receiver: Value,
+    //     ) -> Result<CompletionRecord<Value>, CompletionRecord<CompletionRecordError>>;
+
+    //     fn set(
+    //         &mut self,
+    //         key: PropertyKey,
+    //         value: Value,
+    //         receiver: Value,
+    //     ) -> Result<CompletionRecord<bool>, CompletionRecord<CompletionRecordError>>;
+
+    //     fn delete(
+    //         &mut self,
+    //         key: PropertyKey,
+    //     ) -> Result<CompletionRecord<bool>, CompletionRecord<CompletionRecordError>>;
+
+    //     fn own_property_keys(&self) -> CompletionRecord<Vec<PropertyKey>>;
+    // }
+
+    // impl Ordinary for OrdinaryObject {
+    //
+    // }
 }
 
 #[derive(Clone, Debug)]
@@ -349,4 +407,55 @@ pub struct Reference {
     pub referenced_name: Value,
     pub strict: bool,
     pub this_value: Option<Value>,
+}
+
+pub fn same_type(x: &Value, y: &Value) -> bool {
+    match (x, y) {
+        (Value::Undefined, Value::Undefined)
+        | (Value::Null, Value::Null)
+        | (Value::Boolean(_), Value::Boolean(_))
+        | (Value::String(_), Value::String(_))
+        | (Value::Symbol(_), Value::Symbol(_))
+        | (Value::Number(_), Value::Number(_))
+        | (Value::BigInt(_), Value::BigInt(_))
+        | (Value::Object(_), Value::Object(_)) => true,
+        _ => false,
+    }
+}
+
+pub fn same_value(x: &Value, y: &Value) -> bool {
+    if !same_type(x, y) {
+        return false;
+    }
+
+    if let Value::Number(x_num) = x
+        && let Value::Number(y_num) = y
+    {
+        return x_num.same_value(y_num);
+    }
+
+    return same_value_non_number(x, y);
+}
+
+pub fn same_value_non_number(x: &Value, y: &Value) -> bool {
+    if let Value::Undefined = x {
+        return true;
+    }
+    if let Value::Null = x {
+        return true;
+    }
+
+    if let Value::String(x_str) = x
+        && let Value::String(y_str) = y
+    {
+        return x_str == y_str;
+    }
+
+    if let Value::Boolean(x_bool) = x
+        && let Value::Boolean(y_bool) = y
+    {
+        return x_bool == y_bool;
+    }
+
+    return false;
 }

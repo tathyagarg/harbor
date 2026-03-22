@@ -29,6 +29,10 @@ pub mod array {
         array: &mut ArrayObject,
         desc: PropertyDescriptor,
     ) -> Result<CompletionRecord<bool>, CompletionRecord<()>> {
+        if let PropertyDescriptor::Data { .. } = &desc {
+            // return
+        }
+
         todo!()
     }
 }
