@@ -1,3 +1,4 @@
+pub mod behaviours;
 pub mod executable;
 pub mod expr;
 pub mod operations;

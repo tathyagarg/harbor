@@ -21,3 +21,13 @@ pub mod literals {
         }
     }
 }
+
+pub mod arrays {
+    use crate::js::{
+        expr::ArrayLiteral, types::completion_record::CompletionRecord, values::object::Object,
+    };
+
+    // pub fn evaluate(array: ArrayLiteral, proto: Object) -> Result<CompletionRecord<>> {
+
+    // }
+}

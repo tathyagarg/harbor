@@ -1,10 +1,10 @@
 use crate::js::{
     executable::environment::EnvironmentRecord,
-    values::{number::Number, string::JsString, symbol::Symbol},
+    values::{number::Number, object::Object, string::JsString, symbol::Symbol},
 };
 
 pub mod string {
-    use std::str::FromStr;
+    use std::{ops::Add, str::FromStr};
 
     #[derive(Debug, Clone, Hash, Eq, PartialEq)]
     pub struct JsString(pub Vec<u16>);
@@ -14,6 +14,27 @@ pub mod string {
 
         fn from_str(s: &str) -> Result<Self, Self::Err> {
             Ok(JsString(s.encode_utf16().collect()))
+        }
+    }
+
+    impl Add for JsString {
+        type Output = Self;
+
+        fn add(self, rhs: Self) -> Self::Output {
+            let mut combined = self.0;
+            combined.extend(rhs.0);
+            JsString(combined)
+        }
+    }
+
+    impl PartialEq<&str> for JsString {
+        fn eq(&self, other: &&str) -> bool {
+            let other_utf16: Vec<u16> = other.encode_utf16().collect();
+            self.0 == other_utf16
+        }
+
+        fn ne(&self, other: &&str) -> bool {
+            !self.eq(other)
         }
     }
 
@@ -72,7 +93,7 @@ pub mod symbol {
 
     pub type SymbolId = u64;
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Hash, Eq, PartialEq)]
     pub struct Symbol {
         pub id: SymbolId,
         pub description: Option<JsString>,
@@ -80,9 +101,11 @@ pub mod symbol {
 }
 
 pub mod number {
+    use std::str::FromStr;
+
     use crate::js::{
         operations::{to_int32, to_uint32},
-        values::Value,
+        values::{Value, string::JsString},
     };
 
     pub enum BitwiseOp {
@@ -194,8 +217,24 @@ pub mod number {
         }
 
         /// NOTE: This may not be spec-compliant
-        pub fn to_string(&self) -> String {
-            self.0.to_string()
+        pub fn to_string(&self, radix: u8) -> JsString {
+            if self.0.is_nan() {
+                return JsString::from_str("NaN").unwrap();
+            }
+
+            if self.0 == 0.0 {
+                return JsString::from_str("0").unwrap();
+            }
+
+            if self.0 < 0.0 {
+                return JsString::from_str("-").unwrap() + Number(-self.0).to_string(radix);
+            }
+
+            if self.0.is_infinite() {
+                return JsString::from_str("Infinity").unwrap();
+            }
+
+            return JsString::from_str(&self.0.to_string().to_uppercase()).unwrap();
         }
     }
 
@@ -213,6 +252,72 @@ pub mod number {
     }
 }
 
+pub mod object {
+    use std::{collections::HashMap, str::FromStr};
+
+    use crate::js::values::{Value, string::JsString, symbol::Symbol};
+
+    #[derive(Debug, Clone, Hash, Eq, PartialEq)]
+    pub enum PropertyKey {
+        String(JsString),
+        Symbol(Symbol),
+    }
+
+    impl From<String> for PropertyKey {
+        fn from(value: String) -> Self {
+            PropertyKey::String(JsString::from_str(&value).unwrap())
+        }
+    }
+
+    impl PartialEq<&str> for PropertyKey {
+        fn eq(&self, other: &&str) -> bool {
+            match self {
+                PropertyKey::String(s) => JsString::from_str(other).unwrap() == *s,
+                PropertyKey::Symbol(_) => false,
+            }
+        }
+
+        fn ne(&self, other: &&str) -> bool {
+            !self.eq(other)
+        }
+    }
+
+    #[derive(Debug, Clone)]
+    pub enum PropertyDescriptor {
+        Data {
+            value: Value,
+            writable: bool,
+            enumerable: bool,
+            configurable: bool,
+        },
+        Accessor {
+            /// NOTE: Object or undefined
+            get: Value,
+            /// NOTE: Object or undefined
+            set: Value,
+            enumerable: bool,
+            configurable: bool,
+        },
+    }
+
+    #[derive(Debug, Clone)]
+    pub struct ArrayObject {
+        /// NOTE: This is stored as a property under Object, but is stored here for easier access
+        /// and it also has slight performance benefits. Plus storing as an object property makes
+        /// the length a Number (f64) instead of a u32, which is not ideal.
+        length: u32,
+        object: Box<Object>,
+    }
+
+    #[derive(Debug, Clone)]
+    pub enum Object {
+        Object {
+            properties: HashMap<PropertyKey, PropertyDescriptor>,
+        },
+        Array(ArrayObject),
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum Value {
     Undefined,
@@ -222,7 +327,7 @@ pub enum Value {
     Symbol(Symbol),
     Number(Number),
     BigInt(()),
-    Object(()),
+    Object(Object),
 }
 
 impl Value {

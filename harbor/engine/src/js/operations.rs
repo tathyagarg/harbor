@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use crate::js::{
     types::completion_record::{
         CompletionRecord, CompletionRecordError, CompletionRecordNormal, CompletionRecordThrow,
@@ -69,4 +71,48 @@ pub fn to_uint32(
     let int = number.0.trunc() % f64::powi(2.0, 32);
 
     return Ok(CompletionRecordNormal(Number(int)));
+}
+
+pub fn to_string(
+    argument: Value,
+) -> Result<CompletionRecord<JsString>, CompletionRecord<CompletionRecordError>> {
+    match argument {
+        Value::String(s) => return Ok(CompletionRecordNormal(s)),
+        Value::Symbol(_) => {
+            return Err(CompletionRecordThrow(CompletionRecordError::TypeError));
+        }
+        Value::Undefined => {
+            return Ok(CompletionRecordNormal(
+                JsString::from_str("undefined").unwrap(),
+            ));
+        }
+        Value::Null => return Ok(CompletionRecordNormal(JsString::from_str("null").unwrap())),
+        Value::Boolean(b) => {
+            if b {
+                return Ok(CompletionRecordNormal(JsString::from_str("true").unwrap()));
+            } else {
+                return Ok(CompletionRecordNormal(JsString::from_str("false").unwrap()));
+            }
+        }
+        Value::Number(n) => return Ok(CompletionRecordNormal(n.to_string(10))),
+        _ => todo!("to_string for object"),
+    }
+}
+
+pub fn canonical_numeric_index_string(argument: &JsString) -> Option<Number> {
+    if *argument == "-0" {
+        return Some(Number(-0.0));
+    }
+
+    let n = to_number(Value::String(argument.clone()));
+    match n {
+        Err(_) => None,
+        Ok(CompletionRecord { value, .. }) => {
+            if to_string(Value::Number(value)).unwrap().value == *argument {
+                Some(value)
+            } else {
+                None
+            }
+        }
+    }
 }
