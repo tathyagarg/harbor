@@ -628,6 +628,18 @@ pub struct ArrayElementSeq {
     pub len: usize,
 }
 
+impl Seq for ArrayElementSeq {
+    type Item = ArrayElement;
+
+    fn data(&self) -> *const Self::Item {
+        self.data
+    }
+
+    fn len(&self) -> usize {
+        self.len
+    }
+}
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct ArrayElement {

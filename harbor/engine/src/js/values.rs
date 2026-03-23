@@ -263,7 +263,10 @@ pub mod number {
 pub mod object {
     use std::{cell::RefCell, collections::HashMap, rc::Rc, str::FromStr};
 
-    use crate::js::values::{Value, string::JsString, symbol::Symbol};
+    use crate::js::{
+        behaviours::ordinary_get_own_property,
+        values::{Value, string::JsString, symbol::Symbol},
+    };
 
     #[derive(Debug, Clone, Hash, Eq, PartialEq)]
     pub enum PropertyKey {
@@ -503,6 +506,12 @@ pub mod object {
         }
     }
 
+    pub trait ObjectTrait {
+        fn get_prototype_of(&self) -> Rc<RefCell<Option<Object>>>;
+        fn get_own_property(&self, key: &PropertyKey) -> Option<PropertyDescriptor>;
+        fn set(&mut self, key: &PropertyKey, value: Value, receiver: Value) -> bool;
+    }
+
     #[derive(Debug, Clone)]
     pub struct ArrayObject {
         pub extensible: bool,
@@ -534,6 +543,20 @@ pub mod object {
         }
     }
 
+    impl ObjectTrait for OrdinaryObject {
+        fn get_prototype_of(&self) -> Rc<RefCell<Option<Object>>> {
+            self.prototype.clone()
+        }
+
+        fn get_own_property(&self, key: &PropertyKey) -> Option<PropertyDescriptor> {
+            ordinary_get_own_property(&Object::Ordinary(self.clone()), key)
+        }
+
+        fn set(&mut self, key: &PropertyKey, value: Value, receiver: Value) -> bool {
+            todo!()
+        }
+    }
+
     #[derive(Debug, Clone)]
     pub enum Object {
         Ordinary(OrdinaryObject),
@@ -547,6 +570,29 @@ pub mod object {
 
         pub fn constructor() -> Object {
             Object::Ordinary(OrdinaryObject::prototype())
+        }
+    }
+
+    impl ObjectTrait for Object {
+        fn get_prototype_of(&self) -> Rc<RefCell<Option<Object>>> {
+            match self {
+                Object::Ordinary(obj) => obj.get_prototype_of(),
+                Object::Array(arr) => arr.object.get_prototype_of(),
+            }
+        }
+
+        fn get_own_property(&self, key: &PropertyKey) -> Option<PropertyDescriptor> {
+            match self {
+                Object::Ordinary(obj) => obj.get_own_property(key),
+                Object::Array(arr) => arr.object.get_own_property(key),
+            }
+        }
+
+        fn set(&mut self, key: &PropertyKey, value: Value, receiver: Value) -> bool {
+            match self {
+                Object::Ordinary(obj) => obj.set(key, value, receiver),
+                Object::Array(arr) => arr.object.set(key, value, receiver),
+            }
         }
     }
 
@@ -629,6 +675,30 @@ impl Value {
     pub fn unwrap_number(&self) -> Option<Number> {
         if let Value::Number(n) = self {
             Some(*n)
+        } else {
+            None
+        }
+    }
+
+    pub fn unwrap_object(&self) -> Option<Object> {
+        if let Value::Object(o) = self {
+            Some(o.clone())
+        } else {
+            None
+        }
+    }
+
+    pub fn unwrap_string(&self) -> Option<JsString> {
+        if let Value::String(s) = self {
+            Some(s.clone())
+        } else {
+            None
+        }
+    }
+
+    pub fn unwrap_symbol(&self) -> Option<Symbol> {
+        if let Value::Symbol(s) = self {
+            Some(s.clone())
         } else {
             None
         }

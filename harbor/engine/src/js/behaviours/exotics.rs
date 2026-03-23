@@ -91,7 +91,7 @@ pub mod array {
         let mut obj = Object::Array(array.clone());
 
         if desc.field("value").is_none() {
-            let res = ordinary_define_own_property(&mut obj, PropertyKey::from("length"), &desc);
+            let res = ordinary_define_own_property(&mut obj, &PropertyKey::from("length"), &desc);
             if let Object::Array(arr) = obj {
                 *array = arr;
             }
@@ -113,7 +113,7 @@ pub mod array {
 
         new_len_desc.set_field("value", Value::Number(new_len));
 
-        let old_len_desc = ordinary_get_own_property(&obj, PropertyKey::from("length")).unwrap();
+        let old_len_desc = ordinary_get_own_property(&obj, &PropertyKey::from("length")).unwrap();
         let old_len = old_len_desc
             .field("value")
             .unwrap()
@@ -122,7 +122,7 @@ pub mod array {
 
         if new_len >= old_len {
             let res =
-                ordinary_define_own_property(&mut obj, PropertyKey::from("length"), &new_len_desc);
+                ordinary_define_own_property(&mut obj, &PropertyKey::from("length"), &new_len_desc);
             if let Object::Array(arr) = obj {
                 *array = arr;
             }
@@ -153,7 +153,7 @@ pub mod array {
         };
 
         let succeeded =
-            ordinary_define_own_property(&mut obj, PropertyKey::from("length"), &new_len_desc)?;
+            ordinary_define_own_property(&mut obj, &PropertyKey::from("length"), &new_len_desc)?;
         if let Object::Array(arr) = &obj {
             *array = arr.clone();
         }
@@ -184,7 +184,7 @@ pub mod array {
 
                     ordinary_define_own_property(
                         &mut obj,
-                        PropertyKey::from("length"),
+                        &PropertyKey::from("length"),
                         &new_len_desc,
                     )?;
                     if let Object::Array(arr) = &obj {
@@ -202,7 +202,7 @@ pub mod array {
 
             ordinary_define_own_property(
                 &mut obj,
-                PropertyKey::from("length"),
+                &PropertyKey::from("length"),
                 &PropertyDescriptor::NonGeneric { fields },
             )?;
         }

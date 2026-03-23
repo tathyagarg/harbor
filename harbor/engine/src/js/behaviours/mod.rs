@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::js::{
     types::completion_record::{
@@ -7,7 +7,9 @@ use crate::js::{
     },
     values::{
         Value,
-        object::{ArrayObject, Object, OrdinaryObject, PropertyDescriptor, PropertyKey},
+        object::{
+            ArrayObject, Object, ObjectTrait, OrdinaryObject, PropertyDescriptor, PropertyKey,
+        },
         same_value,
     },
 };
@@ -101,7 +103,7 @@ pub fn ordinary_prevent_extensions(object: &mut Object) -> bool {
     }
 }
 
-pub fn ordinary_get_own_property(object: &Object, key: PropertyKey) -> Option<PropertyDescriptor> {
+pub fn ordinary_get_own_property(object: &Object, key: &PropertyKey) -> Option<PropertyDescriptor> {
     let ordinary = match object {
         Object::Ordinary(ordinary) => ordinary,
         _ => return None,
@@ -148,10 +150,10 @@ pub fn ordinary_get_own_property(object: &Object, key: PropertyKey) -> Option<Pr
 
 pub fn ordinary_define_own_property(
     object: &mut Object,
-    key: PropertyKey,
+    key: &PropertyKey,
     desc: &PropertyDescriptor,
 ) -> Result<CompletionRecord<bool>, CompletionRecord<CompletionRecordError, CRKThrow>> {
-    let _current = ordinary_get_own_property(object, key.clone());
+    let _current = ordinary_get_own_property(object, key);
     if let Some(current) = _current {
         let extensible = ordinary_is_extensible(object);
 
@@ -177,12 +179,12 @@ pub fn is_compatible_property_descriptor(
     desc: &PropertyDescriptor,
     current: Option<&PropertyDescriptor>,
 ) -> bool {
-    validate_and_apply_property_descriptor(None, PropertyKey::empty(), extensible, desc, current)
+    validate_and_apply_property_descriptor(None, &PropertyKey::empty(), extensible, desc, current)
 }
 
 pub fn validate_and_apply_property_descriptor(
     object: Option<&mut Object>,
-    key: PropertyKey,
+    key: &PropertyKey,
     extensible: bool,
     desc: &PropertyDescriptor,
     current: Option<&PropertyDescriptor>,
@@ -199,7 +201,7 @@ pub fn validate_and_apply_property_descriptor(
         let object = object.unwrap();
         match object {
             Object::Ordinary(ordinary) => {
-                ordinary.properties.insert(key, desc.clone());
+                ordinary.properties.insert(key.clone(), desc.clone());
             }
             _ => panic!(),
         }
@@ -280,7 +282,7 @@ pub fn validate_and_apply_property_descriptor(
             match object.unwrap() {
                 Object::Ordinary(ordinary) => {
                     ordinary.properties.insert(
-                        key,
+                        key.clone(),
                         PropertyDescriptor::Accessor {
                             get: desc.field("get").unwrap_or(Value::Undefined),
                             set: desc.field("set").unwrap_or(Value::Undefined),
@@ -311,7 +313,7 @@ pub fn validate_and_apply_property_descriptor(
             match object.unwrap() {
                 Object::Ordinary(ordinary) => {
                     ordinary.properties.insert(
-                        key,
+                        key.clone(),
                         PropertyDescriptor::Data {
                             value: desc.field("value").unwrap_or(Value::Undefined),
                             writable: desc
@@ -356,29 +358,109 @@ pub fn validate_and_apply_property_descriptor(
 // ) -> Result<CompletionRecord<Value>, CompletionRecord<CompletionRecordError>> {
 // }
 //
-// fn ordinary_set(
-//     object: &mut Object,
-//     key: PropertyKey,
-//     value: Value,
-//     receiver: Value,
-// ) -> Result<CompletionRecord<bool>, CompletionRecord<CompletionRecordError>> {
-// }
-//
-// fn ordinary_set_with_own_descriptor(
-//     object: &mut Object,
-//     key: PropertyKey,
-//     value: Value,
-//     receiver: Value,
-//     own_desc: Option<PropertyDescriptor>,
-// ) -> Result<CompletionRecord<bool>, CompletionRecord<CompletionRecordError>> {
-// }
-//
+fn ordinary_set(
+    object: &mut Object,
+    key: &PropertyKey,
+    value: Value,
+    receiver: Value,
+) -> Result<CompletionRecord<bool>, CompletionRecord<CompletionRecordError, CRKThrow>> {
+    let own_desc = ordinary_get_own_property(object, key);
+
+    if let Some(desc) = own_desc {
+        ordinary_set_with_own_descriptor(object, key, value, receiver, Some(desc))
+    } else {
+        Err(CompletionRecordThrow(CompletionRecordError::Misc(format!(
+            "Property {:?} does not exist on object",
+            key
+        ))))
+    }
+}
+
+fn ordinary_set_with_own_descriptor(
+    object: &mut Object,
+    key: &PropertyKey,
+    value: Value,
+    receiver: Value,
+    mut own_desc: Option<PropertyDescriptor>,
+) -> Result<CompletionRecord<bool>, CompletionRecord<CompletionRecordError, CRKThrow>> {
+    if own_desc.is_none() {
+        let prototype = object.get_prototype_of();
+        let mut parent = prototype.borrow_mut();
+
+        if let Some(parent_sure) = parent.as_mut() {
+            return Ok(CompletionRecordNormal(
+                parent_sure.set(key, value, receiver),
+            ));
+        }
+
+        own_desc = Some(PropertyDescriptor::Data {
+            value: Value::Undefined,
+            writable: true,
+            enumerable: true,
+            configurable: true,
+        });
+    }
+
+    if let Some(desc) = &own_desc
+        && desc.is_data_descriptor()
+    {
+        if !desc
+            .field("writable")
+            .unwrap_or(Value::Boolean(true))
+            .unwrap_bool()
+            .unwrap()
+        {
+            return Ok(CompletionRecordNormal(false));
+        }
+
+        match receiver {
+            Value::Object(_) => {}
+            _ => return Ok(CompletionRecordNormal(false)),
+        }
+
+        let obj_receiver = receiver.unwrap_object().unwrap();
+        let existing_desc = obj_receiver.get_own_property(key);
+
+        if existing_desc.is_none() {
+            return todo!("Create data property");
+        }
+
+        let existing_desc = existing_desc.unwrap();
+
+        if existing_desc.is_accessor_descriptor() {
+            return Ok(CompletionRecordNormal(false));
+        }
+
+        if !existing_desc
+            .field("writable")
+            .unwrap_or(Value::Boolean(true))
+            .unwrap_bool()
+            .unwrap()
+        {
+            return Ok(CompletionRecordNormal(false));
+        }
+
+        let value_desc_fields = HashMap::<String, Value>::from([(String::from("value"), value)]);
+        let value_desc = PropertyDescriptor::NonGeneric {
+            fields: value_desc_fields,
+        };
+
+        return todo!("define own prop");
+    }
+
+    let setter = own_desc.unwrap().field("set").unwrap_or(Value::Undefined);
+    if matches!(setter, Value::Undefined) {
+        return Ok(CompletionRecordNormal(false));
+    }
+
+    return todo!("Call");
+}
 
 pub fn ordinary_delete(
     object: &mut Object,
-    key: PropertyKey,
+    key: &PropertyKey,
 ) -> Result<CompletionRecord<bool>, CompletionRecord<CompletionRecordError, CRKThrow>> {
-    let desc = ordinary_get_own_property(object, key.clone());
+    let desc = ordinary_get_own_property(object, key);
 
     if desc.is_none() {
         return Ok(CompletionRecordNormal(true));
@@ -388,7 +470,7 @@ pub fn ordinary_delete(
     if desc.configurable() {
         match object {
             Object::Ordinary(ordinary) => {
-                ordinary.properties.remove(&key);
+                ordinary.properties.remove(key);
             }
             _ => panic!(),
         }
