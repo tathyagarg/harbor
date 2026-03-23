@@ -2,7 +2,8 @@ use std::str::FromStr;
 
 use crate::js::{
     types::completion_record::{
-        CompletionRecord, CompletionRecordError, CompletionRecordNormal, CompletionRecordThrow,
+        CRKThrow, CompletionRecord, CompletionRecordError, CompletionRecordNormal,
+        CompletionRecordThrow,
     },
     values::{
         Value,
@@ -13,7 +14,7 @@ use crate::js::{
 
 pub fn to_number(
     argument: Value,
-) -> Result<CompletionRecord<Number>, CompletionRecord<CompletionRecordError>> {
+) -> Result<CompletionRecord<Number>, CompletionRecord<CompletionRecordError, CRKThrow>> {
     match argument {
         Value::Number(n) => return Ok(CompletionRecordNormal(n)),
         Value::Symbol(_) | Value::BigInt(_) => {
@@ -44,7 +45,7 @@ pub fn string_to_number(argument: JsString) -> Number {
 
 pub fn to_int32(
     argument: Value,
-) -> Result<CompletionRecord<Number>, CompletionRecord<CompletionRecordError>> {
+) -> Result<CompletionRecord<Number>, CompletionRecord<CompletionRecordError, CRKThrow>> {
     let number = to_number(argument)?.value;
 
     if number.0.is_infinite() || number.0 == 0.0 {
@@ -61,7 +62,7 @@ pub fn to_int32(
 
 pub fn to_uint32(
     argument: Value,
-) -> Result<CompletionRecord<Number>, CompletionRecord<CompletionRecordError>> {
+) -> Result<CompletionRecord<Number>, CompletionRecord<CompletionRecordError, CRKThrow>> {
     let number = to_number(argument)?.value;
 
     if number.0.is_infinite() || number.0 == 0.0 {
@@ -75,7 +76,7 @@ pub fn to_uint32(
 
 pub fn to_string(
     argument: Value,
-) -> Result<CompletionRecord<JsString>, CompletionRecord<CompletionRecordError>> {
+) -> Result<CompletionRecord<JsString>, CompletionRecord<CompletionRecordError, CRKThrow>> {
     match argument {
         Value::String(s) => return Ok(CompletionRecordNormal(s)),
         Value::Symbol(_) => {

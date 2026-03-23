@@ -2,7 +2,8 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::js::{
     types::completion_record::{
-        CompletionRecord, CompletionRecordError, CompletionRecordNormal, CompletionRecordThrow,
+        CRKThrow, CompletionRecord, CompletionRecordError, CompletionRecordNormal,
+        CompletionRecordThrow,
     },
     values::{
         Value,
@@ -149,7 +150,7 @@ pub fn ordinary_define_own_property(
     object: &mut Object,
     key: PropertyKey,
     desc: &PropertyDescriptor,
-) -> Result<CompletionRecord<bool>, CompletionRecord<CompletionRecordError>> {
+) -> Result<CompletionRecord<bool>, CompletionRecord<CompletionRecordError, CRKThrow>> {
     let _current = ordinary_get_own_property(object, key.clone());
     if let Some(current) = _current {
         let extensible = ordinary_is_extensible(object);
@@ -376,7 +377,7 @@ pub fn validate_and_apply_property_descriptor(
 pub fn ordinary_delete(
     object: &mut Object,
     key: PropertyKey,
-) -> Result<CompletionRecord<bool>, CompletionRecord<CompletionRecordError>> {
+) -> Result<CompletionRecord<bool>, CompletionRecord<CompletionRecordError, CRKThrow>> {
     let desc = ordinary_get_own_property(object, key.clone());
 
     if desc.is_none() {

@@ -2,8 +2,8 @@ use std::{collections::HashMap, hash::Hash, rc::Rc};
 
 use crate::js::{
     types::completion_record::{
-        CompletionRecord, CompletionRecordError, CompletionRecordNormal, CompletionRecordThrow,
-        UNUSED,
+        CRKThrow, CompletionRecord, CompletionRecordError, CompletionRecordNormal,
+        CompletionRecordThrow, UNUSED,
     },
     values::{Reference, ReferenceBase, Value, string::JsString},
 };
@@ -53,7 +53,7 @@ impl EnvironmentRecord {
     pub fn has_binding(
         &self,
         name: JsString,
-    ) -> Result<CompletionRecord<bool>, CompletionRecord<UNUSED>> {
+    ) -> Result<CompletionRecord<bool>, CompletionRecord<UNUSED, CRKThrow>> {
         match self.kind {
             EnvironmentRecordKind::Declarative => {
                 let has_binding = self.bindings.contains_key(&name);
@@ -68,7 +68,7 @@ impl EnvironmentRecord {
         &mut self,
         name: JsString,
         deletable: bool,
-    ) -> Result<CompletionRecord<UNUSED>, CompletionRecord<UNUSED>> {
+    ) -> Result<CompletionRecord<UNUSED>, CompletionRecord<UNUSED, CRKThrow>> {
         match self.kind {
             EnvironmentRecordKind::Declarative => {
                 if self.bindings.contains_key(&name) && !self.bindings[&name].deletable {
@@ -96,7 +96,7 @@ impl EnvironmentRecord {
         &mut self,
         name: JsString,
         strict: bool,
-    ) -> Result<CompletionRecord<UNUSED>, CompletionRecord<UNUSED>> {
+    ) -> Result<CompletionRecord<UNUSED>, CompletionRecord<UNUSED, CRKThrow>> {
         match self.kind {
             EnvironmentRecordKind::Declarative => {
                 if self.bindings.contains_key(&name) {
@@ -124,7 +124,7 @@ impl EnvironmentRecord {
         &mut self,
         name: JsString,
         value: Value,
-    ) -> Result<CompletionRecord<UNUSED>, CompletionRecord<UNUSED>> {
+    ) -> Result<CompletionRecord<UNUSED>, CompletionRecord<UNUSED, CRKThrow>> {
         match self.kind {
             EnvironmentRecordKind::Declarative => {
                 if !self.bindings.contains_key(&name) {
@@ -150,7 +150,7 @@ impl EnvironmentRecord {
         name: JsString,
         value: Value,
         strict: bool,
-    ) -> Result<CompletionRecord<UNUSED>, CompletionRecord<UNUSED>> {
+    ) -> Result<CompletionRecord<UNUSED>, CompletionRecord<UNUSED, CRKThrow>> {
         match self.kind {
             EnvironmentRecordKind::Declarative => {
                 if !self.bindings.contains_key(&name) {
@@ -174,7 +174,7 @@ impl EnvironmentRecord {
         &self,
         name: JsString,
         strict: bool,
-    ) -> Result<CompletionRecord<Value>, CompletionRecord<CompletionRecordError>> {
+    ) -> Result<CompletionRecord<Value>, CompletionRecord<CompletionRecordError, CRKThrow>> {
         match self.kind {
             EnvironmentRecordKind::Declarative => {
                 if !self.bindings.contains_key(&name) {
@@ -199,7 +199,7 @@ impl EnvironmentRecord {
     pub fn delete_binding(
         &mut self,
         name: JsString,
-    ) -> Result<CompletionRecord<bool>, CompletionRecord<UNUSED>> {
+    ) -> Result<CompletionRecord<bool>, CompletionRecord<UNUSED, CRKThrow>> {
         match self.kind {
             EnvironmentRecordKind::Declarative => {
                 if !self.bindings.contains_key(&name) {
@@ -225,7 +225,7 @@ pub fn get_identifier_reference(
     name: JsString,
     env: Option<EnvironmentRecord>,
     strict: bool,
-) -> Result<CompletionRecord<Reference>, CompletionRecord<()>> {
+) -> Result<CompletionRecord<Reference>, CompletionRecord<(), CRKThrow>> {
     match env {
         None => Ok(CompletionRecordNormal(Reference {
             base: ReferenceBase::Unresolvable,

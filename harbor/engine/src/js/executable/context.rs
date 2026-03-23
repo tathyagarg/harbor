@@ -4,7 +4,7 @@ use crate::js::{
         environment::{EnvironmentRecord, get_identifier_reference},
         realm::Realm,
     },
-    types::completion_record::CompletionRecord,
+    types::completion_record::{CRKThrow, CompletionRecord},
     values::{Reference, string::JsString},
 };
 
@@ -49,7 +49,7 @@ pub fn get_active_script_or_module() -> Option<ScriptOrModule> {
 pub fn resolve_binding(
     name: JsString,
     env: Option<EnvironmentRecord>,
-) -> Result<CompletionRecord<Reference>, CompletionRecord<()>> {
+) -> Result<CompletionRecord<Reference>, CompletionRecord<(), CRKThrow>> {
     let ctx = running_execution_context().unwrap();
 
     let env = env.unwrap_or_else(|| ctx.lexical_env.clone());

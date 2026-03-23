@@ -24,8 +24,17 @@ pub mod literals {
 
 pub mod arrays {
     use crate::js::{
-        expr::ArrayLiteral, types::completion_record::CompletionRecord, values::object::Object,
+        expr::ArrayLiteral,
+        types::completion_record::{CRK, CRKAbrupt, CRKNormal, CompletionRecord},
+        values::object::{ArrayObject, Object},
     };
+
+    pub fn array_acculumation(
+        array: ArrayObject,
+        next_index: usize,
+    ) -> Result<CompletionRecord<usize, CRKNormal>, CompletionRecord<(), CRKAbrupt>> {
+        todo!()
+    }
 
     // pub fn evaluate(array: ArrayLiteral, proto: Object) -> Result<CompletionRecord<>> {
 

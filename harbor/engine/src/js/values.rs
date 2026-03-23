@@ -366,6 +366,20 @@ pub mod object {
             }
         }
 
+        pub fn data_descriptor(
+            value: Value,
+            writable: bool,
+            enumerable: bool,
+            configurable: bool,
+        ) -> Self {
+            PropertyDescriptor::Data {
+                value,
+                writable,
+                enumerable,
+                configurable,
+            }
+        }
+
         pub fn is_data_descriptor(&self) -> bool {
             matches!(self, PropertyDescriptor::Data { .. })
         }
@@ -510,10 +524,30 @@ pub mod object {
         pub properties: HashMap<PropertyKey, PropertyDescriptor>,
     }
 
+    impl OrdinaryObject {
+        pub fn prototype() -> OrdinaryObject {
+            OrdinaryObject {
+                prototype: Rc::new(RefCell::new(None)),
+                extensible: true,
+                properties: HashMap::new(),
+            }
+        }
+    }
+
     #[derive(Debug, Clone)]
     pub enum Object {
         Ordinary(OrdinaryObject),
         Array(ArrayObject),
+    }
+
+    impl Object {
+        pub fn prototype() -> Object {
+            Object::Ordinary(OrdinaryObject::prototype())
+        }
+
+        pub fn constructor() -> Object {
+            Object::Ordinary(OrdinaryObject::prototype())
+        }
     }
 
     // impl OrdinaryObject {
