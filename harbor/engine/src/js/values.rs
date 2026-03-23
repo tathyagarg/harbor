@@ -101,7 +101,7 @@ pub mod symbol {
 }
 
 pub mod number {
-    use std::str::FromStr;
+    use std::{ops::Add, str::FromStr};
 
     use crate::js::{
         operations::{to_int32, to_uint32},
@@ -114,8 +114,16 @@ pub mod number {
         Or,
     }
 
-    #[derive(Debug, Clone, Copy)]
+    #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
     pub struct Number(pub f64);
+
+    impl Add<f64> for Number {
+        type Output = Self;
+
+        fn add(self, rhs: f64) -> Self::Output {
+            Number(self.0 + rhs)
+        }
+    }
 
     impl Number {
         pub fn unary_minus(&self) -> Self {
@@ -275,6 +283,36 @@ pub mod object {
         }
     }
 
+    impl From<&str> for PropertyKey {
+        fn from(value: &str) -> Self {
+            PropertyKey::String(JsString::from_str(value).unwrap())
+        }
+    }
+
+    impl From<JsString> for PropertyKey {
+        fn from(value: JsString) -> Self {
+            PropertyKey::String(value)
+        }
+    }
+
+    impl Into<JsString> for PropertyKey {
+        fn into(self) -> JsString {
+            match self {
+                PropertyKey::String(s) => s,
+                PropertyKey::Symbol(_) => panic!("Cannot convert Symbol to String"),
+            }
+        }
+    }
+
+    impl Into<JsString> for &PropertyKey {
+        fn into(self) -> JsString {
+            match self {
+                PropertyKey::String(s) => s.clone(),
+                PropertyKey::Symbol(_) => panic!("Cannot convert Symbol to String"),
+            }
+        }
+    }
+
     impl PartialEq<&str> for PropertyKey {
         fn eq(&self, other: &&str) -> bool {
             match self {
@@ -397,6 +435,58 @@ pub mod object {
                 PropertyDescriptor::NonGeneric { fields } => fields.get(name).cloned(),
             }
         }
+
+        pub fn set_field(&mut self, name: &str, value: Value) {
+            match self {
+                PropertyDescriptor::Data {
+                    value: val,
+                    writable,
+                    enumerable,
+                    configurable,
+                } => match name {
+                    "value" => *val = value,
+                    "writable" => {
+                        if let Value::Boolean(b) = value {
+                            *writable = b;
+                        }
+                    }
+                    "enumerable" => {
+                        if let Value::Boolean(b) = value {
+                            *enumerable = b;
+                        }
+                    }
+                    "configurable" => {
+                        if let Value::Boolean(b) = value {
+                            *configurable = b;
+                        }
+                    }
+                    _ => {}
+                },
+                PropertyDescriptor::Accessor {
+                    get,
+                    set,
+                    enumerable,
+                    configurable,
+                } => match name {
+                    "get" => *get = value,
+                    "set" => *set = value,
+                    "enumerable" => {
+                        if let Value::Boolean(b) = value {
+                            *enumerable = b;
+                        }
+                    }
+                    "configurable" => {
+                        if let Value::Boolean(b) = value {
+                            *configurable = b;
+                        }
+                    }
+                    _ => {}
+                },
+                PropertyDescriptor::NonGeneric { fields } => {
+                    fields.insert(name.to_string(), value);
+                }
+            }
+        }
     }
 
     #[derive(Debug, Clone)]
@@ -407,7 +497,9 @@ pub mod object {
         /// and it also has slight performance benefits. Plus storing as an object property makes
         /// the length a Number (f64) instead of a u32, which is not ideal.
         pub length: u32,
-        pub object: Box<Object>,
+        pub object: OrdinaryObject,
+
+        pub data: Vec<Value>,
     }
 
     #[derive(Debug, Clone)]
@@ -499,6 +591,14 @@ impl Value {
             None
         }
     }
+
+    pub fn unwrap_number(&self) -> Option<Number> {
+        if let Value::Number(n) = self {
+            Some(*n)
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -539,6 +639,20 @@ pub fn same_value(x: &Value, y: &Value) -> bool {
         && let Value::Number(y_num) = y
     {
         return x_num.same_value(y_num);
+    }
+
+    return same_value_non_number(x, y);
+}
+
+pub fn same_value_zero(x: &Value, y: &Value) -> bool {
+    if !same_type(x, y) {
+        return false;
+    }
+
+    if let Value::Number(x_num) = x
+        && let Value::Number(y_num) = y
+    {
+        return x_num.same_value_zero(y_num);
     }
 
     return same_value_non_number(x, y);

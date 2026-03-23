@@ -14,14 +14,14 @@ use crate::js::{
 // 10.4
 pub mod exotics;
 
-fn ordinary_get_prototype_of(object: &Object) -> Rc<RefCell<Option<Object>>> {
+pub fn ordinary_get_prototype_of(object: &Object) -> Rc<RefCell<Option<Object>>> {
     match object {
         Object::Ordinary(OrdinaryObject { prototype, .. }) => prototype.clone(),
         _ => Rc::new(RefCell::new(None)),
     }
 }
 
-fn ordinary_set_prototype_of(object: &mut Object, prototype: Option<Object>) -> bool {
+pub fn ordinary_set_prototype_of(object: &mut Object, prototype: Option<Object>) -> bool {
     let current = ordinary_get_prototype_of(object);
 
     if same_value(
@@ -145,10 +145,10 @@ pub fn ordinary_get_own_property(object: &Object, key: PropertyKey) -> Option<Pr
     Some(desc)
 }
 
-fn ordinary_define_own_property(
+pub fn ordinary_define_own_property(
     object: &mut Object,
     key: PropertyKey,
-    desc: PropertyDescriptor,
+    desc: &PropertyDescriptor,
 ) -> Result<CompletionRecord<bool>, CompletionRecord<CompletionRecordError>> {
     let _current = ordinary_get_own_property(object, key.clone());
     if let Some(current) = _current {
@@ -171,7 +171,7 @@ fn ordinary_define_own_property(
     }
 }
 
-fn is_compatible_property_descriptor(
+pub fn is_compatible_property_descriptor(
     extensible: bool,
     desc: &PropertyDescriptor,
     current: Option<&PropertyDescriptor>,
@@ -179,7 +179,7 @@ fn is_compatible_property_descriptor(
     validate_and_apply_property_descriptor(None, PropertyKey::empty(), extensible, desc, current)
 }
 
-fn validate_and_apply_property_descriptor(
+pub fn validate_and_apply_property_descriptor(
     object: Option<&mut Object>,
     key: PropertyKey,
     extensible: bool,
@@ -372,10 +372,31 @@ fn validate_and_apply_property_descriptor(
 // ) -> Result<CompletionRecord<bool>, CompletionRecord<CompletionRecordError>> {
 // }
 //
-// fn ordinary_delete(
-//     object: &mut Object,
-//     key: PropertyKey,
-// ) -> Result<CompletionRecord<bool>, CompletionRecord<CompletionRecordError>> {
-// }
+
+pub fn ordinary_delete(
+    object: &mut Object,
+    key: PropertyKey,
+) -> Result<CompletionRecord<bool>, CompletionRecord<CompletionRecordError>> {
+    let desc = ordinary_get_own_property(object, key.clone());
+
+    if desc.is_none() {
+        return Ok(CompletionRecordNormal(true));
+    }
+
+    let desc = desc.unwrap();
+    if desc.configurable() {
+        match object {
+            Object::Ordinary(ordinary) => {
+                ordinary.properties.remove(&key);
+            }
+            _ => panic!(),
+        }
+
+        return Ok(CompletionRecordNormal(true));
+    }
+
+    Ok(CompletionRecordNormal(false))
+}
+
 //
 // fn ordinary_own_property_keys(object: &Object) -> Vec<PropertyKey>;

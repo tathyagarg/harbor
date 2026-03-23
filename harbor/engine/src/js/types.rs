@@ -9,6 +9,7 @@ pub mod completion_record {
 
         ReferenceError,
         TypeError,
+        RangeErorr,
 
         Misc(String),
     }
@@ -27,6 +28,12 @@ pub mod completion_record {
         pub kind: CompletionRecordKind,
         pub value: T,
         pub target: Option<String>,
+    }
+
+    impl<T: Debug> CompletionRecord<T> {
+        pub fn unwrapped(&self) -> &T {
+            &self.value
+        }
     }
 
     #[allow(non_snake_case)]
