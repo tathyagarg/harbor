@@ -29,15 +29,20 @@ pub mod arrays {
             ARRAY_ELEMENT_ELISION, ARRAY_ELEMENT_EXPRESSION, ARRAY_ELEMENT_SPREAD, ArrayElement,
             ArrayLiteral,
         },
-        types::completion_record::{CRK, CRKAbrupt, CompletionRecord},
-        values::object::{ArrayObject, Object},
+        operations::set,
+        types::completion_record::{CRK, CRKAbrupt, CompletionRecord, CompletionRecordError},
+        values::{
+            Value,
+            number::Number,
+            object::{ArrayObject, Object, PropertyKey},
+        },
     };
 
     pub fn array_acculumation(
         array: &mut ArrayObject,
         array_syntax: ArrayLiteral,
         mut next_index: usize,
-    ) -> Result<CompletionRecord<usize>, CompletionRecord<(), CRKAbrupt>> {
+    ) -> Result<CompletionRecord<usize>, CompletionRecord<CompletionRecordError, CRKAbrupt>> {
         let elements = collect_seq(array_syntax.elements);
         let mut obj = Object::Array(array.clone());
 
@@ -45,8 +50,26 @@ pub mod arrays {
             match elem.tag {
                 ARRAY_ELEMENT_ELISION => {
                     let new_len = next_index + 1;
+                    let res = set(
+                        &mut obj,
+                        &PropertyKey::from("length"),
+                        &Value::Number(Number(new_len as f64)),
+                        true,
+                    );
+
+                    if let Err(e) = res {
+                        return Err(CompletionRecord {
+                            kind: CRKAbrupt::Throw,
+                            value: e.unwrapped().clone(),
+                            target: None,
+                        });
+                    }
+
+                    next_index = new_len;
                 }
-                ARRAY_ELEMENT_EXPRESSION => {}
+                ARRAY_ELEMENT_EXPRESSION => {
+                    todo!()
+                }
                 ARRAY_ELEMENT_SPREAD => {}
                 _ => unreachable!("Unknown array element tag: {}", elem.tag),
             }
@@ -55,7 +78,11 @@ pub mod arrays {
         todo!()
     }
 
-    // pub fn evaluate(array: ArrayLiteral, proto: Object) -> Result<CompletionRecord<>> {
-
-    // }
+    pub fn evaluate(
+        array: ArrayLiteral,
+        proto: Object,
+    ) -> Result<CompletionRecord<ArrayObject>, CompletionRecord<CompletionRecordError, CRKAbrupt>>
+    {
+        todo!("Array literal evaluation")
+    }
 }

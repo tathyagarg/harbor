@@ -363,7 +363,7 @@ pub fn validate_and_apply_property_descriptor(
 pub fn ordinary_set(
     object: &mut Object,
     key: &PropertyKey,
-    value: Value,
+    value: &Value,
     receiver: &mut Value,
 ) -> Result<CompletionRecord<bool>, CompletionRecord<CompletionRecordError, CRKThrow>> {
     let own_desc = ordinary_get_own_property(object, key);
@@ -381,7 +381,7 @@ pub fn ordinary_set(
 fn ordinary_set_with_own_descriptor(
     object: &mut Object,
     key: &PropertyKey,
-    value: Value,
+    value: &Value,
     receiver: &mut Value,
     mut own_desc: Option<PropertyDescriptor>,
 ) -> Result<CompletionRecord<bool>, CompletionRecord<CompletionRecordError, CRKThrow>> {
@@ -443,7 +443,8 @@ fn ordinary_set_with_own_descriptor(
             return Ok(CompletionRecordNormal(false));
         }
 
-        let value_desc_fields = HashMap::<String, Value>::from([(String::from("value"), value)]);
+        let value_desc_fields =
+            HashMap::<String, Value>::from([(String::from("value"), value.clone())]);
         let value_desc = PropertyDescriptor::NonGeneric {
             fields: value_desc_fields,
         };

@@ -3,7 +3,7 @@ use std::str::FromStr;
 use crate::js::{
     types::completion_record::{
         CRKThrow, CompletionRecord, CompletionRecordError, CompletionRecordNormal,
-        CompletionRecordThrow,
+        CompletionRecordThrow, UNUSED,
     },
     values::{
         Value,
@@ -122,10 +122,10 @@ pub fn canonical_numeric_index_string(argument: &JsString) -> Option<Number> {
 pub fn create_data_property(
     obj: &mut Object,
     key: &PropertyKey,
-    value: Value,
+    value: &Value,
 ) -> Result<CompletionRecord<bool>, CompletionRecord<CompletionRecordError, CRKThrow>> {
     let new_desc = PropertyDescriptor::Data {
-        value,
+        value: value.clone(),
         writable: true,
         enumerable: true,
         configurable: true,
@@ -136,6 +136,21 @@ pub fn create_data_property(
     ));
 }
 
-// pub fn set(obj: &mut Object, key: &PropertyKey, value: Value, throw: bool) -> Result<CompletionRecord<UNUSED>, CompletionRecord<CompletionRecordError, CRKThrow>> {
-//
-// }
+pub fn set(
+    obj: &mut Object,
+    key: &PropertyKey,
+    value: &Value,
+    throw: bool,
+) -> Result<CompletionRecord<UNUSED>, CompletionRecord<CompletionRecordError, CRKThrow>> {
+    let mut obj_value = Value::Object(obj.clone());
+    let success = obj.set(key, value, &mut obj_value);
+    if let Value::Object(o) = obj_value {
+        *obj = o;
+    }
+
+    if !success && throw {
+        return Err(CompletionRecordThrow(CompletionRecordError::TypeError));
+    }
+
+    return Ok(CompletionRecordNormal(()));
+}

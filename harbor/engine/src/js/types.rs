@@ -3,7 +3,7 @@ pub mod completion_record {
 
     pub type UNUSED = ();
 
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub enum CompletionRecordError {
         Unused,
 

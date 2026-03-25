@@ -264,8 +264,8 @@ pub mod object {
     use std::{cell::RefCell, collections::HashMap, rc::Rc, str::FromStr};
 
     use crate::js::{
-        behaviours::{ordinary_get_own_property, ordinary_set},
-        values::{Value, string::JsString, symbol::Symbol},
+        behaviours::{ordinary_get_own_property, ordinary_set, ordinary_set_prototype_of},
+        values::{Value, number::Number, string::JsString, symbol::Symbol},
     };
 
     #[derive(Debug, Clone, Hash, Eq, PartialEq)]
@@ -508,9 +508,11 @@ pub mod object {
 
     pub trait ObjectTrait {
         fn get_prototype_of(&self) -> Rc<RefCell<Option<Object>>>;
+        fn set_prototype_of(&mut self, prototype: Option<Object>) -> bool;
+
         fn get_own_property(&self, key: &PropertyKey) -> Option<PropertyDescriptor>;
         fn define_own_property(&mut self, key: &PropertyKey, desc: PropertyDescriptor) -> bool;
-        fn set(&mut self, key: &PropertyKey, value: Value, receiver: &mut Value) -> bool;
+        fn set(&mut self, key: &PropertyKey, value: &Value, receiver: &mut Value) -> bool;
     }
 
     #[derive(Debug, Clone)]
@@ -549,6 +551,16 @@ pub mod object {
             self.prototype.clone()
         }
 
+        fn set_prototype_of(&mut self, prototype: Option<Object>) -> bool {
+            let mut object = Object::Ordinary(self.clone());
+            let res = ordinary_set_prototype_of(&mut object, prototype);
+            if let Object::Ordinary(obj) = object {
+                *self = obj;
+            }
+
+            res
+        }
+
         fn get_own_property(&self, key: &PropertyKey) -> Option<PropertyDescriptor> {
             ordinary_get_own_property(&Object::Ordinary(self.clone()), key)
         }
@@ -558,7 +570,7 @@ pub mod object {
             true
         }
 
-        fn set(&mut self, key: &PropertyKey, value: Value, receiver: &mut Value) -> bool {
+        fn set(&mut self, key: &PropertyKey, value: &Value, receiver: &mut Value) -> bool {
             let mut obj = Object::Ordinary(self.clone());
             let res = ordinary_set(&mut obj, key, value, receiver);
             if let Object::Ordinary(obj) = obj {
@@ -593,10 +605,28 @@ pub mod object {
             }
         }
 
+        fn set_prototype_of(&mut self, prototype: Option<Object>) -> bool {
+            match self {
+                Object::Ordinary(obj) => obj.set_prototype_of(prototype),
+                Object::Array(arr) => arr.object.set_prototype_of(prototype),
+            }
+        }
+
         fn get_own_property(&self, key: &PropertyKey) -> Option<PropertyDescriptor> {
             match self {
                 Object::Ordinary(obj) => obj.get_own_property(key),
-                Object::Array(arr) => arr.object.get_own_property(key),
+                Object::Array(arr) => {
+                    if *key == PropertyKey::from("length") {
+                        return Some(PropertyDescriptor::Data {
+                            value: Value::Number(Number(arr.length as f64)),
+                            writable: true,
+                            enumerable: false,
+                            configurable: false,
+                        });
+                    }
+
+                    arr.object.get_own_property(key)
+                }
             }
         }
 
@@ -607,10 +637,19 @@ pub mod object {
             }
         }
 
-        fn set(&mut self, key: &PropertyKey, value: Value, receiver: &mut Value) -> bool {
+        fn set(&mut self, key: &PropertyKey, value: &Value, receiver: &mut Value) -> bool {
             match self {
                 Object::Ordinary(obj) => obj.set(key, value, receiver),
-                Object::Array(arr) => arr.object.set(key, value, receiver),
+                Object::Array(arr) => {
+                    let res = arr.object.set(key, value, receiver);
+                    if *key == PropertyKey::from("length") {
+                        if let Value::Number(n) = value {
+                            arr.length = n.0 as u32;
+                        }
+                    }
+
+                    return res;
+                }
             }
         }
     }
