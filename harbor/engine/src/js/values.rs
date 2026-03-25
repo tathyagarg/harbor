@@ -264,7 +264,7 @@ pub mod object {
     use std::{cell::RefCell, collections::HashMap, rc::Rc, str::FromStr};
 
     use crate::js::{
-        behaviours::ordinary_get_own_property,
+        behaviours::{ordinary_get_own_property, ordinary_set},
         values::{Value, string::JsString, symbol::Symbol},
     };
 
@@ -509,7 +509,8 @@ pub mod object {
     pub trait ObjectTrait {
         fn get_prototype_of(&self) -> Rc<RefCell<Option<Object>>>;
         fn get_own_property(&self, key: &PropertyKey) -> Option<PropertyDescriptor>;
-        fn set(&mut self, key: &PropertyKey, value: Value, receiver: Value) -> bool;
+        fn define_own_property(&mut self, key: &PropertyKey, desc: PropertyDescriptor) -> bool;
+        fn set(&mut self, key: &PropertyKey, value: Value, receiver: &mut Value) -> bool;
     }
 
     #[derive(Debug, Clone)]
@@ -552,8 +553,19 @@ pub mod object {
             ordinary_get_own_property(&Object::Ordinary(self.clone()), key)
         }
 
-        fn set(&mut self, key: &PropertyKey, value: Value, receiver: Value) -> bool {
-            todo!()
+        fn define_own_property(&mut self, key: &PropertyKey, desc: PropertyDescriptor) -> bool {
+            self.properties.insert(key.clone(), desc);
+            true
+        }
+
+        fn set(&mut self, key: &PropertyKey, value: Value, receiver: &mut Value) -> bool {
+            let mut obj = Object::Ordinary(self.clone());
+            let res = ordinary_set(&mut obj, key, value, receiver);
+            if let Object::Ordinary(obj) = obj {
+                *self = obj;
+            }
+
+            *res.unwrap().unwrapped()
         }
     }
 
@@ -588,7 +600,14 @@ pub mod object {
             }
         }
 
-        fn set(&mut self, key: &PropertyKey, value: Value, receiver: Value) -> bool {
+        fn define_own_property(&mut self, key: &PropertyKey, desc: PropertyDescriptor) -> bool {
+            match self {
+                Object::Ordinary(obj) => obj.define_own_property(key, desc),
+                Object::Array(arr) => arr.object.define_own_property(key, desc),
+            }
+        }
+
+        fn set(&mut self, key: &PropertyKey, value: Value, receiver: &mut Value) -> bool {
             match self {
                 Object::Ordinary(obj) => obj.set(key, value, receiver),
                 Object::Array(arr) => arr.object.set(key, value, receiver),

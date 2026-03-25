@@ -3,12 +3,12 @@ use std::str::FromStr;
 use crate::js::{
     types::completion_record::{
         CRKThrow, CompletionRecord, CompletionRecordError, CompletionRecordNormal,
-        CompletionRecordThrow, UNUSED,
+        CompletionRecordThrow,
     },
     values::{
         Value,
         number::Number,
-        object::{Object, PropertyKey},
+        object::{Object, ObjectTrait, PropertyDescriptor, PropertyKey},
         string::{_equals_raw, JsString},
     },
 };
@@ -117,6 +117,23 @@ pub fn canonical_numeric_index_string(argument: &JsString) -> Option<Number> {
             }
         }
     }
+}
+
+pub fn create_data_property(
+    obj: &mut Object,
+    key: &PropertyKey,
+    value: Value,
+) -> Result<CompletionRecord<bool>, CompletionRecord<CompletionRecordError, CRKThrow>> {
+    let new_desc = PropertyDescriptor::Data {
+        value,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+    };
+
+    return Ok(CompletionRecordNormal(
+        obj.define_own_property(key, new_desc),
+    ));
 }
 
 // pub fn set(obj: &mut Object, key: &PropertyKey, value: Value, throw: bool) -> Result<CompletionRecord<UNUSED>, CompletionRecord<CompletionRecordError, CRKThrow>> {

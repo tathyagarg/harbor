@@ -1,6 +1,7 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::js::{
+    operations::create_data_property,
     types::completion_record::{
         CRKThrow, CompletionRecord, CompletionRecordError, CompletionRecordNormal,
         CompletionRecordThrow,
@@ -358,11 +359,12 @@ pub fn validate_and_apply_property_descriptor(
 // ) -> Result<CompletionRecord<Value>, CompletionRecord<CompletionRecordError>> {
 // }
 //
-fn ordinary_set(
+
+pub fn ordinary_set(
     object: &mut Object,
     key: &PropertyKey,
     value: Value,
-    receiver: Value,
+    receiver: &mut Value,
 ) -> Result<CompletionRecord<bool>, CompletionRecord<CompletionRecordError, CRKThrow>> {
     let own_desc = ordinary_get_own_property(object, key);
 
@@ -380,7 +382,7 @@ fn ordinary_set_with_own_descriptor(
     object: &mut Object,
     key: &PropertyKey,
     value: Value,
-    receiver: Value,
+    receiver: &mut Value,
     mut own_desc: Option<PropertyDescriptor>,
 ) -> Result<CompletionRecord<bool>, CompletionRecord<CompletionRecordError, CRKThrow>> {
     if own_desc.is_none() {
@@ -418,11 +420,12 @@ fn ordinary_set_with_own_descriptor(
             _ => return Ok(CompletionRecordNormal(false)),
         }
 
-        let obj_receiver = receiver.unwrap_object().unwrap();
+        let mut obj_receiver = receiver.unwrap_object().unwrap();
         let existing_desc = obj_receiver.get_own_property(key);
 
         if existing_desc.is_none() {
-            return todo!("Create data property");
+            let res = create_data_property(object, key, value)?;
+            return Ok(res);
         }
 
         let existing_desc = existing_desc.unwrap();
@@ -445,7 +448,10 @@ fn ordinary_set_with_own_descriptor(
             fields: value_desc_fields,
         };
 
-        return todo!("define own prop");
+        let res = obj_receiver.define_own_property(key, value_desc);
+        *receiver = Value::Object(obj_receiver);
+
+        return Ok(CompletionRecordNormal(res));
     }
 
     let setter = own_desc.unwrap().field("set").unwrap_or(Value::Undefined);
