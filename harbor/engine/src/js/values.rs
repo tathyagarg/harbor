@@ -582,9 +582,72 @@ pub mod object {
     }
 
     #[derive(Debug, Clone)]
+    pub struct MiscObject {
+        pub properties: HashMap<PropertyKey, PropertyDescriptor>,
+    }
+
+    impl ObjectTrait for MiscObject {
+        fn get_prototype_of(&self) -> Rc<RefCell<Option<Object>>> {
+            if let Some(desc) = self.properties.get(&PropertyKey::from("prototype")) {
+                desc.field("value")
+                    .map(|v| Rc::new(RefCell::new(v.unwrap_object())))
+                    .unwrap_or_else(|| Rc::new(RefCell::new(None)))
+            } else {
+                Rc::new(RefCell::new(None))
+            }
+        }
+
+        fn set_prototype_of(&mut self, prototype: Option<Object>) -> bool {
+            if let Some(desc) = self.properties.get(&PropertyKey::from("prototype")) {
+                self.properties.insert(
+                    PropertyKey::from("prototype"),
+                    PropertyDescriptor::Data {
+                        value: Value::Object(prototype.unwrap_or_else(|| Object::prototype())),
+                        writable: true,
+                        enumerable: false,
+                        configurable: true,
+                    },
+                );
+
+                return true;
+            }
+
+            return false;
+        }
+
+        fn get_own_property(&self, key: &PropertyKey) -> Option<PropertyDescriptor> {
+            self.properties.get(key).cloned()
+        }
+
+        fn define_own_property(&mut self, key: &PropertyKey, desc: PropertyDescriptor) -> bool {
+            self.properties.insert(key.clone(), desc);
+            true
+        }
+
+        fn set(&mut self, key: &PropertyKey, value: &Value, receiver: &mut Value) -> bool {
+            if let Some(desc) = self.properties.get(key) {
+                self.properties.insert(
+                    key.clone(),
+                    PropertyDescriptor::Data {
+                        value: value.clone(),
+                        writable: desc.enumerable(),
+                        enumerable: desc.enumerable(),
+                        configurable: desc.configurable(),
+                    },
+                );
+
+                return true;
+            }
+
+            return false;
+        }
+    }
+
+    #[derive(Debug, Clone)]
     pub enum Object {
         Ordinary(OrdinaryObject),
         Array(ArrayObject),
+        Misc(MiscObject),
     }
 
     impl Object {
@@ -602,6 +665,7 @@ pub mod object {
             match self {
                 Object::Ordinary(obj) => obj.get_prototype_of(),
                 Object::Array(arr) => arr.object.get_prototype_of(),
+                Object::Misc(misc) => misc.get_prototype_of(),
             }
         }
 
@@ -609,6 +673,7 @@ pub mod object {
             match self {
                 Object::Ordinary(obj) => obj.set_prototype_of(prototype),
                 Object::Array(arr) => arr.object.set_prototype_of(prototype),
+                Object::Misc(misc) => misc.set_prototype_of(prototype),
             }
         }
 
@@ -627,6 +692,7 @@ pub mod object {
 
                     arr.object.get_own_property(key)
                 }
+                Object::Misc(misc) => misc.get_own_property(key),
             }
         }
 
@@ -634,6 +700,7 @@ pub mod object {
             match self {
                 Object::Ordinary(obj) => obj.define_own_property(key, desc),
                 Object::Array(arr) => arr.object.define_own_property(key, desc),
+                Object::Misc(misc) => misc.define_own_property(key, desc),
             }
         }
 
@@ -650,6 +717,7 @@ pub mod object {
 
                     return res;
                 }
+                Object::Misc(misc) => misc.set(key, value, receiver),
             }
         }
     }

@@ -18,6 +18,15 @@ use crate::js::{
 // 10.4
 pub mod exotics;
 
+pub fn ordinary_object_create(
+    prototype: Option<Object>,
+    additional_internal_slots_list: Vec<String>,
+) -> Object {
+    // let obj = make_basic_object();
+
+    todo!()
+}
+
 pub fn ordinary_get_prototype_of(object: &Object) -> Rc<RefCell<Option<Object>>> {
     match object {
         Object::Ordinary(OrdinaryObject { prototype, .. }) => prototype.clone(),
@@ -43,10 +52,16 @@ pub fn ordinary_set_prototype_of(object: &mut Object, prototype: Option<Object>)
     }
 
     let extensible = match object {
-        Object::Ordinary(OrdinaryObject { extensible, .. }) => extensible,
-        Object::Array(ArrayObject { extensible, .. }) => extensible,
-    }
-    .clone();
+        Object::Ordinary(OrdinaryObject { extensible, .. }) => *extensible,
+        Object::Array(ArrayObject { extensible, .. }) => *extensible,
+        Object::Misc(misc) => misc
+            .get_own_property(&PropertyKey::from("extensible"))
+            .unwrap()
+            .field("value")
+            .unwrap()
+            .unwrap_bool()
+            .unwrap(),
+    };
 
     if !extensible {
         return false;
@@ -88,6 +103,13 @@ pub fn ordinary_is_extensible(object: &Object) -> bool {
     match object {
         Object::Ordinary(OrdinaryObject { extensible, .. }) => *extensible,
         Object::Array(ArrayObject { extensible, .. }) => *extensible,
+        Object::Misc(misc) => misc
+            .get_own_property(&PropertyKey::from("extensible"))
+            .unwrap()
+            .field("value")
+            .unwrap()
+            .unwrap_bool()
+            .unwrap(),
     }
 }
 
@@ -99,6 +121,27 @@ pub fn ordinary_prevent_extensions(object: &mut Object) -> bool {
         }
         Object::Array(ArrayObject { extensible, .. }) => {
             *extensible = false;
+            true
+        }
+        Object::Misc(misc) => {
+            let desc = misc
+                .get_own_property(&PropertyKey::from("extensible"))
+                .unwrap();
+
+            if !desc.configurable() {
+                return false;
+            }
+
+            misc.define_own_property(
+                &PropertyKey::from("extensible"),
+                PropertyDescriptor::Data {
+                    value: Value::Boolean(false),
+                    writable: false,
+                    enumerable: false,
+                    configurable: false,
+                },
+            );
+
             true
         }
     }
