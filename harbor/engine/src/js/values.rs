@@ -261,7 +261,7 @@ pub mod number {
 }
 
 pub mod object {
-    use std::{cell::RefCell, collections::HashMap, rc::Rc, str::FromStr};
+    use std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc, str::FromStr};
 
     use crate::js::{
         behaviours::{ordinary_get_own_property, ordinary_set, ordinary_set_prototype_of},
@@ -582,65 +582,172 @@ pub mod object {
     }
 
     #[derive(Debug, Clone)]
+    pub enum SlotValue {
+        Undefined,
+        List(Vec<Box<SlotValue>>),
+        Object(Object),
+    }
+
+    #[derive(Clone)]
+    pub struct EssentialMethodProxy<T> {
+        pub get_prototype_of: Rc<dyn Fn(&T) -> Rc<RefCell<Option<Object>>>>,
+        pub set_prototype_of: Rc<dyn Fn(&mut T, Option<Object>) -> bool>,
+
+        pub get_own_property: Rc<dyn Fn(&T, &PropertyKey) -> Option<PropertyDescriptor>>,
+        pub define_own_property: Rc<dyn Fn(&mut T, &PropertyKey, PropertyDescriptor) -> bool>,
+
+        pub set: Rc<dyn Fn(&mut T, &PropertyKey, &Value, &mut Value) -> bool>,
+    }
+
+    impl<T> Debug for EssentialMethodProxy<T> {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.debug_struct("EssentialMethodProxy").finish()
+        }
+    }
+
+    #[derive(Debug, Clone)]
     pub struct MiscObject {
+        pub internal_slots: HashMap<String, SlotValue>,
         pub properties: HashMap<PropertyKey, PropertyDescriptor>,
+
+        pub method_proxy: Option<EssentialMethodProxy<MiscObject>>,
+    }
+
+    impl MiscObject {
+        const _GET_PROTOTYPE_OF: fn(&MiscObject) -> Rc<RefCell<Option<Object>>> =
+            |obj| pmdd_get_prototype_of(obj);
+        const _SET_PROTOTYPE_OF: fn(&mut MiscObject, Option<Object>) -> bool =
+            |obj, prototype| pmdd_set_prototype_of(obj, prototype);
+
+        const _GET_OWN_PROPERTY: fn(&MiscObject, &PropertyKey) -> Option<PropertyDescriptor> =
+            |obj, key| pmdd_get_own_property(obj, key);
+        const _DEFINE_OWN_PROPERTY: fn(&mut MiscObject, &PropertyKey, PropertyDescriptor) -> bool =
+            |obj, key, desc| pmdd_define_own_property(obj, key, desc);
+
+        const _SET: fn(&mut MiscObject, &PropertyKey, &Value, &mut Value) -> bool =
+            |obj, key, value, receiver| pmdd_set(obj, key, value, receiver);
     }
 
     impl ObjectTrait for MiscObject {
         fn get_prototype_of(&self) -> Rc<RefCell<Option<Object>>> {
-            if let Some(desc) = self.properties.get(&PropertyKey::from("prototype")) {
-                desc.field("value")
-                    .map(|v| Rc::new(RefCell::new(v.unwrap_object())))
-                    .unwrap_or_else(|| Rc::new(RefCell::new(None)))
-            } else {
-                Rc::new(RefCell::new(None))
+            if let Some(proxy) = &self.method_proxy {
+                return (proxy.get_prototype_of)(self);
             }
+
+            Self::_GET_PROTOTYPE_OF(self)
         }
 
         fn set_prototype_of(&mut self, prototype: Option<Object>) -> bool {
-            if let Some(desc) = self.properties.get(&PropertyKey::from("prototype")) {
-                self.properties.insert(
-                    PropertyKey::from("prototype"),
-                    PropertyDescriptor::Data {
-                        value: Value::Object(prototype.unwrap_or_else(|| Object::prototype())),
-                        writable: true,
-                        enumerable: false,
-                        configurable: true,
-                    },
-                );
-
-                return true;
+            if let Some(proxy) = &self.method_proxy {
+                return (proxy.set_prototype_of.clone())(self, prototype);
             }
 
-            return false;
+            Self::_SET_PROTOTYPE_OF(self, prototype)
         }
 
         fn get_own_property(&self, key: &PropertyKey) -> Option<PropertyDescriptor> {
-            self.properties.get(key).cloned()
+            if let Some(proxy) = &self.method_proxy {
+                return (proxy.get_own_property)(self, key);
+            }
+
+            Self::_GET_OWN_PROPERTY(self, key)
         }
 
         fn define_own_property(&mut self, key: &PropertyKey, desc: PropertyDescriptor) -> bool {
-            self.properties.insert(key.clone(), desc);
-            true
+            if let Some(proxy) = &self.method_proxy {
+                return (proxy.define_own_property.clone())(self, key, desc);
+            }
+
+            Self::_DEFINE_OWN_PROPERTY(self, key, desc)
         }
 
         fn set(&mut self, key: &PropertyKey, value: &Value, receiver: &mut Value) -> bool {
-            if let Some(desc) = self.properties.get(key) {
-                self.properties.insert(
-                    key.clone(),
-                    PropertyDescriptor::Data {
-                        value: value.clone(),
-                        writable: desc.enumerable(),
-                        enumerable: desc.enumerable(),
-                        configurable: desc.configurable(),
-                    },
-                );
-
-                return true;
+            if let Some(proxy) = &self.method_proxy {
+                return (proxy.set.clone())(self, key, value, receiver);
             }
 
-            return false;
+            Self::_SET(self, key, value, receiver)
         }
+    }
+
+    // NOTE: PMDD stands for "Proxy Method Default Definition".
+    pub fn pmdd_get_prototype_of(obj: &MiscObject) -> Rc<RefCell<Option<Object>>> {
+        if let Some(slot) = obj.internal_slots.get("prototype") {
+            if let SlotValue::Object(obj) = slot {
+                return Rc::new(RefCell::new(Some(obj.clone())));
+            }
+        }
+
+        if let Some(desc) = obj.properties.get(&PropertyKey::from("prototype")) {
+            desc.field("value")
+                .map(|v| Rc::new(RefCell::new(v.unwrap_object())))
+                .unwrap_or_else(|| Rc::new(RefCell::new(None)))
+        } else {
+            Rc::new(RefCell::new(None))
+        }
+    }
+
+    fn pmdd_set_prototype_of(obj: &mut MiscObject, prototype: Option<Object>) -> bool {
+        if let Some(slot) = obj.internal_slots.get_mut("prototype") {
+            *slot = match prototype {
+                Some(obj) => SlotValue::Object(obj),
+                None => SlotValue::Undefined,
+            };
+
+            return true;
+        }
+
+        if let Some(desc) = obj.properties.get(&PropertyKey::from("prototype")) {
+            obj.properties.insert(
+                PropertyKey::from("prototype"),
+                PropertyDescriptor::Data {
+                    value: Value::Object(prototype.unwrap_or_else(|| Object::prototype())),
+                    writable: true,
+                    enumerable: false,
+                    configurable: true,
+                },
+            );
+
+            return true;
+        }
+
+        return false;
+    }
+
+    fn pmdd_get_own_property(obj: &MiscObject, key: &PropertyKey) -> Option<PropertyDescriptor> {
+        obj.properties.get(key).cloned()
+    }
+
+    fn pmdd_define_own_property(
+        obj: &mut MiscObject,
+        key: &PropertyKey,
+        desc: PropertyDescriptor,
+    ) -> bool {
+        obj.properties.insert(key.clone(), desc);
+        true
+    }
+
+    fn pmdd_set(
+        obj: &mut MiscObject,
+        key: &PropertyKey,
+        value: &Value,
+        receiver: &mut Value,
+    ) -> bool {
+        if let Some(desc) = obj.properties.get(key) {
+            obj.properties.insert(
+                key.clone(),
+                PropertyDescriptor::Data {
+                    value: value.clone(),
+                    writable: desc.enumerable(),
+                    enumerable: desc.enumerable(),
+                    configurable: desc.configurable(),
+                },
+            );
+
+            return true;
+        }
+
+        return false;
     }
 
     #[derive(Debug, Clone)]

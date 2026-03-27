@@ -7,7 +7,7 @@ use crate::js::{
     },
     values::{
         Value,
-        object::{MiscObject, Object, ObjectTrait, PropertyDescriptor, PropertyKey},
+        object::{MiscObject, Object, ObjectTrait, PropertyDescriptor, PropertyKey, SlotValue},
     },
 };
 
@@ -19,31 +19,18 @@ pub fn make_basic_object(internal_slots_list: Vec<String>) -> Object {
     .concat();
 
     let mut object = MiscObject {
-        properties: internal_slots
+        internal_slots: internal_slots
             .iter()
-            .map(|slot| {
-                (
-                    PropertyKey::from(slot.clone()),
-                    PropertyDescriptor::Data {
-                        value: Value::Undefined,
-                        writable: false,
-                        enumerable: false,
-                        configurable: false,
-                    },
-                )
-            })
-            .collect::<HashMap<PropertyKey, PropertyDescriptor>>(),
+            .map(|name| (name.clone(), SlotValue::Undefined))
+            .collect(),
+        properties: HashMap::new(),
+        // with an empty method proxy the misc object gets default ordinary object behavior
+        method_proxy: None,
     };
 
-    object.properties.insert(
-        PropertyKey::from("private_elements"),
-        PropertyDescriptor::Data {
-            value: Value::Undefined,
-            writable: false,
-            enumerable: false,
-            configurable: false,
-        },
-    );
+    object
+        .internal_slots
+        .insert("private_elements".to_string(), SlotValue::List(Vec::new()));
 
     todo!()
 }
