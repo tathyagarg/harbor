@@ -19,6 +19,10 @@ where
     slice.to_vec()
 }
 
+pub const SLOT_PROTOTYPE: &str = "Prototype";
+pub const SLOT_EXTENSIBLE: &str = "Extensible";
+pub const SLOT_PRIVATE_ELEMENTS: &str = "PrivateElements";
+
 // pub fn zs_to_str(zs: ZigString) -> &'static str {
 //     unsafe {
 //         let slice = std::slice::from_raw_parts(zs.data as *const u8, zs.len);

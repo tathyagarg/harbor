@@ -1,6 +1,7 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::js::{
+    SLOT_EXTENSIBLE, SLOT_PROTOTYPE,
     operations::create_data_property,
     types::completion_record::{
         CRKThrow, CompletionRecord, CompletionRecordError, CompletionRecordNormal,
@@ -10,6 +11,7 @@ use crate::js::{
         Value,
         object::{
             ArrayObject, Object, ObjectTrait, OrdinaryObject, PropertyDescriptor, PropertyKey,
+            SlotValue,
         },
         same_value,
     },
@@ -22,6 +24,8 @@ pub fn ordinary_object_create(
     prototype: Option<Object>,
     additional_internal_slots_list: Vec<String>,
 ) -> Object {
+    let internal_slots_list = vec![SLOT_PROTOTYPE, SLOT_EXTENSIBLE];
+
     // let obj = make_basic_object();
 
     todo!()
@@ -55,7 +59,7 @@ pub fn ordinary_set_prototype_of(object: &mut Object, prototype: Option<Object>)
         Object::Ordinary(OrdinaryObject { extensible, .. }) => *extensible,
         Object::Array(ArrayObject { extensible, .. }) => *extensible,
         Object::Misc(misc) => misc
-            .get_own_property(&PropertyKey::from("extensible"))
+            .get_own_property(&PropertyKey::from(SLOT_EXTENSIBLE))
             .unwrap()
             .field("value")
             .unwrap()
@@ -103,13 +107,10 @@ pub fn ordinary_is_extensible(object: &Object) -> bool {
     match object {
         Object::Ordinary(OrdinaryObject { extensible, .. }) => *extensible,
         Object::Array(ArrayObject { extensible, .. }) => *extensible,
-        Object::Misc(misc) => misc
-            .get_own_property(&PropertyKey::from("extensible"))
-            .unwrap()
-            .field("value")
-            .unwrap()
-            .unwrap_bool()
-            .unwrap(),
+        Object::Misc(misc) => match misc.internal_slots.get(SLOT_EXTENSIBLE).unwrap() {
+            &SlotValue::Value(Value::Boolean(b)) => b,
+            _ => panic!(),
+        },
     }
 }
 
@@ -124,22 +125,9 @@ pub fn ordinary_prevent_extensions(object: &mut Object) -> bool {
             true
         }
         Object::Misc(misc) => {
-            let desc = misc
-                .get_own_property(&PropertyKey::from("extensible"))
-                .unwrap();
-
-            if !desc.configurable() {
-                return false;
-            }
-
-            misc.define_own_property(
-                &PropertyKey::from("extensible"),
-                PropertyDescriptor::Data {
-                    value: Value::Boolean(false),
-                    writable: false,
-                    enumerable: false,
-                    configurable: false,
-                },
+            misc.internal_slots.insert(
+                SLOT_EXTENSIBLE.to_string(),
+                SlotValue::Value(Value::Boolean(false)),
             );
 
             true

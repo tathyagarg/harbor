@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::js::{
+    SLOT_EXTENSIBLE, SLOT_PRIVATE_ELEMENTS,
     types::completion_record::{
         CRKThrow, CompletionRecord, CompletionRecordError, CompletionRecordNormal,
         CompletionRecordThrow, UNUSED,
@@ -14,7 +15,7 @@ use crate::js::{
 pub fn make_basic_object(internal_slots_list: Vec<String>) -> Object {
     let internal_slots = [
         &internal_slots_list[..],
-        &[String::from("private_elements")][..],
+        &[String::from(SLOT_PRIVATE_ELEMENTS)][..],
     ]
     .concat();
 
@@ -28,11 +29,21 @@ pub fn make_basic_object(internal_slots_list: Vec<String>) -> Object {
         method_proxy: None,
     };
 
-    object
-        .internal_slots
-        .insert("private_elements".to_string(), SlotValue::List(Vec::new()));
+    object.internal_slots.insert(
+        SLOT_PRIVATE_ELEMENTS.to_string(),
+        SlotValue::List(Vec::new()),
+    );
 
-    todo!()
+    // NOTE: Step 5 is skipped because setting method_proxy to None gives that behavior by default
+
+    if internal_slots.contains(&String::from(SLOT_EXTENSIBLE)) {
+        object.internal_slots.insert(
+            SLOT_EXTENSIBLE.to_string(),
+            SlotValue::Value(Value::Boolean(true)),
+        );
+    }
+
+    return Object::Misc(object);
 }
 
 pub fn set(

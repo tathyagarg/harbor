@@ -264,6 +264,7 @@ pub mod object {
     use std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc, str::FromStr};
 
     use crate::js::{
+        SLOT_PROTOTYPE,
         behaviours::{ordinary_get_own_property, ordinary_set, ordinary_set_prototype_of},
         values::{Value, number::Number, string::JsString, symbol::Symbol},
     };
@@ -585,7 +586,7 @@ pub mod object {
     pub enum SlotValue {
         Undefined,
         List(Vec<Box<SlotValue>>),
-        Object(Object),
+        Value(Value),
     }
 
     #[derive(Clone)]
@@ -672,13 +673,13 @@ pub mod object {
 
     // NOTE: PMDD stands for "Proxy Method Default Definition".
     pub fn pmdd_get_prototype_of(obj: &MiscObject) -> Rc<RefCell<Option<Object>>> {
-        if let Some(slot) = obj.internal_slots.get("prototype") {
-            if let SlotValue::Object(obj) = slot {
+        if let Some(slot) = obj.internal_slots.get(SLOT_PROTOTYPE) {
+            if let SlotValue::Value(Value::Object(obj)) = slot {
                 return Rc::new(RefCell::new(Some(obj.clone())));
             }
         }
 
-        if let Some(desc) = obj.properties.get(&PropertyKey::from("prototype")) {
+        if let Some(desc) = obj.properties.get(&PropertyKey::from(SLOT_PROTOTYPE)) {
             desc.field("value")
                 .map(|v| Rc::new(RefCell::new(v.unwrap_object())))
                 .unwrap_or_else(|| Rc::new(RefCell::new(None)))
@@ -688,18 +689,18 @@ pub mod object {
     }
 
     fn pmdd_set_prototype_of(obj: &mut MiscObject, prototype: Option<Object>) -> bool {
-        if let Some(slot) = obj.internal_slots.get_mut("prototype") {
+        if let Some(slot) = obj.internal_slots.get_mut(SLOT_PROTOTYPE) {
             *slot = match prototype {
-                Some(obj) => SlotValue::Object(obj),
+                Some(obj) => SlotValue::Value(Value::Object(obj)),
                 None => SlotValue::Undefined,
             };
 
             return true;
         }
 
-        if let Some(desc) = obj.properties.get(&PropertyKey::from("prototype")) {
+        if let Some(_) = obj.properties.get(&PropertyKey::from(SLOT_PROTOTYPE)) {
             obj.properties.insert(
-                PropertyKey::from("prototype"),
+                PropertyKey::from(SLOT_PROTOTYPE),
                 PropertyDescriptor::Data {
                     value: Value::Object(prototype.unwrap_or_else(|| Object::prototype())),
                     writable: true,
@@ -731,7 +732,7 @@ pub mod object {
         obj: &mut MiscObject,
         key: &PropertyKey,
         value: &Value,
-        receiver: &mut Value,
+        _receiver: &mut Value,
     ) -> bool {
         if let Some(desc) = obj.properties.get(key) {
             obj.properties.insert(
