@@ -352,18 +352,15 @@ pub struct MiscObject {
 }
 
 impl MiscObject {
-    const _GET_PROTOTYPE_OF: fn(&MiscObject) -> Rc<RefCell<Option<Object>>> =
-        |obj| pmdd_get_prototype_of(obj);
-    const _SET_PROTOTYPE_OF: fn(&mut MiscObject, Option<Object>) -> bool =
-        |obj, prototype| pmdd_set_prototype_of(obj, prototype);
+    const _GET_PROTOTYPE_OF: fn(&MiscObject) -> Rc<RefCell<Option<Object>>> = pmdd_get_prototype_of;
+    const _SET_PROTOTYPE_OF: fn(&mut MiscObject, Option<Object>) -> bool = pmdd_set_prototype_of;
 
     const _GET_OWN_PROPERTY: fn(&MiscObject, &PropertyKey) -> Option<PropertyDescriptor> =
-        |obj, key| pmdd_get_own_property(obj, key);
+        pmdd_get_own_property;
     const _DEFINE_OWN_PROPERTY: fn(&mut MiscObject, &PropertyKey, PropertyDescriptor) -> bool =
-        |obj, key, desc| pmdd_define_own_property(obj, key, desc);
+        pmdd_define_own_property;
 
-    const _SET: fn(&mut MiscObject, &PropertyKey, &Value, &mut Value) -> bool =
-        |obj, key, value, receiver| pmdd_set(obj, key, value, receiver);
+    const _SET: fn(&mut MiscObject, &PropertyKey, &Value, &mut Value) -> bool = pmdd_set;
 }
 
 impl ObjectTrait for MiscObject {

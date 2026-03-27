@@ -2,7 +2,7 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::js::{
     SLOT_EXTENSIBLE, SLOT_PROTOTYPE,
-    operations::create_data_property,
+    operations::{create_data_property, make_basic_object},
     types::completion_record::{
         CRKThrow, CompletionRecord, CompletionRecordError, CompletionRecordNormal,
         CompletionRecordThrow,
@@ -24,11 +24,18 @@ pub fn ordinary_object_create(
     prototype: Option<Object>,
     additional_internal_slots_list: Vec<String>,
 ) -> Object {
-    let internal_slots_list = vec![SLOT_PROTOTYPE, SLOT_EXTENSIBLE];
+    let mut internal_slots_list = vec![SLOT_PROTOTYPE.to_string(), SLOT_EXTENSIBLE.to_string()];
+    internal_slots_list.extend(additional_internal_slots_list);
 
-    // let obj = make_basic_object();
+    let mut obj = make_basic_object(internal_slots_list);
 
-    todo!()
+    // NOTE: Spec says:
+    // > Set O.[[Prototype]] to proto.
+    // Which is technically not the same as calling [[SetPrototypeOf]], but in practice it should
+    // be fine
+    obj.set_prototype_of(prototype);
+
+    obj
 }
 
 pub fn ordinary_get_prototype_of(object: &Object) -> Rc<RefCell<Option<Object>>> {
