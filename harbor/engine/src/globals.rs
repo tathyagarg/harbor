@@ -11,7 +11,7 @@ type ResPath = fn() -> PathBuf;
 pub const ROOT_PATH: ResPath = || {
     let res = std::path::PathBuf::from(std::env::current_exe().unwrap().parent().unwrap());
     if std::env::var("HARBOR_DEV").is_ok_and(|v| v == "super_secret_password") {
-        return std::path::PathBuf::from(res.parent().unwrap().parent().unwrap());
+        return std::path::PathBuf::from(res.parent().unwrap().parent().unwrap().parent().unwrap());
     }
 
     res
