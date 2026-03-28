@@ -12,7 +12,8 @@ use crate::{
     },
     globals::{
         ADDRESS_BAR_ADDRESS_OFFSET, ADDRESS_BAR_OFFSET, DEFAULT_FONT_FAMILY, DEFAULT_FONT_SIZE,
-        DEFAULT_FONT_STYLE_ITALIC, DEFAULT_FONT_WEIGHT, TAB_WIDTH, TABS_BAR_OFFSET, TOOLBAR_OFFSET,
+        DEFAULT_FONT_STYLE_ITALIC, DEFAULT_FONT_WEIGHT, TAB_BAR_HORIZONTAL, TAB_HEIGHT, TAB_WIDTH,
+        TABS_BAR_OFFSET, TOOLBAR_OFFSET,
     },
     html5::dom::{Document, Element, NodeKind},
     render::{
@@ -174,7 +175,125 @@ impl WindowState {
         glyph_instances
     }
 
-    pub fn render_tabs_bar(&mut self, render_pass: &mut wgpu::RenderPass) {
+    pub fn render_tabs_bar_vert(&mut self, render_pass: &mut wgpu::RenderPass) {
+        render_pass.set_stencil_reference(1);
+        render_pass.set_pipeline(&self.tab_bar_render_pipeline);
+
+        render_pass.set_vertex_buffer(0, self.tab_buffer.slice(..));
+        render_pass.draw(0..6, 0..1);
+
+        let address_bar_size =
+            ADDRESS_BAR_OFFSET(self.config.width as f64, self.config.height as f64);
+
+        let renderer = {
+            let layout = self.layout.as_mut().unwrap();
+
+            if let Some(r) = layout
+                ._renderers
+                .get_mut(&RendererIdentifier {
+                    font_family: DEFAULT_FONT_FAMILY.to_string().to_lowercase(),
+                    font_weight: DEFAULT_FONT_WEIGHT,
+                    italic: DEFAULT_FONT_STYLE_ITALIC,
+                })
+                .map_or(None, |r| r.as_mut())
+            {
+                r
+            } else {
+                layout
+                    .get_renderer_mut(DEFAULT_FONT_FAMILY.to_string().to_lowercase())
+                    .expect("No renderer found for font family")
+            }
+        };
+
+        let padding = 10.0;
+        let mut pen_y = address_bar_size.1 as f64;
+
+        let tab_width = TAB_WIDTH(self.config.width as f64, self.tab_datas.len());
+        let tab_height = TAB_HEIGHT(self.config.width as f64, self.config.height as f64);
+
+        let font_size = tab_height as f32 * 0.5;
+        let padding_y = tab_height as f32 * 0.25;
+
+        for (i, tab) in self.tab_datas.iter().enumerate() {
+            render_pass.set_stencil_reference(0);
+            render_pass.set_pipeline(&self.fill_render_pipeline);
+
+            let color = if i == self.active_tab {
+                ACTIVE_TAB_COLOR
+            } else {
+                TAB_COLOR
+            };
+
+            let verts = rectangle_at(
+                0.0,
+                pen_y as f32,
+                tab_width as f32,
+                tab_height as f32,
+                color,
+            );
+
+            let bg_vertex_buffer =
+                self.device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("Tab Background Vertex Buffer"),
+                        contents: bytemuck::cast_slice(&verts),
+                        usage: wgpu::BufferUsages::VERTEX,
+                    });
+
+            render_pass.set_vertex_buffer(0, bg_vertex_buffer.slice(..));
+            render_pass.draw(0..verts.len() as u32, 0..1);
+
+            let adj_position = (padding, pen_y + padding_y as f64);
+
+            let title = tab.document.as_ref().map_or(tab.url.clone(), |doc| {
+                doc.borrow_mut().title().unwrap_or_else(|| tab.url.clone())
+            });
+
+            let char_count = renderer.find_char_count_under_width(
+                &title,
+                font_size,
+                // subtract padding for right-side padding
+                (tab_width - 2.0 * padding) as f32,
+            );
+
+            let glyph_instances = WindowState::get_char_instances(
+                adj_position,
+                &self.device,
+                renderer,
+                font_size,
+                TAB_TEXT_COLOR,
+                title.chars().take(char_count).collect(),
+            );
+
+            for (key, instances) in glyph_instances {
+                let glyph = renderer.get_from_char(key.0, key.1, &self.device).unwrap();
+
+                let instance_buffer =
+                    self.device
+                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                            label: Some("Glyph Instance Buffer"),
+                            contents: bytemuck::cast_slice(&instances),
+                            usage: wgpu::BufferUsages::VERTEX,
+                        });
+
+                render_pass.set_pipeline(&self.glyph_stencil_render_pipeline);
+                render_pass.set_vertex_buffer(0, glyph.fill_vertex_buffer.slice(..));
+                render_pass.set_vertex_buffer(1, instance_buffer.slice(..));
+                render_pass.draw(0..glyph.fill_vertex_count, 0..instances.len() as u32);
+
+                render_pass.set_pipeline(&self.glyph_fill_render_pipeline);
+                render_pass.set_stencil_reference(0);
+
+                render_pass.set_vertex_buffer(0, glyph.fill_vertex_buffer.slice(..));
+                render_pass.set_vertex_buffer(1, instance_buffer.slice(..));
+                render_pass.draw(0..glyph.fill_vertex_count, 0..instances.len() as u32);
+            }
+
+            pen_y += tab_height + padding;
+        }
+    }
+
+    pub fn render_tabs_bar_horiz(&mut self, render_pass: &mut wgpu::RenderPass) {
         render_pass.set_stencil_reference(1);
         render_pass.set_pipeline(&self.tab_bar_render_pipeline);
 
@@ -734,7 +853,11 @@ impl WindowState {
 
             self.render_box(root_box, &mut vec![], &mut _render_pass);
 
-            self.render_tabs_bar(&mut _render_pass);
+            if TAB_BAR_HORIZONTAL {
+                self.render_tabs_bar_horiz(&mut _render_pass);
+            } else {
+                self.render_tabs_bar_vert(&mut _render_pass);
+            }
             self.render_address_bar(&mut _render_pass);
         }
 
@@ -1485,10 +1608,17 @@ impl WindowState {
             self.stencil_view =
                 stencil_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-            let tabs_bar_size = (
-                self.config.width as f64,
-                TABS_BAR_OFFSET(self.config.width as f64, self.config.height as f64).1,
-            );
+            let tabs_bar_size = if TAB_BAR_HORIZONTAL {
+                (
+                    self.config.width as f64,
+                    TABS_BAR_OFFSET(self.config.width as f64, self.config.height as f64).1,
+                )
+            } else {
+                (
+                    TABS_BAR_OFFSET(self.config.width as f64, 0.0).0,
+                    self.config.height as f64,
+                )
+            };
 
             let tab_bar_verts = rectangle_at(
                 0.0,

@@ -26,11 +26,10 @@ pub mod arrays {
     use crate::js::{
         collect_seq,
         expr::{
-            ARRAY_ELEMENT_ELISION, ARRAY_ELEMENT_EXPRESSION, ARRAY_ELEMENT_SPREAD, ArrayElement,
-            ArrayLiteral,
+            ARRAY_ELEMENT_ELISION, ARRAY_ELEMENT_EXPRESSION, ARRAY_ELEMENT_SPREAD, ArrayLiteral,
         },
         operations::set,
-        types::completion_record::{CRK, CRKAbrupt, CompletionRecord, CompletionRecordError},
+        types::completion_record::{CRKAbrupt, CompletionRecord, CompletionRecordError},
         values::{
             Value,
             number::Number,
