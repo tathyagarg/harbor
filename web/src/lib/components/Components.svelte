@@ -40,8 +40,8 @@
 </script>
 
 <div
-  class="flex flex-col gap-4 bg-deep-space-blue p-6 rounded-lg shadow-lg border-1
-  border-celadon"
+  class="flex flex-col gap-4 p-6 rounded-lg shadow-lg border-1
+  border-(white/20)"
   style="transform-style: preserve-3d;"
   bind:this={card}
   on:mousemove={handleMouseMove}
@@ -50,15 +50,17 @@
   tabindex="0"
 >
   <div class="flex justify-between">
-    <span class="text-2xl text-celadon">{icon}</span>
+    <div class="flex gap-2 items-center">
+      <span class="text-2xl">{icon}</span>
+      <h3 class="text-xl font-semibold">{title}</h3>
+    </div>
     <p
-      class="text-(white/50) text-sm border-2
-      border-white/50 px-4 py-1 rounded-full
+      class="text-sm border-2
+      border-white/20 px-4 py-1 rounded-full
       h-fit"
     >
-      ~{loc} lines
+      {loc} lines
     </p>
   </div>
-  <h3 class="text-xl font-semibold">{title}</h3>
   <p class="text-sm">{description}</p>
 </div>

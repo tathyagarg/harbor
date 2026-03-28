@@ -22,7 +22,7 @@ html, body {
   padding: 0;
   font-family: 'Arial', sans-serif;
 
-  background-color: color-mix(in srgb, var(--color-dark-deep-space-blue) 80%, black 20%);
+  background-color: #05081c;
   color: var(--text);
 
   font-family: 'Bricolage Grotesque', sans-serif;

@@ -77,7 +77,7 @@
 >
   <div class="font-serif text-9xl text-center text-(white/80) my-4">
     <h1 class="animate">welcome to</h1>
-    <h1 class="italic text-celadon animate">harbor browser</h1>
+    <h1 class="italic text-muted-teal animate">harbor browser</h1>
   </div>
   <h2 class="text-center animate">
     A web browser written completely from scratch.<br />Every service
@@ -107,15 +107,11 @@
   </div>
 </div>
 
-<hr class="border-cerulean" />
-
-<div class="flex justify-around py-16">
+<div class="flex justify-around py-16 gap-8">
   <Stat title="Lines of Code" value={data.total} />
   <Stat title="Third Party Dependencies" value="0" />
   <Stat title="Core Modules" value="6" />
 </div>
-
-<hr class="border-cerulean" />
 
 <div class="py-16">
   <h1 class="text-6xl text-center py-4">Core Components</h1>
