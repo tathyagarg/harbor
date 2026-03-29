@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 
 use crate::js::expr::{AssignmentExpression, Expression, IdentifierNameTokenData};
 
@@ -91,6 +91,16 @@ impl Display for MaybeAssignmentExpression {
     }
 }
 
+impl Debug for MaybeAssignmentExpression {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.has_value {
+            write!(f, "{:?}", unsafe { self.value.value })
+        } else {
+            write!(f, "None")
+        }
+    }
+}
+
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub union MaybeAssignmentExpressionValue {
@@ -145,45 +155,51 @@ pub struct Statement {
 impl Display for Statement {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.tag {
-            STATEMENT_BLOCK_STATEMENT => write!(f, "BlockStatement { }", unsafe {
+            STATEMENT_BLOCK_STATEMENT => write!(f, "BlockStatement {{ {} }}", unsafe {
                 self.data.block.as_ref().unwrap()
             },),
-            STATEMENT_VAR_STATEMENT => write!(f, "VariableStatement { }", unsafe {
+            STATEMENT_VAR_STATEMENT => write!(f, "VariableStatement {{ {} }}", unsafe {
                 self.data.var.as_ref().unwrap()
             },),
             STATEMENT_EMPTY_STATEMENT => write!(f, "EmptyStatement"),
-            STATEMENT_EXPR_STATEMENT => write!(f, "ExpressionStatement {:?}", unsafe {
+            STATEMENT_EXPR_STATEMENT => write!(f, "ExpressionStatement {{ {:?} }}", unsafe {
                 self.data.expression.as_ref().unwrap()
             },),
-            STATEMENT_IF_STATEMENT => write!(f, "IfStatement { }", unsafe {
+            STATEMENT_IF_STATEMENT => write!(f, "IfStatement {{ {} }}", unsafe {
                 self.data.if_stmt.as_ref().unwrap()
             },),
-            STATEMENT_CONTINUE_STATEMENT => write!(f, "ContinueStatement { }", unsafe {
+            STATEMENT_CONTINUE_STATEMENT => write!(f, "ContinueStatement {{ {} }}", unsafe {
                 self.data.continue_.as_ref().unwrap()
             },),
-            STATEMENT_BREAK_STATEMENT => write!(f, "BreakStatement { }", unsafe {
+            STATEMENT_BREAK_STATEMENT => write!(f, "BreakStatement {{ {} }}", unsafe {
                 self.data.break_.as_ref().unwrap()
             },),
-            STATEMENT_RETURN_STATEMENT => write!(f, "ReturnStatement { }", unsafe {
+            STATEMENT_RETURN_STATEMENT => write!(f, "ReturnStatement {{ {} }}", unsafe {
                 self.data.return_.as_ref().unwrap()
             },),
             STATEMENT_WITH_STATEMENT => write!(f, "WithStatement {{ }}"),
-            STATEMENT_THROW_STATEMENT => write!(f, "ThrowStatement {:?}", unsafe {
+            STATEMENT_THROW_STATEMENT => write!(f, "ThrowStatement {{ {:?} }}", unsafe {
                 self.data.throw.as_ref().unwrap()
             },),
-            STATEMENT_TRY_STATEMENT => write!(f, "TryStatement { }", unsafe {
+            STATEMENT_TRY_STATEMENT => write!(f, "TryStatement {{ {} }}", unsafe {
                 self.data.try_.as_ref().unwrap()
             },),
             STATEMENT_DEBUGGER_STATEMENT => write!(f, "DebuggerStatement"),
-            STATEMENT_DO_WHILE => write!(f, "DoWhileStatement { }", unsafe {
+            STATEMENT_DO_WHILE => write!(f, "DoWhileStatement {{ {} }}", unsafe {
                 self.data.do_while.as_ref().unwrap()
             },),
-            STATEMENT_WHILE => write!(f, "WhileStatement { }", unsafe {
+            STATEMENT_WHILE => write!(f, "WhileStatement {{ {} }}", unsafe {
                 self.data.while_.as_ref().unwrap()
             },),
             STATEMENT_FOR => write!(f, "ForStatement {{ }}"),
             _ => write!(f, "Unknown"),
         }
+    }
+}
+
+impl Debug for Statement {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(&self, f)
     }
 }
 
@@ -311,6 +327,16 @@ pub struct FormalParameter {
     pub name: *const IdentifierNameTokenData,
     pub initializer: *const MaybeAssignmentExpression,
     pub is_rest: bool,
+}
+
+impl Debug for FormalParameter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FormalParameter")
+            .field("name", unsafe { self.name.as_ref().unwrap() })
+            .field("initializer", unsafe { self.initializer.as_ref().unwrap() })
+            .field("is_rest", &self.is_rest)
+            .finish()
+    }
 }
 
 #[repr(C)]

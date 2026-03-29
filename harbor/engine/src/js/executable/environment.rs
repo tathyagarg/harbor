@@ -1,4 +1,4 @@
-use std::{collections::HashMap, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::js::{
     types::completion_record::{
@@ -7,24 +7,42 @@ use crate::js::{
     },
     values::{
         Value,
+        object::{FunctionObject, Object, ThisMode},
         reference::{Reference, ReferenceBase, ReferenceName},
         string::JsString,
     },
 };
 
 #[derive(Clone, Debug)]
+pub enum BindingStatus {
+    Lexical,
+    Initialized,
+    Uninitialized,
+}
+
+#[derive(Clone, Debug)]
+pub struct ObjectEnvironmentRecord {
+    pub object: Rc<Object>,
+
+    pub is_with_environment: bool,
+}
+
+#[derive(Clone, Debug)]
 pub enum EnvironmentRecordKind {
     Declarative,
-    Object {
-        // NOTE: In a complete implementation, this would likely be a more complex type that can
-        // represent any JavaScript object
-        object: String,
-
-        is_with_environment: bool,
+    Object(ObjectEnvironmentRecord),
+    Function {
+        this_value: Rc<Value>,
+        this_binding_status: BindingStatus,
+        function_object: Rc<FunctionObject>,
+        new_target: Option<Rc<FunctionObject>>,
     },
-    Function,
     Module,
-    Global,
+    Global {
+        object: ObjectEnvironmentRecord,
+        global_this_value: Rc<Object>,
+        declarative_record: Rc<EnvironmentRecord>,
+    },
 }
 
 // NOTE: This is a placeholder type. In a complete implementation, this would likely be a more
@@ -254,5 +272,55 @@ pub fn get_identifier_reference(
                 )
             }
         }
+    }
+}
+
+pub fn new_function_environment(
+    func: &FunctionObject,
+    new_target: Option<Object>,
+) -> EnvironmentRecord {
+    EnvironmentRecord {
+        outer_env: Some(Rc::new(func.environment.clone())),
+        kind: EnvironmentRecordKind::Function {
+            function_object: Rc::new(func.clone()),
+            this_binding_status: if matches!(func.this_mode, ThisMode::Lexical) {
+                BindingStatus::Lexical
+            } else {
+                BindingStatus::Uninitialized
+            },
+            new_target: new_target.map(|obj| {
+                if let Object::Function(func) = obj {
+                    Rc::new(func)
+                } else {
+                    panic!("new_target must be a function object");
+                }
+            }),
+            this_value: Rc::new(Value::Undefined),
+        },
+        bindings: HashMap::new(),
+    }
+}
+
+pub fn bind_this_value(
+    env: Rc<RefCell<EnvironmentRecord>>,
+    value: &Value,
+) -> Result<CompletionRecord<()>, CompletionRecord<CompletionRecordError, CRKThrow>> {
+    let mut env_borrow = env.borrow_mut();
+    match &mut env_borrow.kind {
+        EnvironmentRecordKind::Function {
+            this_binding_status,
+            this_value,
+            ..
+        } => {
+            if matches!(this_binding_status, BindingStatus::Lexical) {
+                return Err(CompletionRecordThrow(CompletionRecordError::ReferenceError));
+            }
+
+            *this_value = Rc::new(value.clone());
+            *this_binding_status = BindingStatus::Initialized;
+
+            Ok(CompletionRecordNormal(()))
+        }
+        _ => panic!("bind_this_value can only be called on function environment records"),
     }
 }

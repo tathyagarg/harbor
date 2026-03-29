@@ -10,8 +10,8 @@ use crate::js::{
     values::{
         Value,
         object::{
-            ArrayObject, Object, ObjectTrait, OrdinaryObject, PropertyDescriptor, PropertyKey,
-            SlotValue,
+            ArrayObject, FunctionObject, Object, ObjectTrait, OrdinaryObject, PropertyDescriptor,
+            PropertyKey, SlotValue,
         },
     },
 };
@@ -63,6 +63,7 @@ pub fn ordinary_set_prototype_of(object: &mut Object, prototype: Option<Object>)
 
     let extensible = match object {
         Object::Ordinary(OrdinaryObject { extensible, .. }) => *extensible,
+        Object::Function(FunctionObject { extensible, .. }) => *extensible,
         Object::Array(ArrayObject { extensible, .. }) => *extensible,
         Object::Misc(misc) => misc
             .get_own_property(&PropertyKey::from(SLOT_EXTENSIBLE))
@@ -112,6 +113,7 @@ pub fn ordinary_set_prototype_of(object: &mut Object, prototype: Option<Object>)
 pub fn ordinary_is_extensible(object: &Object) -> bool {
     match object {
         Object::Ordinary(OrdinaryObject { extensible, .. }) => *extensible,
+        Object::Function(FunctionObject { extensible, .. }) => *extensible,
         Object::Array(ArrayObject { extensible, .. }) => *extensible,
         Object::Misc(misc) => match misc.internal_slots.get(SLOT_EXTENSIBLE).unwrap() {
             &SlotValue::Value(Value::Boolean(b)) => b,
@@ -123,6 +125,10 @@ pub fn ordinary_is_extensible(object: &Object) -> bool {
 pub fn ordinary_prevent_extensions(object: &mut Object) -> bool {
     match object {
         Object::Ordinary(OrdinaryObject { extensible, .. }) => {
+            *extensible = false;
+            true
+        }
+        Object::Function(FunctionObject { extensible, .. }) => {
             *extensible = false;
             true
         }

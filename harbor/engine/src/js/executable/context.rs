@@ -1,3 +1,5 @@
+use std::{cell::RefCell, rc::Rc};
+
 use crate::js::{
     executable::{
         agent::{SURROUNDING_AGENT, running_execution_context},
@@ -5,7 +7,7 @@ use crate::js::{
         realm::Realm,
     },
     types::completion_record::{CRKThrow, CompletionRecord},
-    values::{reference::Reference, string::JsString},
+    values::{object::FunctionObject, reference::Reference, string::JsString},
 };
 
 #[derive(Clone, Debug)]
@@ -15,15 +17,41 @@ pub enum ScriptOrModule {
 }
 
 #[derive(Clone, Debug)]
-pub struct ExecutionContext {
+pub enum ExecutionContext {
+    Generic(GenericExecutionContext),
+    Code(CodeExecutionContext),
+}
+
+impl ExecutionContext {
+    pub fn script_or_module(&self) -> Option<ScriptOrModule> {
+        match self {
+            ExecutionContext::Generic(ctx) => ctx.script_or_module.clone(),
+            ExecutionContext::Code(ctx) => ctx.execution_context.script_or_module.clone(),
+        }
+    }
+
+    pub fn lexical_env(&self) -> Option<Rc<RefCell<EnvironmentRecord>>> {
+        match self {
+            ExecutionContext::Generic(_) => None,
+            ExecutionContext::Code(ctx) => Some(ctx.lexical_env.clone()),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct GenericExecutionContext {
+    pub function: Option<FunctionObject>,
     pub realm: Realm,
+
     pub script_or_module: Option<ScriptOrModule>,
+}
 
-    pub lexical_env: EnvironmentRecord,
-    pub variable_env: EnvironmentRecord,
+#[derive(Clone, Debug)]
+pub struct CodeExecutionContext {
+    pub execution_context: GenericExecutionContext,
 
-    // NOTE: Is this right?
-    pub is_strict: bool,
+    pub lexical_env: Rc<RefCell<EnvironmentRecord>>,
+    pub variable_env: Rc<RefCell<EnvironmentRecord>>,
 }
 
 pub fn get_active_script_or_module() -> Option<ScriptOrModule> {
@@ -37,9 +65,9 @@ pub fn get_active_script_or_module() -> Option<ScriptOrModule> {
             let ec = agent_borrow
                 .execution_context_stack
                 .iter()
-                .rfind(|context| context.script_or_module.is_some());
+                .rfind(|context| context.script_or_module().is_some());
 
-            ec.and_then(|context| context.script_or_module.clone())
+            ec.and_then(|context| context.script_or_module().clone())
         } else {
             panic!("No surrounding agent found");
         }
@@ -52,8 +80,8 @@ pub fn resolve_binding(
 ) -> Result<CompletionRecord<Reference>, CompletionRecord<(), CRKThrow>> {
     let ctx = running_execution_context().unwrap();
 
-    let env = env.unwrap_or_else(|| ctx.lexical_env.clone());
-    let strict = ctx.is_strict;
+    let env = env.unwrap_or_else(|| ctx.lexical_env().unwrap().borrow().clone());
+    let strict = true;
 
     return get_identifier_reference(name, Some(env), strict);
 }

@@ -9,7 +9,7 @@ thread_local! {
 pub type AgentSignifier = u64;
 
 pub struct Agent {
-    pub execution_context_stack: Vec<ExecutionContext>,
+    pub execution_context_stack: Vec<Rc<ExecutionContext>>,
 
     pub record: AgentRecord,
 
@@ -68,7 +68,7 @@ pub fn increment_module_async_evaluation_count() {
     })
 }
 
-pub fn running_execution_context() -> Option<ExecutionContext> {
+pub fn running_execution_context() -> Option<Rc<ExecutionContext>> {
     SURROUNDING_AGENT.with_borrow(|agent| {
         if let Some(agent) = agent.as_ref() {
             let agent_borrow = agent.borrow();
