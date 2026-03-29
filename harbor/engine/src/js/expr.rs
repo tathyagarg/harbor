@@ -936,13 +936,13 @@ pub struct CoverCallExpression {
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub union CallExpressionData {
-    _super: *const SuperCall,
-    import: *const ImportCall,
-    call: TrueCallExpressionData,
-    member: MemberCallExpressionData,
-    property: PropertyCallExpressionData,
-    private_property: PrivateCallExpressionData,
-    cover: CoverCallExpression,
+    pub _super: *const SuperCall,
+    pub import: *const ImportCall,
+    pub call: TrueCallExpressionData,
+    pub member: MemberCallExpressionData,
+    pub property: PropertyCallExpressionData,
+    pub private_property: PrivateCallExpressionData,
+    pub cover: CoverCallExpression,
 }
 
 pub const CALL_EXPR_SUPER: u8 = 0;

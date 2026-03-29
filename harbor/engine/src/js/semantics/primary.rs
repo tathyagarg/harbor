@@ -1,17 +1,17 @@
 use crate::js::{
     expr::{PRIMARY_EXPR_ARRAY, PRIMARY_EXPR_LITERAL, PrimaryExpression},
-    values::Value,
+    values::ReferenceOrValue,
 };
 
 pub mod literals {
     use crate::js::{
         expr::{LITERAL_BOOLEAN, LITERAL_NULL, LITERAL_NUMBER, LITERAL_STRING, Literal},
-        values::{Value, number::Number},
+        values::{ReferenceOrValue, Value, number::Number},
         zs_to_js_string,
     };
 
-    pub fn evaluate(value: Literal) -> Value {
-        match value.tag {
+    pub fn evaluate(value: Literal) -> ReferenceOrValue {
+        ReferenceOrValue::Value(match value.tag {
             LITERAL_NULL => Value::Null,
             LITERAL_BOOLEAN => Value::Boolean(unsafe { value.data.boolean }),
             LITERAL_NUMBER => {
@@ -23,7 +23,7 @@ pub mod literals {
                 Value::String(zs_to_js_string(s))
             }
             _ => unreachable!("Unknown literal tag: {}", value.tag),
-        }
+        })
     }
 }
 
@@ -36,7 +36,7 @@ pub mod arrays {
         operations::set,
         types::completion_record::{CRKAbrupt, CompletionRecord, CompletionRecordError},
         values::{
-            Value,
+            ReferenceOrValue, Value,
             number::Number,
             object::{ArrayObject, Object, PropertyKey},
         },
@@ -82,12 +82,12 @@ pub mod arrays {
         todo!()
     }
 
-    pub fn evaluate(_array: ArrayLiteral) -> Value {
+    pub fn evaluate(_array: ArrayLiteral) -> ReferenceOrValue {
         todo!("Array literal evaluation")
     }
 }
 
-pub fn evaluate(primary: PrimaryExpression) -> Value {
+pub fn evaluate(primary: PrimaryExpression) -> ReferenceOrValue {
     match primary.tag {
         PRIMARY_EXPR_LITERAL => {
             let literal_data = unsafe { *primary.data.literal };

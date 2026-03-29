@@ -532,7 +532,7 @@ fn ordinary_set_with_own_descriptor(
         return Ok(CompletionRecordNormal(false));
     }
 
-    return todo!("Call");
+    todo!("Call")
 }
 
 pub fn ordinary_delete(

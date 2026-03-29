@@ -1,13 +1,19 @@
 use crate::js::{
     expr::{
-        LEFT_HAND_SIDE_EXPR_CALL, LEFT_HAND_SIDE_EXPR_NEW, LeftHandSideExpression,
-        MEMBER_EXPR_MEMBER, MEMBER_EXPR_PRIMARY, MemberExpression, NEW_EXPR_MEMBER,
+        CALL_EXPR_MEMBER, CALL_EXPR_PRIVATE_PROPERTY, CALL_EXPR_PROPERTY, CallExpression,
+        IdentifierNameTokenData, LEFT_HAND_SIDE_EXPR_CALL, LEFT_HAND_SIDE_EXPR_NEW,
+        LeftHandSideExpression, MEMBER_EXPR_MEMBER, MEMBER_EXPR_PRIMARY,
+        MEMBER_EXPR_PRIVATE_PROPERTY, MEMBER_EXPR_PROPERTY, MemberExpression, NEW_EXPR_MEMBER,
     },
-    semantics::primary,
-    values::{ReferenceOrValue, Value, reference::get_value},
+    semantics::{EvaluateExpressionTag, general_evaluate, identifier, primary},
+    types::completion_record::{CRKAbrupt, CRKNormal, CompletionRecord, CompletionRecordError},
+    values::{
+        ReferenceOrValue, Value,
+        reference::{Reference, ReferenceBase, ReferenceName, get_value},
+    },
 };
 
-pub fn evaluate(lhs: LeftHandSideExpression) -> Value {
+pub fn evaluate(lhs: LeftHandSideExpression) -> ReferenceOrValue {
     match lhs.tag {
         LEFT_HAND_SIDE_EXPR_NEW => {
             let new_data = unsafe { *lhs.data.new };
@@ -21,16 +27,57 @@ pub fn evaluate(lhs: LeftHandSideExpression) -> Value {
         }
         LEFT_HAND_SIDE_EXPR_CALL => {
             let call_data = unsafe { *lhs.data.call };
-            todo!(
-                "Implement left-hand side call expression evaluation: {:?}",
-                call_data
-            );
+
+            return _evaluate_call(&call_data);
         }
         _ => unreachable!("Unknown left-hand side expression tag: {}", lhs.tag),
     }
 }
 
-fn _evaluate_member(member: &MemberExpression) -> Value {
+fn _evaluate_call(call: &CallExpression) -> ReferenceOrValue {
+    match call.tag {
+        CALL_EXPR_MEMBER => {
+            let object_data = unsafe { *call.data.member.object };
+            let expression_data = unsafe { *call.data.member.expr };
+
+            let base_reference = _evaluate_call(&object_data);
+            let base_value = get_value(base_reference);
+
+            let strict = true;
+
+            let res = evaluate_property_access_with_expression_key(
+                base_value.unwrap().value,
+                EvaluateExpressionTag::Expression(expression_data),
+                strict,
+            );
+
+            return ReferenceOrValue::Reference(res.unwrap().value);
+        }
+        CALL_EXPR_PROPERTY => {
+            let object_data = unsafe { *call.data.property.object };
+            let property_name_data = unsafe { *call.data.property.property };
+
+            let base_reference = _evaluate_call(&object_data);
+            let base_value = get_value(base_reference);
+
+            let strict = true;
+
+            let res = evaluate_property_access_with_identifier_key(
+                base_value.unwrap().value,
+                property_name_data,
+                strict,
+            );
+
+            return ReferenceOrValue::Reference(res);
+        }
+        CALL_EXPR_PRIVATE_PROPERTY => {
+            todo!("Private property access evaluation in call expression")
+        }
+        _ => unreachable!("Unknown call expression tag: {}", call.tag),
+    }
+}
+
+fn _evaluate_member(member: &MemberExpression) -> ReferenceOrValue {
     match member.tag {
         MEMBER_EXPR_PRIMARY => {
             let primary_data = unsafe { *member.data.primary };
@@ -41,10 +88,85 @@ fn _evaluate_member(member: &MemberExpression) -> Value {
             let expression_data = unsafe { *member.data.member.expr };
 
             let base_reference = _evaluate_member(&object_data);
-            let base_value = get_value(ReferenceOrValue::Value(base_reference));
+            let base_value = get_value(base_reference);
 
-            todo!()
+            // NOTE: Uhhhhh
+            let strict = true;
+
+            let res = evaluate_property_access_with_expression_key(
+                base_value.unwrap().value,
+                EvaluateExpressionTag::Expression(expression_data),
+                strict,
+            )
+            .unwrap();
+
+            return ReferenceOrValue::Reference(res.value);
+        }
+        MEMBER_EXPR_PROPERTY => {
+            let object_data = unsafe { *member.data.property.object };
+            let property_name_data = unsafe { *member.data.property.property };
+
+            let base_reference = _evaluate_member(&object_data);
+            let base_value = get_value(base_reference);
+
+            let strict = true;
+
+            let res = evaluate_property_access_with_identifier_key(
+                base_value.unwrap().value,
+                property_name_data,
+                strict,
+            );
+
+            return ReferenceOrValue::Reference(res);
+        }
+        MEMBER_EXPR_PRIVATE_PROPERTY => {
+            todo!("Private property access evaluation")
         }
         _ => unreachable!("Unknown member expression tag: {}", member.tag),
+    }
+}
+
+pub fn evaluate_property_access_with_expression_key(
+    base_value: Value,
+    expression: EvaluateExpressionTag,
+    strict: bool,
+) -> Result<CompletionRecord<Reference>, CompletionRecord<CompletionRecordError, CRKAbrupt>> {
+    let property_name_reference = general_evaluate(expression);
+    let maybe_property_name_value = get_value(property_name_reference);
+
+    if let Err(e) = maybe_property_name_value {
+        return Err(CompletionRecord {
+            kind: CRKAbrupt::Throw,
+            value: e.value,
+            target: None,
+        });
+    }
+
+    let property_name_value = maybe_property_name_value.unwrap().unwrapped().clone();
+
+    Ok(CompletionRecord {
+        kind: CRKNormal,
+        value: Reference {
+            base: ReferenceBase::Value(base_value),
+            referenced_name: ReferenceName::Value(property_name_value),
+            strict,
+            this_value: None,
+        },
+        target: None,
+    })
+}
+
+pub fn evaluate_property_access_with_identifier_key(
+    base_value: Value,
+    identifier_name: IdentifierNameTokenData,
+    strict: bool,
+) -> Reference {
+    let property_name_string = identifier::string_value(identifier_name);
+
+    Reference {
+        base: ReferenceBase::Value(base_value),
+        referenced_name: ReferenceName::Value(Value::String(property_name_string)),
+        strict,
+        this_value: None,
     }
 }
