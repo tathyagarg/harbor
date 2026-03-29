@@ -2,7 +2,7 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::js::{
     SLOT_EXTENSIBLE, SLOT_PROTOTYPE,
-    operations::{create_data_property, make_basic_object},
+    operations::{create_data_property, make_basic_object, same_value},
     types::completion_record::{
         CRKThrow, CompletionRecord, CompletionRecordError, CompletionRecordNormal,
         CompletionRecordThrow,
@@ -13,7 +13,6 @@ use crate::js::{
             ArrayObject, Object, ObjectTrait, OrdinaryObject, PropertyDescriptor, PropertyKey,
             SlotValue,
         },
-        same_value,
     },
 };
 

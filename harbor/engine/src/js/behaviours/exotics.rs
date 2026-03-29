@@ -5,7 +5,7 @@ pub mod array {
 
     use crate::js::{
         behaviours::{ordinary_define_own_property, ordinary_get_own_property},
-        operations::{canonical_numeric_index_string, to_number, to_uint32},
+        operations::{canonical_numeric_index_string, same_value_zero, to_number, to_uint32},
         types::completion_record::{
             CRKThrow, CompletionRecord, CompletionRecordError, CompletionRecordNormal,
             CompletionRecordThrow,
@@ -14,7 +14,6 @@ pub mod array {
             Value,
             number::Number,
             object::{ArrayObject, Object, OrdinaryObject, PropertyDescriptor, PropertyKey},
-            same_value_zero,
         },
     };
 
