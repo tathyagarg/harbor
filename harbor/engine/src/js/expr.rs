@@ -826,6 +826,7 @@ impl Debug for NewMemberExpressionData {
 #[derive(Copy, Clone)]
 pub struct Arguments {
     pub arguments: AssignmentExpressionSeq,
+    pub is_spread: *const bool,
 }
 
 impl Debug for Arguments {
@@ -844,6 +845,18 @@ impl Debug for Arguments {
 pub struct AssignmentExpressionSeq {
     pub data: *const AssignmentExpression,
     pub len: usize,
+}
+
+impl Seq for AssignmentExpressionSeq {
+    type Item = AssignmentExpression;
+
+    fn data(&self) -> *const Self::Item {
+        self.data
+    }
+
+    fn len(&self) -> usize {
+        self.len
+    }
 }
 
 #[repr(C)]

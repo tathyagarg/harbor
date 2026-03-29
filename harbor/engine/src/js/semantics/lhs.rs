@@ -1,4 +1,5 @@
 use crate::js::{
+    collect_seq,
     expr::{
         Arguments, CALL_EXPR_MEMBER, CALL_EXPR_PRIVATE_PROPERTY, CALL_EXPR_PROPERTY,
         CallExpression, IdentifierNameTokenData, LEFT_HAND_SIDE_EXPR_CALL, LEFT_HAND_SIDE_EXPR_NEW,
@@ -6,7 +7,7 @@ use crate::js::{
         MEMBER_EXPR_PRIVATE_PROPERTY, MEMBER_EXPR_PROPERTY, MemberExpression, NEW_EXPR_MEMBER,
         NEW_EXPR_NEW, NewExpression,
     },
-    operations::is_constructor,
+    operations::{IteratorKind, get_iterator, is_constructor},
     semantics::{EvaluateExpressionTag, general_evaluate, identifier, primary},
     types::completion_record::{CRKAbrupt, CRKNormal, CompletionRecord, CompletionRecordError},
     values::{
@@ -229,4 +230,29 @@ pub fn evaluate_new(
     }
 
     todo!("Construct")
+}
+
+pub fn argument_list_evaluation(
+    arguments: Arguments,
+) -> Result<CompletionRecord<Vec<Value>>, CompletionRecord<CompletionRecordError, CRKAbrupt>> {
+    let mut args_list = Vec::<Value>::new();
+    let seq = collect_seq(arguments.arguments);
+
+    let is_spread_elems =
+        unsafe { std::slice::from_raw_parts(arguments.is_spread, arguments.arguments.len) }
+            .iter()
+            .copied()
+            .collect::<Vec<bool>>();
+
+    for (i, arg) in seq.iter().enumerate() {
+        if is_spread_elems[i] {
+            let mut list = Vec::<Value>::new();
+            let spread_ref = general_evaluate(EvaluateExpressionTag::AssignmentExpression(*arg));
+            let spread_obj = get_value(spread_ref)?.value;
+
+            // let iterator_rec = get_iterator(&spread_obj, IteratorKind::Sync);
+        }
+    }
+
+    todo!()
 }

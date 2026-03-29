@@ -1,7 +1,7 @@
 use crate::js::{
     expr::{
-        Expression, IdentifierNameTokenData, LeftHandSideExpression, MemberExpression,
-        NewExpression, PrimaryExpression,
+        AssignmentExpression, Expression, IdentifierNameTokenData, LeftHandSideExpression,
+        MemberExpression, NewExpression, PrimaryExpression,
     },
     values::ReferenceOrValue,
 };
@@ -18,6 +18,8 @@ pub enum EvaluateExpressionTag {
 
     MemberExpression(MemberExpression),
     NewExpression(NewExpression),
+
+    AssignmentExpression(AssignmentExpression),
     Expression(Expression),
 }
 

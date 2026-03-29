@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use crate::js::{
     SLOT_EXTENSIBLE, SLOT_PRIVATE_ELEMENTS,
+    operations::{is_callable, to_object},
     types::completion_record::{
         CRKThrow, CompletionRecord, CompletionRecordError, CompletionRecordNormal,
         CompletionRecordThrow, UNUSED,
@@ -46,6 +47,16 @@ pub fn make_basic_object(internal_slots_list: Vec<String>) -> Object {
     return Object::Misc(object);
 }
 
+pub fn getv(
+    value: &Value,
+    property_key: &PropertyKey,
+) -> Result<CompletionRecord<Value>, CompletionRecord<CompletionRecordError, CRKThrow>> {
+    let o = to_object(value)?.value;
+    let res = o.get(property_key, value);
+
+    return Ok(CompletionRecordNormal(res.unwrap_or(Value::Undefined)));
+}
+
 pub fn set(
     obj: &mut Object,
     key: &PropertyKey,
@@ -80,4 +91,23 @@ pub fn create_data_property(
     return Ok(CompletionRecordNormal(
         obj.define_own_property(key, new_desc),
     ));
+}
+
+pub fn get_method(
+    value: &Value,
+    key: &PropertyKey,
+) -> Result<CompletionRecord<Option<Object>>, CompletionRecord<CompletionRecordError, CRKThrow>> {
+    let func = getv(value, key)?.value;
+
+    if matches!(func, Value::Undefined | Value::Null) {
+        return Ok(CompletionRecordNormal(None));
+    }
+
+    if !is_callable(&func) {
+        return Err(CompletionRecordThrow(CompletionRecordError::TypeError));
+    }
+
+    let func_obj = func.unwrap_object();
+
+    Ok(CompletionRecordNormal(func_obj))
 }

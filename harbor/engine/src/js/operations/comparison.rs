@@ -1,5 +1,13 @@
 use crate::js::values::Value;
 
+pub fn is_callable(arg: &Value) -> bool {
+    if let Value::Object(obj) = arg {
+        todo!("Check if object is callable");
+    }
+
+    return false;
+}
+
 pub fn is_constructor(arg: &Value) -> bool {
     if let Value::Object(obj) = arg {
         todo!("Check if object is a constructor");

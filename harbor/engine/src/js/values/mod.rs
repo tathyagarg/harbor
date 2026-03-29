@@ -98,6 +98,8 @@ pub mod string {
 }
 
 pub mod symbol {
+    use std::{str::FromStr, sync::LazyLock};
+
     use crate::js::values::string::JsString;
 
     pub type SymbolId = u64;
@@ -107,6 +109,11 @@ pub mod symbol {
         pub id: SymbolId,
         pub description: Option<JsString>,
     }
+
+    pub static SYMBOL_ITERATOR: LazyLock<Symbol> = LazyLock::new(|| Symbol {
+        id: 0,
+        description: Some(JsString::from_str("Symbol.iterator").unwrap()),
+    });
 }
 
 #[derive(Clone, Debug)]
