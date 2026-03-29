@@ -2,8 +2,10 @@ use std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc, str::FromStr}
 
 use crate::js::{
     SLOT_PROTOTYPE,
-    behaviours::{ordinary_get_own_property, ordinary_set, ordinary_set_prototype_of},
-    values::{Value, number::Number, string::JsString, symbol::Symbol},
+    behaviours::{
+        ordinary_get, ordinary_get_own_property, ordinary_set, ordinary_set_prototype_of,
+    },
+    values::{Value, number::Number, reference::ReferenceName, string::JsString, symbol::Symbol},
 };
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
@@ -33,6 +35,21 @@ impl From<&str> for PropertyKey {
 impl From<JsString> for PropertyKey {
     fn from(value: JsString) -> Self {
         PropertyKey::String(value)
+    }
+}
+
+impl From<ReferenceName> for PropertyKey {
+    fn from(value: ReferenceName) -> Self {
+        match value {
+            ReferenceName::Value(v) => match v {
+                Value::String(s) => PropertyKey::String(s),
+                Value::Symbol(sym) => PropertyKey::Symbol(sym),
+                _ => panic!("Invalid ReferenceName value for PropertyKey"),
+            },
+            ReferenceName::Private(_) => {
+                panic!("Cannot convert Private ReferenceName to PropertyKey")
+            }
+        }
     }
 }
 
@@ -250,6 +267,8 @@ pub trait ObjectTrait {
 
     fn get_own_property(&self, key: &PropertyKey) -> Option<PropertyDescriptor>;
     fn define_own_property(&mut self, key: &PropertyKey, desc: PropertyDescriptor) -> bool;
+
+    fn get(&self, key: &PropertyKey, receiver: &Value) -> Option<Value>;
     fn set(&mut self, key: &PropertyKey, value: &Value, receiver: &mut Value) -> bool;
 }
 
@@ -308,6 +327,17 @@ impl ObjectTrait for OrdinaryObject {
         true
     }
 
+    fn get(&self, key: &PropertyKey, receiver: &Value) -> Option<Value> {
+        let obj = Object::Ordinary(self.clone());
+        let res = ordinary_get(&obj, key, receiver);
+
+        if let Ok(val) = res {
+            Some(val.unwrapped().clone())
+        } else {
+            None
+        }
+    }
+
     fn set(&mut self, key: &PropertyKey, value: &Value, receiver: &mut Value) -> bool {
         let mut obj = Object::Ordinary(self.clone());
         let res = ordinary_set(&mut obj, key, value, receiver);
@@ -334,6 +364,7 @@ pub struct EssentialMethodProxy<T> {
     pub get_own_property: Rc<dyn Fn(&T, &PropertyKey) -> Option<PropertyDescriptor>>,
     pub define_own_property: Rc<dyn Fn(&mut T, &PropertyKey, PropertyDescriptor) -> bool>,
 
+    pub get: Rc<dyn Fn(&T, &PropertyKey, &Value) -> Option<Value>>,
     pub set: Rc<dyn Fn(&mut T, &PropertyKey, &Value, &mut Value) -> bool>,
 }
 
@@ -360,6 +391,7 @@ impl MiscObject {
     const _DEFINE_OWN_PROPERTY: fn(&mut MiscObject, &PropertyKey, PropertyDescriptor) -> bool =
         pmdd_define_own_property;
 
+    const _GET: fn(&MiscObject, &PropertyKey, &Value) -> Option<Value> = pmdd_get;
     const _SET: fn(&mut MiscObject, &PropertyKey, &Value, &mut Value) -> bool = pmdd_set;
 }
 
@@ -394,6 +426,14 @@ impl ObjectTrait for MiscObject {
         }
 
         Self::_DEFINE_OWN_PROPERTY(self, key, desc)
+    }
+
+    fn get(&self, key: &PropertyKey, receiver: &Value) -> Option<Value> {
+        if let Some(proxy) = &self.method_proxy {
+            return (proxy.get.clone())(self, key, receiver);
+        }
+
+        Self::_GET(self, key, receiver)
     }
 
     fn set(&mut self, key: &PropertyKey, value: &Value, receiver: &mut Value) -> bool {
@@ -462,6 +502,16 @@ fn pmdd_define_own_property(
     true
 }
 
+fn pmdd_get(obj: &MiscObject, key: &PropertyKey, _receiver: &Value) -> Option<Value> {
+    if let Some(desc) = obj.properties.get(key) {
+        if let PropertyDescriptor::Data { value, .. } = desc {
+            return Some(value.clone());
+        }
+    }
+
+    None
+}
+
 fn pmdd_set(obj: &mut MiscObject, key: &PropertyKey, value: &Value, _receiver: &mut Value) -> bool {
     if let Some(desc) = obj.properties.get(key) {
         obj.properties.insert(
@@ -511,6 +561,14 @@ impl ObjectTrait for Object {
             Object::Ordinary(obj) => obj.set_prototype_of(prototype),
             Object::Array(arr) => arr.object.set_prototype_of(prototype),
             Object::Misc(misc) => misc.set_prototype_of(prototype),
+        }
+    }
+
+    fn get(&self, key: &PropertyKey, receiver: &Value) -> Option<Value> {
+        match self {
+            Object::Ordinary(obj) => obj.get(key, receiver),
+            Object::Array(arr) => arr.object.get(key, receiver),
+            Object::Misc(misc) => misc.get(key, receiver),
         }
     }
 

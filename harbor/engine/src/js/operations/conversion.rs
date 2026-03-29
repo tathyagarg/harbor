@@ -8,6 +8,7 @@ use crate::js::{
     values::{
         Value,
         number::Number,
+        object::Object,
         string::{_equals_raw, JsString},
     },
 };
@@ -97,6 +98,22 @@ pub fn to_string(
         }
         Value::Number(n) => return Ok(CompletionRecordNormal(n.to_string(10))),
         _ => todo!("to_string for object"),
+    }
+}
+
+pub fn to_object(
+    argument: &Value,
+) -> Result<CompletionRecord<Object>, CompletionRecord<CompletionRecordError, CRKThrow>> {
+    match argument {
+        Value::Undefined | Value::Null => {
+            return Err(CompletionRecordThrow(CompletionRecordError::TypeError));
+        }
+        Value::Boolean(_boolean) => todo!("Boolean object"),
+        Value::Number(_number) => todo!("Number object"),
+        Value::String(_string) => todo!("String object"),
+        Value::Symbol(_symbol) => todo!("Symbol object"),
+        Value::BigInt(_big) => todo!("big int object??"),
+        Value::Object(obj) => Ok(CompletionRecordNormal(obj.clone())),
     }
 }
 

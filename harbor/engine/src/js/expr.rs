@@ -266,9 +266,9 @@ impl Debug for LeftHandSideExpression {
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub union LeftHandSideExpressionData {
-    new: *const NewExpression,
-    call: *const CallExpression,
-    optional: *const OptionalExpression,
+    pub new: *const NewExpression,
+    pub call: *const CallExpression,
+    pub optional: *const OptionalExpression,
 }
 
 pub const LEFT_HAND_SIDE_EXPR_NEW: u8 = 0;
@@ -396,8 +396,8 @@ impl Debug for NewExpression {
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub union NewExpressionData {
-    member: *const MemberExpression,
-    new: *const NewExpression,
+    pub member: *const MemberExpression,
+    pub new: *const NewExpression,
 }
 
 pub const NEW_EXPR_MEMBER: u8 = 0;
@@ -471,11 +471,11 @@ pub struct PrimaryExpression {
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub union PrimaryExpressionData {
-    this: (),
-    identifier: *const IdentifierReference,
-    literal: *const Literal,
-    array: *const ArrayLiteral,
-    object: *const ObjectLiteral,
+    pub this: (),
+    pub identifier: *const IdentifierReference,
+    pub literal: *const Literal,
+    pub array: *const ArrayLiteral,
+    pub object: *const ObjectLiteral,
 }
 
 pub const PRIMARY_EXPR_THIS: u8 = 0;
@@ -733,13 +733,13 @@ pub const PROPERTY_NAME_COMPUTED: u8 = 3;
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub union MemberExpressionData {
-    primary: *const PrimaryExpression,
-    member: TrueMemberExpressionData,
-    property: PropertyMemberExpressionData,
-    _super: *const SuperProperty,
-    import_meta: ImportMeta,
-    new: NewMemberExpressionData,
-    private_property: PrivateMemberExpressionData,
+    pub primary: *const PrimaryExpression,
+    pub member: TrueMemberExpressionData,
+    pub property: PropertyMemberExpressionData,
+    pub _super: *const SuperProperty,
+    pub import_meta: ImportMeta,
+    pub new: NewMemberExpressionData,
+    pub private_property: PrivateMemberExpressionData,
 }
 
 pub const MEMBER_EXPR_PRIMARY: u8 = 0;

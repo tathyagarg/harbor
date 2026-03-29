@@ -3,7 +3,7 @@ use crate::js::{
     executable::context::resolve_binding,
     expr::{CodePoint, IdentifierNameTokenData},
     string_to_cps,
-    values::{Reference, string::JsString},
+    values::{reference::Reference, string::JsString},
     zs_to_js_string,
 };
 

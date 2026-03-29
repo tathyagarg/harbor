@@ -1,10 +1,16 @@
-use crate::js::{
-    executable::environment::EnvironmentRecord,
-    values::{number::Number, object::Object, string::JsString, symbol::Symbol},
+use crate::js::values::{
+    number::Number, object::Object, reference::Reference, string::JsString, symbol::Symbol,
 };
 
 pub mod number;
 pub mod object;
+
+pub mod reference;
+
+pub enum ReferenceOrValue {
+    Reference(Reference),
+    Value(Value),
+}
 
 pub mod string {
     use std::{ops::Add, str::FromStr};
@@ -159,21 +165,10 @@ impl Value {
             None
         }
     }
-}
 
-#[derive(Clone, Debug)]
-pub enum ReferenceBase {
-    Value(Value),
-    EnvironmentRecord(EnvironmentRecord),
-    Unresolvable,
-}
-
-#[derive(Clone, Debug)]
-pub struct Reference {
-    pub base: ReferenceBase,
-    pub referenced_name: Value,
-    pub strict: bool,
-    pub this_value: Option<Value>,
+    pub fn is_property_key(&self) -> bool {
+        matches!(self, Value::String(_) | Value::Symbol(_))
+    }
 }
 
 pub fn same_type(x: &Value, y: &Value) -> bool {

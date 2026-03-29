@@ -389,14 +389,48 @@ pub fn validate_and_apply_property_descriptor(
 //     key: PropertyKey,
 // ) -> Result<CompletionRecord<bool>, CompletionRecord<CompletionRecordError>> {
 // }
-//
-// fn ordinary_get(
-//     object: &Object,
-//     key: PropertyKey,
-//     receiver: Value,
-// ) -> Result<CompletionRecord<Value>, CompletionRecord<CompletionRecordError>> {
-// }
-//
+
+pub fn ordinary_get(
+    object: &Object,
+    key: &PropertyKey,
+    receiver: &Value,
+) -> Result<CompletionRecord<Value>, CompletionRecord<CompletionRecordError, CRKThrow>> {
+    let maybe_desc = object.get_own_property(key);
+    if maybe_desc.is_none() {
+        let parent = object.get_prototype_of();
+        if let Some(parent_sure) = parent.borrow().as_ref() {
+            let res = parent_sure.get(key, receiver);
+            if let Some(val) = res {
+                return Ok(CompletionRecordNormal(val));
+            } else {
+                return Err(CompletionRecordThrow(CompletionRecordError::Misc(format!(
+                    "Property {:?} does not exist on object or its prototype chain",
+                    key
+                ))));
+            }
+        }
+    }
+
+    let desc = maybe_desc.unwrap();
+    if desc.is_data_descriptor() {
+        return desc
+            .field("value")
+            .ok_or_else(|| {
+                CompletionRecordThrow(CompletionRecordError::Misc(format!(
+                    "Data descriptor for property {:?} is missing 'value' field",
+                    key
+                )))
+            })
+            .map(CompletionRecordNormal);
+    }
+
+    let getter = desc.field("get").unwrap_or(Value::Undefined);
+    if matches!(getter, Value::Undefined) {
+        return Ok(CompletionRecordNormal(Value::Undefined));
+    }
+
+    todo!("Call getter function")
+}
 
 pub fn ordinary_set(
     object: &mut Object,

@@ -1,11 +1,15 @@
-use std::{collections::HashMap, hash::Hash, rc::Rc};
+use std::{collections::HashMap, rc::Rc};
 
 use crate::js::{
     types::completion_record::{
         CRKThrow, CompletionRecord, CompletionRecordError, CompletionRecordNormal,
         CompletionRecordThrow, UNUSED,
     },
-    values::{Reference, ReferenceBase, Value, string::JsString},
+    values::{
+        Value,
+        reference::{Reference, ReferenceBase, ReferenceName},
+        string::JsString,
+    },
 };
 
 #[derive(Clone, Debug)]
@@ -229,7 +233,7 @@ pub fn get_identifier_reference(
     match env {
         None => Ok(CompletionRecordNormal(Reference {
             base: ReferenceBase::Unresolvable,
-            referenced_name: Value::String(name),
+            referenced_name: ReferenceName::Value(Value::String(name)),
             strict,
             this_value: None,
         })),
@@ -238,7 +242,7 @@ pub fn get_identifier_reference(
             if exists.value {
                 Ok(CompletionRecordNormal(Reference {
                     base: ReferenceBase::EnvironmentRecord(env),
-                    referenced_name: Value::String(name),
+                    referenced_name: ReferenceName::Value(Value::String(name)),
                     strict,
                     this_value: None,
                 }))

@@ -5,7 +5,7 @@ use crate::js::{
         realm::Realm,
     },
     types::completion_record::{CRKThrow, CompletionRecord},
-    values::{Reference, string::JsString},
+    values::{reference::Reference, string::JsString},
 };
 
 #[derive(Clone, Debug)]

@@ -1,3 +1,8 @@
+use crate::js::{
+    expr::{PRIMARY_EXPR_ARRAY, PRIMARY_EXPR_LITERAL, PrimaryExpression},
+    values::Value,
+};
+
 pub mod literals {
     use crate::js::{
         expr::{LITERAL_BOOLEAN, LITERAL_NULL, LITERAL_NUMBER, LITERAL_STRING, Literal},
@@ -77,11 +82,21 @@ pub mod arrays {
         todo!()
     }
 
-    pub fn evaluate(
-        array: ArrayLiteral,
-        proto: Object,
-    ) -> Result<CompletionRecord<ArrayObject>, CompletionRecord<CompletionRecordError, CRKAbrupt>>
-    {
+    pub fn evaluate(_array: ArrayLiteral) -> Value {
         todo!("Array literal evaluation")
+    }
+}
+
+pub fn evaluate(primary: PrimaryExpression) -> Value {
+    match primary.tag {
+        PRIMARY_EXPR_LITERAL => {
+            let literal_data = unsafe { *primary.data.literal };
+            return literals::evaluate(literal_data);
+        }
+        PRIMARY_EXPR_ARRAY => {
+            let array_data = unsafe { *primary.data.array };
+            return arrays::evaluate(array_data);
+        }
+        _ => todo!("Implement evaluation of primaries of tag {}", primary.tag),
     }
 }
