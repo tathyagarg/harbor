@@ -57,7 +57,7 @@ pub fn evaluate_call(call: &CallExpression) -> ReferenceOrValue {
             let expression_data = unsafe { *call.data.member.expr };
 
             let base_reference = evaluate_call(&object_data);
-            let base_value = get_value(base_reference);
+            let base_value = get_value(&base_reference);
 
             let strict = true;
 
@@ -74,7 +74,7 @@ pub fn evaluate_call(call: &CallExpression) -> ReferenceOrValue {
             let property_name_data = unsafe { *call.data.property.property };
 
             let base_reference = evaluate_call(&object_data);
-            let base_value = get_value(base_reference);
+            let base_value = get_value(&base_reference);
 
             let strict = true;
 
@@ -104,7 +104,7 @@ pub fn evaluate_member(member: &MemberExpression) -> ReferenceOrValue {
             let expression_data = unsafe { *member.data.member.expr };
 
             let base_reference = evaluate_member(&object_data);
-            let base_value = get_value(base_reference);
+            let base_value = get_value(&base_reference);
 
             // NOTE: Uhhhhh
             let strict = true;
@@ -123,7 +123,7 @@ pub fn evaluate_member(member: &MemberExpression) -> ReferenceOrValue {
             let property_name_data = unsafe { *member.data.property.property };
 
             let base_reference = evaluate_member(&object_data);
-            let base_value = get_value(base_reference);
+            let base_value = get_value(&base_reference);
 
             let strict = true;
 
@@ -156,7 +156,7 @@ pub fn evaluate_property_access_with_expression_key(
     strict: bool,
 ) -> Result<CompletionRecord<Reference>, CompletionRecord<CompletionRecordError, CRKAbrupt>> {
     let property_name_reference = general_evaluate(expression);
-    let maybe_property_name_value = get_value(property_name_reference);
+    let maybe_property_name_value = get_value(&property_name_reference);
 
     if let Err(e) = maybe_property_name_value {
         return Err(CompletionRecord {
@@ -215,7 +215,7 @@ pub fn evaluate_new(
         }
     };
 
-    let constructor = get_value(reference)?.value;
+    let constructor = get_value(&reference)?.value;
 
     let _args_list = if arguments.is_none() {
         Vec::<Value>::new()
@@ -249,7 +249,7 @@ pub fn argument_list_evaluation(
     for (i, arg) in seq.iter().enumerate() {
         if is_spread_elems[i] {
             let spread_ref = general_evaluate(EvaluateExpressionTag::AssignmentExpression(*arg));
-            let spread_obj = get_value(spread_ref)?.value;
+            let spread_obj = get_value(&spread_ref)?.value;
 
             let mut iterator_rec = get_iterator(&spread_obj, IteratorKind::Sync).unwrap().value;
 
@@ -263,7 +263,7 @@ pub fn argument_list_evaluation(
             }
         } else {
             let arg_ref = general_evaluate(EvaluateExpressionTag::AssignmentExpression(*arg));
-            let arg_value = get_value(arg_ref)?.value;
+            let arg_value = get_value(&arg_ref)?.value;
 
             args_list.push(arg_value);
         }

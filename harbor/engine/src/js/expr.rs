@@ -1572,8 +1572,8 @@ impl Debug for UnaryExpressionOrLHS {
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub union UnaryExpressionOrLHSData {
-    unary: *const UnaryExpression,
-    lhs: *const LeftHandSideExpression,
+    pub unary: *const UnaryExpression,
+    pub lhs: *const LeftHandSideExpression,
 }
 
 #[repr(u8)]
@@ -1593,39 +1593,6 @@ pub enum UnaryOperator {
     Await = 11,
 
     None = 12,
-}
-
-pub const UNARY_EXPR_UPDATE: u8 = 0;
-pub const UNARY_EXPR_UNARY: u8 = 1;
-pub const UNARY_EXPR_AWAIT: u8 = 2;
-
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub struct UpdateExpression {
-    pub tag: u8,
-    pub data: UpdateExpressionData,
-}
-
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub union UpdateExpressionData {
-    left_hand_side: *const LeftHandSideExpression,
-    update: TrueUpdateExpressionData,
-}
-
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub struct TrueUpdateExpressionData {
-    pub operand: *const LeftHandSideExpression,
-    pub operator: UpdateOperator,
-    pub is_prefix: bool,
-}
-
-#[repr(u8)]
-#[derive(Debug, Eq, PartialEq, Copy, Clone)]
-pub enum UpdateOperator {
-    Increment = 0,
-    Decrement = 1,
 }
 
 #[repr(C)]

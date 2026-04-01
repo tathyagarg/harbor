@@ -2,7 +2,7 @@ use crate::js::{
     executable::environment::EnvironmentRecord,
     operations::to_object,
     types::completion_record::{
-        CRKAbrupt, CompletionRecord, CompletionRecordError, CompletionRecordNormal,
+        CRKAbrupt, CompletionRecord, CompletionRecordError, CompletionRecordNormal, UNUSED,
     },
     values::{
         ReferenceOrValue, Value,
@@ -64,10 +64,10 @@ pub fn is_private_reference(reference: &Reference) -> bool {
 }
 
 pub fn get_value(
-    val: ReferenceOrValue,
+    val: &ReferenceOrValue,
 ) -> Result<CompletionRecord<Value>, CompletionRecord<CompletionRecordError, CRKAbrupt>> {
     if let ReferenceOrValue::Value(value) = val {
-        return Ok(CompletionRecordNormal(value));
+        return Ok(CompletionRecordNormal(value.clone()));
     }
 
     let reference = match val {
@@ -141,6 +141,67 @@ pub fn get_value(
             });
         }
     }
+}
+
+pub fn put_value(
+    reference: &mut ReferenceOrValue,
+    value: Value,
+) -> Result<CompletionRecord<UNUSED>, CompletionRecord<CompletionRecordError, CRKAbrupt>> {
+    if let ReferenceOrValue::Value(_) = reference {
+        panic!("put_value called on a value");
+    }
+
+    let reference = match reference {
+        ReferenceOrValue::Reference(reference) => reference,
+        _ => unreachable!(),
+    };
+
+    if is_unresolvable_reference(reference) {
+        if reference.strict {
+            return Err(CompletionRecord {
+                kind: CRKAbrupt::Throw,
+                value: CompletionRecordError::ReferenceError,
+                target: None,
+            });
+        } else {
+            // TODO: Global object
+        }
+    }
+
+    if is_property_reference(reference) {
+        let base = match &reference.base {
+            ReferenceBase::Value(val) => val,
+            _ => unreachable!(),
+        };
+        let mut base_obj = to_object(base).unwrap().value;
+        if is_private_reference(reference) {
+            todo!("Private reference")
+        }
+
+        if let ReferenceName::Value(val) = &reference.referenced_name
+            && !val.is_property_key()
+        {
+            todo!("To property key")
+        }
+
+        let succeeded = base_obj.set(
+            &PropertyKey::from(reference.referenced_name.clone()),
+            &value,
+            &mut get_this_value(reference),
+        );
+
+        if !succeeded && reference.strict {
+            return Err(CompletionRecord {
+                kind: CRKAbrupt::Throw,
+                value: CompletionRecordError::TypeError,
+                target: None,
+            });
+        }
+
+        return Ok(CompletionRecordNormal(()));
+    }
+
+    todo!("set mutable binding for environment record reference")
 }
 
 pub fn get_this_value(reference: &Reference) -> Value {

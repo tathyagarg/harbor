@@ -1,7 +1,7 @@
 use crate::js::{
     expr::{
         AssignmentExpression, Expression, IdentifierNameTokenData, LeftHandSideExpression,
-        MemberExpression, NewExpression, PrimaryExpression,
+        MemberExpression, NewExpression, PrimaryExpression, UnaryExpression,
     },
     values::ReferenceOrValue,
 };
@@ -9,6 +9,7 @@ use crate::js::{
 pub mod identifier;
 pub mod lhs;
 pub mod primary;
+pub mod unary;
 
 #[derive(Debug, Clone)]
 pub enum EvaluateExpressionTag {
@@ -18,6 +19,8 @@ pub enum EvaluateExpressionTag {
 
     MemberExpression(MemberExpression),
     NewExpression(NewExpression),
+
+    UnaryExpression(UnaryExpression),
 
     AssignmentExpression(AssignmentExpression),
     Expression(Expression),
@@ -31,6 +34,8 @@ pub fn general_evaluate(expression: EvaluateExpressionTag) -> ReferenceOrValue {
 
         EvaluateExpressionTag::MemberExpression(expr) => lhs::evaluate_member(&expr),
         EvaluateExpressionTag::NewExpression(expr) => lhs::evaluate_new_expr(&expr),
+
+        EvaluateExpressionTag::UnaryExpression(expr) => unary::evaluate(expr),
 
         _ => todo!("General expression evaluation for tag: {:?}", expression),
     }
