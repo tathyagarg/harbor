@@ -38,7 +38,7 @@ pub fn parse_script(parser: *Parser) error{ UnexpectedEndOfTokens, OutOfMemory }
     const slice = try body.toOwnedSlice(parser.allocator);
 
     const body_data = try parser.allocator.create(_text.Seq(stmt.StatementOrDeclaration));
-    body_data.* = _text.Seq(stmt.StatementOrDeclaration){
+    body_data.* = .{
         .data = slice.ptr,
         .len = slice.len,
     };
@@ -177,8 +177,6 @@ pub fn parse_statement(parser: *Parser) error{ UnexpectedEndOfTokens, OutOfMemor
                 })) {
                     return error.UnexpectedEndOfTokens;
                 }
-
-                _ = p.next(parser);
             }
 
             statement.* = stmt.Statement{
@@ -195,8 +193,6 @@ pub fn parse_statement(parser: *Parser) error{ UnexpectedEndOfTokens, OutOfMemor
         // if (is_keyword(name, "var")) return parse_var_statement(parser);
         // if (is_keyword(name, "try")) return parse_try_statement(parser);
         // if (is_keyword(name, "with")) return parse_with_statement(parser);
-
-        // if (is_keyword(name, "function")) return parse_function_declaration(parser);
     }
 
     if (data.common_token_kind == .Punctuator) {
@@ -477,11 +473,6 @@ pub fn parse_declaration(parser: *Parser) error{ UnexpectedEndOfTokens, OutOfMem
         }
     }
 
-    return error.UnexpectedEndOfTokens;
-}
-
-pub fn parse_function_declaration(parser: *Parser) error{UnexpectedEndOfTokens}!*stmt.HoistableDeclaration {
-    _ = .{parser};
     return error.UnexpectedEndOfTokens;
 }
 
@@ -1073,5 +1064,220 @@ test "parse example #1" {
     std.debug.assert(testing.are_equal_strings(
         result.data.if_statement.alternate.value.value.data.block_statement.body.data[0].data.statement.data.expr_statement.data[0].data.lhs.data.call.data.cover.arguments.arguments.data[0].data.lhs.data.new.data.member.data.primary.data.literal.data.string.*,
         testing.u8_array_to_string(@ptrCast(@constCast("non-positive")), 12),
+    ));
+}
+
+fn parse_formal_parameter(parser: *Parser) error{ UnexpectedEndOfTokens, OutOfMemory }!*stmt.FormalParameter {
+    const formal_param = try parser.allocator.create(stmt.FormalParameter);
+    const initializer_maybe = try parser.allocator.create(stmt.MaybeAssignmentExpression);
+    initializer_maybe.* = .{ .has_value = false, .value = .{ .none = {} } };
+
+    formal_param.*.initializer = initializer_maybe;
+    formal_param.*.is_rest = false;
+
+    if (p.match(parser, _text.Token{
+        .kind = .CommonToken,
+        .data = @intFromPtr(&CommonTokenData{
+            .common_token_kind = .Punctuator,
+            .data = @intFromEnum(_text.PunctuatorKind.Ellipsis),
+        }),
+    })) {
+        formal_param.is_rest = true;
+    }
+
+    const param_token = p.peek(parser) orelse return error.UnexpectedEndOfTokens;
+
+    const param_data: *CommonTokenData = @ptrFromInt(param_token.data);
+    const param_ident: *IdentifierNameData = @ptrFromInt(param_data.data);
+
+    _ = p.next(parser);
+
+    formal_param.*.name = param_ident;
+
+    if (p.match(parser, _text.Token{
+        .kind = .CommonToken,
+        .data = @intFromPtr(&CommonTokenData{
+            .common_token_kind = .Punctuator,
+            .data = @intFromEnum(_text.PunctuatorKind.Assign),
+        }),
+    })) {
+        const initializer_expr = exp_parser.parse_assignment_expression(parser) catch return error.UnexpectedEndOfTokens;
+        initializer_maybe.* = .{
+            .has_value = true,
+            .value = .{
+                .value = initializer_expr.*,
+            },
+        };
+    }
+
+    return formal_param;
+}
+
+fn parse_function_declaration(parser: *Parser) error{ UnexpectedEndOfTokens, OutOfMemory }!*stmt.HoistableDeclaration {
+    const function_token = p.peek(parser) orelse return error.UnexpectedEndOfTokens;
+    const function_data: *CommonTokenData = @ptrFromInt(function_token.data);
+    if (!is_keyword(function_data, "function")) {
+        return error.UnexpectedEndOfTokens;
+    }
+    _ = p.next(parser);
+
+    const name = try parser.allocator.create(stmt.MaybeIdentifier);
+    name.* = .{
+        .has_value = false,
+        .value = .{
+            .none = {},
+        },
+    };
+
+    if (p.peek(parser)) |next_token| {
+        if (next_token.kind == .CommonToken) {
+            const next_data: *CommonTokenData = @ptrFromInt(next_token.data);
+            if (next_data.common_token_kind == .IdentifierName) {
+                const name_ident: *IdentifierNameData = @ptrFromInt(next_data.data);
+                _ = p.next(parser);
+
+                name.* = .{ .has_value = true, .value = .{
+                    .value = name_ident.*,
+                } };
+            }
+        }
+    }
+
+    p.expect_skip_whitespace(parser, _text.Token{
+        .kind = .CommonToken,
+        .data = @intFromPtr(&CommonTokenData{
+            .common_token_kind = .Punctuator,
+            .data = @intFromEnum(_text.PunctuatorKind.OpenParen),
+        }),
+    }) catch return error.UnexpectedEndOfTokens;
+    _ = p.next(parser);
+
+    var params = std.ArrayList(stmt.FormalParameter).empty;
+    while (!p.match(parser, _text.Token{
+        .kind = .CommonToken,
+        .data = @intFromPtr(&CommonTokenData{
+            .common_token_kind = .Punctuator,
+            .data = @intFromEnum(_text.PunctuatorKind.CloseParen),
+        }),
+    })) {
+        const param = try parse_formal_parameter(parser);
+        try params.append(parser.allocator, param.*);
+
+        if (p.match(parser, _text.Token{
+            .kind = .CommonToken,
+            .data = @intFromPtr(&CommonTokenData{
+                .common_token_kind = .Punctuator,
+                .data = @intFromEnum(_text.PunctuatorKind.CloseParen),
+            }),
+        })) {
+            break;
+        } else {
+            if (!p.match(parser, _text.Token{
+                .kind = .CommonToken,
+                .data = @intFromPtr(&CommonTokenData{
+                    .common_token_kind = .Punctuator,
+                    .data = @intFromEnum(_text.PunctuatorKind.Comma),
+                }),
+            })) {
+                if (!p.match(parser, _text.Token{
+                    .kind = .CommonToken,
+                    .data = @intFromPtr(&CommonTokenData{
+                        .common_token_kind = .Punctuator,
+                        .data = @intFromEnum(_text.PunctuatorKind.CloseParen),
+                    }),
+                })) {
+                    return error.UnexpectedEndOfTokens;
+                }
+
+                break;
+            }
+        }
+    }
+
+    const body = parse_block_statement(parser) catch return error.UnexpectedEndOfTokens;
+
+    const params_seq = try parser.allocator.create(_text.Seq(stmt.FormalParameter));
+    const slice = try params.toOwnedSlice(parser.allocator);
+
+    params_seq.* = .{
+        .data = slice.ptr,
+        .len = slice.len,
+    };
+
+    const function_decl = try parser.allocator.create(stmt.HoistableDeclaration);
+    function_decl.* = .{
+        .name = name,
+        .params = params_seq.*,
+        .body = body,
+    };
+
+    return function_decl;
+}
+
+test "parse function declaration" {
+    const result = try get_parse_result(stmt.StatementOrDeclaration, parse_statement_or_declaration, "function foo(a, b = 1, ...rest) { return a + b; }");
+
+    std.debug.assert(result.tag == stmt.STATEMENT_OR_DECLARATION_DECLARATION);
+    std.debug.assert(result.data.declaration.tag == stmt.DECLARATION_FUNCTION_DECLARATION);
+    std.debug.assert(result.data.declaration.data.function_declaration.name.has_value == true);
+    std.debug.assert(testing.are_equal_strings(
+        result.data.declaration.data.function_declaration.name.value.value.name,
+        testing.u8_array_to_string(@ptrCast(@constCast("foo")), 3),
+    ));
+
+    std.debug.assert(result.data.declaration.data.function_declaration.params.len == 3);
+    std.debug.assert(result.data.declaration.data.function_declaration.params.data[0].is_rest == false);
+    std.debug.assert(testing.are_equal_strings(
+        result.data.declaration.data.function_declaration.params.data[0].name.name,
+        testing.u8_array_to_string(@ptrCast(@constCast("a")), 1),
+    ));
+    std.debug.assert(result.data.declaration.data.function_declaration.params.data[0].initializer.has_value == false);
+
+    std.debug.assert(result.data.declaration.data.function_declaration.params.data[1].is_rest == false);
+    std.debug.assert(testing.are_equal_strings(
+        result.data.declaration.data.function_declaration.params.data[1].name.name,
+        testing.u8_array_to_string(@ptrCast(@constCast("b")), 1),
+    ));
+    std.debug.assert(result.data.declaration.data.function_declaration.params.data[1].initializer.has_value == true);
+    std.debug.assert(result.data.declaration.data.function_declaration.params.data[1].initializer.value.value.tag == expr.ASSIGNMENT_EXPR_LHS);
+    std.debug.assert(result.data.declaration.data.function_declaration.params.data[1].initializer.value.value.data.lhs.tag == expr.LEFT_HAND_SIDE_EXPR_NEW);
+    std.debug.assert(result.data.declaration.data.function_declaration.params.data[1].initializer.value.value.data.lhs.data.new.tag == expr.NEW_EXPR_MEMBER);
+    std.debug.assert(result.data.declaration.data.function_declaration.params.data[1].initializer.value.value.data.lhs.data.new.data.member.tag == expr.MEMBER_EXPR_PRIMARY);
+    std.debug.assert(result.data.declaration.data.function_declaration.params.data[1].initializer.value.value.data.lhs.data.new.data.member.data.primary.tag == expr.PRIMARY_EXPR_LITERAL);
+    std.debug.assert(result.data.declaration.data.function_declaration.params.data[1].initializer.value.value.data.lhs.data.new.data.member.data.primary.data.literal.tag == expr.LITERAL_NUMBER);
+    std.debug.assert(result.data.declaration.data.function_declaration.params.data[1].initializer.value.value.data.lhs.data.new.data.member.data.primary.data.literal.data.number.value == 1);
+
+    std.debug.assert(result.data.declaration.data.function_declaration.params.data[2].is_rest == true);
+    std.debug.assert(testing.are_equal_strings(
+        result.data.declaration.data.function_declaration.params.data[2].name.name,
+        testing.u8_array_to_string(@ptrCast(@constCast("rest")), 4),
+    ));
+    std.debug.assert(result.data.declaration.data.function_declaration.params.data[2].initializer.has_value == false);
+
+    std.debug.assert(result.data.declaration.data.function_declaration.body.body.len == 1);
+    std.debug.assert(result.data.declaration.data.function_declaration.body.body.data[0].tag == stmt.STATEMENT_OR_DECLARATION_STATEMENT);
+    std.debug.assert(result.data.declaration.data.function_declaration.body.body.data[0].data.statement.tag == stmt.STATEMENT_RETURN_STATEMENT);
+    std.debug.assert(result.data.declaration.data.function_declaration.body.body.data[0].data.statement.data.return_statement.has_value == true);
+    std.debug.assert(result.data.declaration.data.function_declaration.body.body.data[0].data.statement.data.return_statement.value.value.data[0].tag == expr.ASSIGNMENT_EXPR_BINARY);
+    std.debug.assert(result.data.declaration.data.function_declaration.body.body.data[0].data.statement.data.return_statement.value.value.data[0].data.binary.operator == .Plus);
+    std.debug.assert(result.data.declaration.data.function_declaration.body.body.data[0].data.statement.data.return_statement.value.value.data[0].data.binary.left.tag == expr.BINARY_OR_UNARY_UNARY);
+    std.debug.assert(result.data.declaration.data.function_declaration.body.body.data[0].data.statement.data.return_statement.value.value.data[0].data.binary.left.data.unary.operator == .None);
+    std.debug.assert(result.data.declaration.data.function_declaration.body.body.data[0].data.statement.data.return_statement.value.value.data[0].data.binary.left.data.unary.operand.tag == expr.UNARY_EXPR_OR_LHS_LHS);
+    std.debug.assert(result.data.declaration.data.function_declaration.body.body.data[0].data.statement.data.return_statement.value.value.data[0].data.binary.left.data.unary.operand.data.left_hand_side.tag == expr.LEFT_HAND_SIDE_EXPR_NEW);
+    std.debug.assert(result.data.declaration.data.function_declaration.body.body.data[0].data.statement.data.return_statement.value.value.data[0].data.binary.left.data.unary.operand.data.left_hand_side.data.new.tag == expr.NEW_EXPR_MEMBER);
+    std.debug.assert(result.data.declaration.data.function_declaration.body.body.data[0].data.statement.data.return_statement.value.value.data[0].data.binary.left.data.unary.operand.data.left_hand_side.data.new.data.member.tag == expr.MEMBER_EXPR_PRIMARY);
+    std.debug.assert(testing.are_equal_strings(
+        result.data.declaration.data.function_declaration.body.body.data[0].data.statement.data.return_statement.value.value.data[0].data.binary.left.data.unary.operand.data.left_hand_side.data.new.data.member.data.primary.data.identifier.data.identifier.name,
+        testing.u8_array_to_string(@ptrCast(@constCast("a")), 1),
+    ));
+    std.debug.assert(result.data.declaration.data.function_declaration.body.body.data[0].data.statement.data.return_statement.value.value.data[0].data.binary.right.tag == expr.UNARY_EXPR_OR_NULL_UNARY);
+    std.debug.assert(result.data.declaration.data.function_declaration.body.body.data[0].data.statement.data.return_statement.value.value.data[0].data.binary.right.data.unary.operator == .None);
+    std.debug.assert(result.data.declaration.data.function_declaration.body.body.data[0].data.statement.data.return_statement.value.value.data[0].data.binary.right.data.unary.operand.tag == expr.UNARY_EXPR_OR_LHS_LHS);
+    std.debug.assert(result.data.declaration.data.function_declaration.body.body.data[0].data.statement.data.return_statement.value.value.data[0].data.binary.right.data.unary.operand.data.left_hand_side.tag == expr.LEFT_HAND_SIDE_EXPR_NEW);
+    std.debug.assert(result.data.declaration.data.function_declaration.body.body.data[0].data.statement.data.return_statement.value.value.data[0].data.binary.right.data.unary.operand.data.left_hand_side.data.new.tag == expr.NEW_EXPR_MEMBER);
+    std.debug.assert(result.data.declaration.data.function_declaration.body.body.data[0].data.statement.data.return_statement.value.value.data[0].data.binary.right.data.unary.operand.data.left_hand_side.data.new.data.member.tag == expr.MEMBER_EXPR_PRIMARY);
+    std.debug.assert(testing.are_equal_strings(
+        result.data.declaration.data.function_declaration.body.body.data[0].data.statement.data.return_statement.value.value.data[0].data.binary.right.data.unary.operand.data.left_hand_side.data.new.data.member.data.primary.data.identifier.data.identifier.name,
+        testing.u8_array_to_string(@ptrCast(@constCast("b")), 1),
     ));
 }
