@@ -13,6 +13,16 @@ use crate::js::{
     },
 };
 
+pub fn to_boolean(argument: &Value) -> bool {
+    match argument {
+        &Value::Boolean(b) => b,
+        &Value::Undefined | &Value::Null | &Value::Number(Number(-0.0)) => false,
+        &Value::Number(Number(n)) if n.is_nan() => false,
+        &Value::String(ref s) if s.0.is_empty() => false,
+        _ => true,
+    }
+}
+
 pub fn to_number(
     argument: Value,
 ) -> Result<CompletionRecord<Number>, CompletionRecord<CompletionRecordError, CRKThrow>> {

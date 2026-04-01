@@ -47,6 +47,15 @@ pub fn make_basic_object(internal_slots_list: Vec<String>) -> Object {
     return Object::Misc(object);
 }
 
+pub fn get(
+    obj: &Object,
+    key: &PropertyKey,
+) -> Result<CompletionRecord<Value>, CompletionRecord<CompletionRecordError, CRKThrow>> {
+    let res = obj.get(key, &Value::Object(obj.clone()));
+
+    return Ok(CompletionRecordNormal(res.unwrap_or(Value::Undefined)));
+}
+
 pub fn getv(
     value: &Value,
     property_key: &PropertyKey,
@@ -110,4 +119,16 @@ pub fn get_method(
     let func_obj = func.unwrap_object();
 
     Ok(CompletionRecordNormal(func_obj))
+}
+
+pub fn call(
+    func: &Value,
+    target: &Value,
+    args: Vec<Value>,
+) -> Result<CompletionRecord<Value>, CompletionRecord<CompletionRecordError, CRKThrow>> {
+    if let Value::Object(func_obj) = func {
+        return Ok(CompletionRecordNormal(func_obj.call(target, args)));
+    }
+
+    return Err(CompletionRecordThrow(CompletionRecordError::TypeError));
 }

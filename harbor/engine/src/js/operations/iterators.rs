@@ -1,6 +1,8 @@
 use crate::js::{
-    operations::get_method,
-    types::completion_record::{CRKThrow, CompletionRecord, CompletionRecordError},
+    operations::{call, get, get_method, to_boolean},
+    types::completion_record::{
+        CRKThrow, CompletionRecord, CompletionRecordError, CompletionRecordNormal,
+    },
     values::{
         Value,
         object::{Object, PropertyKey},
@@ -20,11 +22,34 @@ pub struct Iterator {
     pub done: bool,
 }
 
+pub fn get_iterator_direct(
+    obj: &Object,
+) -> Result<CompletionRecord<Iterator>, CompletionRecord<CompletionRecordError, CRKThrow>> {
+    let next_method = get(obj, &PropertyKey::from("next"))?.value;
+    let iterator_record = Iterator {
+        iterator: obj.clone(),
+        next_method: next_method,
+        done: false,
+    };
+
+    return Ok(CompletionRecordNormal(iterator_record));
+}
+
 pub fn get_iterator_from_method(
     obj: &Value,
     method: &Object,
 ) -> Result<CompletionRecord<Iterator>, CompletionRecord<CompletionRecordError, CRKThrow>> {
-    todo!()
+    let iterator = call(&Value::Object(method.clone()), obj, Vec::new())?.value;
+
+    if let Value::Object(iterator_obj) = iterator {
+        return get_iterator_direct(&iterator_obj);
+    } else {
+        return Err(CompletionRecord {
+            kind: CRKThrow,
+            value: CompletionRecordError::TypeError,
+            target: None,
+        });
+    }
 }
 
 pub fn get_iterator(
@@ -54,17 +79,88 @@ pub fn iterator_next(
     iterator: &mut Iterator,
     value: Option<Value>,
 ) -> Result<CompletionRecord<Object>, CompletionRecord<CompletionRecordError, CRKThrow>> {
-    let result = if value.is_none() { todo!() } else { todo!() };
+    let result = if value.is_none() {
+        call(
+            &iterator.next_method,
+            &Value::Object(iterator.iterator.clone()),
+            Vec::new(),
+        )
+    } else {
+        call(
+            &iterator.next_method,
+            &Value::Object(iterator.iterator.clone()),
+            vec![value.unwrap()],
+        )
+    };
+
+    if result.is_err() {
+        iterator.done = true;
+        return Err(result.err().unwrap());
+    }
+
+    let result_value = result.unwrap().value;
+
+    if let Value::Object(result_obj) = result_value {
+        return Ok(CompletionRecordNormal(result_obj));
+    } else {
+        iterator.done = true;
+        return Err(CompletionRecord {
+            kind: CRKThrow,
+            value: CompletionRecordError::TypeError,
+            target: None,
+        });
+    }
+}
+
+pub fn iterator_complete(
+    iterator_result: &Object,
+) -> Result<CompletionRecord<bool>, CompletionRecord<CompletionRecordError, CRKThrow>> {
+    let res = get(iterator_result, &PropertyKey::from("done"))?.value;
+
+    Ok(CompletionRecordNormal(to_boolean(&res)))
+}
+
+pub fn iterator_value(
+    iterator_result: &Object,
+) -> Result<CompletionRecord<Value>, CompletionRecord<CompletionRecordError, CRKThrow>> {
+    let res = get(iterator_result, &PropertyKey::from("value"))?.value;
+
+    Ok(CompletionRecordNormal(res))
 }
 
 pub fn iterator_step(
     iterator: &mut Iterator,
 ) -> Result<CompletionRecord<Option<Object>>, CompletionRecord<CompletionRecordError, CRKThrow>> {
-    todo!()
+    let result = iterator_next(iterator, None)?.value;
+    let done = iterator_complete(&result);
+
+    if done.is_err() {
+        iterator.done = true;
+        return Err(done.err().unwrap());
+    }
+
+    let done_value = done.unwrap().value;
+    if done_value {
+        iterator.done = true;
+        return Ok(CompletionRecordNormal(None));
+    }
+
+    return Ok(CompletionRecordNormal(Some(result)));
 }
 
 pub fn iterator_step_value(
     iterator: &mut Iterator,
 ) -> Result<CompletionRecord<Option<Value>>, CompletionRecord<CompletionRecordError, CRKThrow>> {
-    todo!()
+    let result = iterator_step(iterator)?.value;
+
+    if result.is_none() {
+        return Ok(CompletionRecordNormal(None));
+    }
+
+    let value = iterator_value(&result.unwrap());
+    if value.is_err() {
+        iterator.done = true;
+    }
+
+    return value.map(|v| CompletionRecordNormal(Some(v.value)));
 }

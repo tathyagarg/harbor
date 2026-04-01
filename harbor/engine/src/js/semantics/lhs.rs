@@ -7,9 +7,11 @@ use crate::js::{
         MEMBER_EXPR_PRIVATE_PROPERTY, MEMBER_EXPR_PROPERTY, MemberExpression, NEW_EXPR_MEMBER,
         NEW_EXPR_NEW, NewExpression,
     },
-    operations::{IteratorKind, get_iterator, is_constructor},
+    operations::{IteratorKind, get_iterator, is_constructor, iterator_step_value},
     semantics::{EvaluateExpressionTag, general_evaluate, identifier, primary},
-    types::completion_record::{CRKAbrupt, CRKNormal, CompletionRecord, CompletionRecordError},
+    types::completion_record::{
+        CRKAbrupt, CRKNormal, CompletionRecord, CompletionRecordError, CompletionRecordNormal,
+    },
     values::{
         ReferenceOrValue, Value,
         reference::{Reference, ReferenceBase, ReferenceName, get_value},
@@ -246,13 +248,26 @@ pub fn argument_list_evaluation(
 
     for (i, arg) in seq.iter().enumerate() {
         if is_spread_elems[i] {
-            let mut list = Vec::<Value>::new();
             let spread_ref = general_evaluate(EvaluateExpressionTag::AssignmentExpression(*arg));
             let spread_obj = get_value(spread_ref)?.value;
 
-            // let iterator_rec = get_iterator(&spread_obj, IteratorKind::Sync);
+            let mut iterator_rec = get_iterator(&spread_obj, IteratorKind::Sync).unwrap().value;
+
+            loop {
+                let next = iterator_step_value(&mut iterator_rec).unwrap().value;
+                if let Some(value) = next {
+                    args_list.push(value);
+                } else {
+                    break;
+                }
+            }
+        } else {
+            let arg_ref = general_evaluate(EvaluateExpressionTag::AssignmentExpression(*arg));
+            let arg_value = get_value(arg_ref)?.value;
+
+            args_list.push(arg_value);
         }
     }
 
-    todo!()
+    Ok(CompletionRecordNormal(args_list))
 }
