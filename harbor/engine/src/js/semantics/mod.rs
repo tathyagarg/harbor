@@ -6,6 +6,7 @@ use crate::js::{
     values::ReferenceOrValue,
 };
 
+pub mod binary;
 pub mod identifier;
 pub mod lhs;
 pub mod primary;
