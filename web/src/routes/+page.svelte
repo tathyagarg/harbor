@@ -7,6 +7,7 @@
   import { animate, createTimeline, stagger } from "animejs";
   import { onMount } from "svelte";
   import type { PageProps } from "./$types";
+  import Font from "$lib/components/Steps/Font/Step.svelte";
 
   let { data }: PageProps = $props();
 
@@ -64,15 +65,20 @@
   });
 
   const steps = [
-    "Font Parsing",
-    "HTTP Request",
-    "HTML Parsing",
-    "Link Resolution",
-    "CSS Parsing",
-    "Style Cascading",
-    "Layout",
-    "Text Rasterizer",
-    "Painting",
+    {
+      short: "Font",
+      title: "Font Reader",
+      description:
+        "Reads TrueType fonts and parses them into tables like <code>cmap</code>, <code>glyf</code>, etc.",
+    },
+    { short: "HTTP", title: "HTTP Client" },
+    { short: "HTML", title: "HTML Parser" },
+    { short: "Links", title: "Link Resolver" },
+    { short: "CSS", title: "CSS Parser" },
+    { short: "Cascade", title: "Cascade & Inheritance" },
+    { short: "Layout", title: "Layout Engine" },
+    { short: "Rasterize", title: "Rasterizer" },
+    { short: "Paint", title: "Paint Engine" },
   ];
 
   const radius = 25;
@@ -117,7 +123,7 @@
   </div>
 
   <div class="h-screen">
-    <div class="h-[80%] py-[10%]">
+    <div class="h-full py-[10%] flex flex-col">
       <div class="flex gap-4 items-baseline my-2">
         <span class="text-emphasis-1">01</span>
         <div class="w-full bg-emphasis-1 h-0.5"></div>
@@ -186,9 +192,9 @@
               dominant-baseline="middle"
               fill="var(--color-subtext)"
               font-size="10"
-              font-family="monospace"
+              font-family="var(--font-code)"
             >
-              {step}
+              {step.short}
             </text>
           </g>
 
@@ -204,6 +210,31 @@
           {/if}
         {/each}
       </svg>
+
+      <div
+        class="w-full flex-1 my-8 border-1 border-emphasis-1 p-4 rounded-lg flex flex-col"
+      >
+        <div class="flex gap-2 items-center text-emphasis-1 mb-2">
+          <div
+            class="text-emphasis-2 bg-emphasis-2/25 py-1 text-[12px] text-center h-[24px] aspect-square rounded-full"
+          >
+            {selected_step + 1}
+          </div>
+          <span class="text-2xl font-mono">
+            {steps[selected_step].title}
+          </span>
+        </div>
+        <p class="text-subtext">
+          {@html steps[selected_step].description ||
+            "Description coming soon..."}
+        </p>
+        <div
+          class="flex-1 w-full mt-4 border-1 border-emphasis-1 rounded-lg"
+          id="step-container"
+        >
+          <Font />
+        </div>
+      </div>
     </div>
   </div>
 </div>

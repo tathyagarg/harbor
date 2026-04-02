@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Merriweather:ital,opsz,wght@0,18..144,300..900;1,18..144,300..900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@300..700&family=Merriweather:ital,opsz,wght@0,18..144,300..900;1,18..144,300..900&display=swap');
 @import 'tailwindcss';
 
 @font-face {
@@ -15,12 +15,16 @@
 
   --color-emphasis-1: #B9C6E3;
   --color-emphasis-2: #59A5C9;
+  /* green emphasis color */
+  --color-emphasis-3: #7FEFBD;
 
   --color-gh-green: #0FBF3E;
   --color-scratch-red: #FF5733;
+  --color-pretty-blue: #1E90FF;
 
   --font-heading: 'Space Grotesk', serif;
   --font-body: 'Merriweather', serif;
+  --font-code: 'Fira Code', monospace;
 }
 
 body {
@@ -37,4 +41,14 @@ h1, h2, h3, h4, h5, h6 {
 
 p {
   line-height: 2;
+}
+
+code {
+  font-family: var(--font-code);
+  color: var(--color-emphasis-3);
+  background-color: rgba(from var(--color-emphasis-3) r g b / 0.25);
+  border: 1px solid var(--color-emphasis-3);
+  padding: 0.2em 0.4em;
+  border-radius: 4px;
+  margin: 0 0.2em;
 }
