@@ -62,6 +62,22 @@
         delay: stagger(100),
       });
   });
+
+  const steps = [
+    "Font Parsing",
+    "HTTP Request",
+    "HTML Parsing",
+    "Link Resolution",
+    "CSS Parsing",
+    "Style Cascading",
+    "Layout",
+    "Text Rasterizer",
+    "Painting",
+  ];
+
+  const radius = 25;
+
+  let selected_step = $state(0);
 </script>
 
 <div class="w-[50%] mx-auto">
@@ -112,7 +128,82 @@
         work together to process and render web content.
       </p>
 
-      <div></div>
+      <svg class="mx-auto" viewBox="0 0 900 150">
+        <defs>
+          <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+            <feDropShadow
+              dx="0"
+              dy="0"
+              stdDeviation="10"
+              flood-opacity="0.5"
+              flood-color="var(--color-emphasis-2)"
+            />
+          </filter>
+        </defs>
+
+        {#each steps as step, i}
+          {@const color =
+            i <= selected_step
+              ? "var(--color-emphasis-2)"
+              : "var(--color-emphasis-1)"}
+          <g
+            transform={`translate(${i * 4 * radius}, 75)`}
+            onclick={() => (selected_step = i)}
+            onkeydown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                selected_step = i;
+              }
+            }}
+            style="cursor: pointer"
+            role="button"
+            aria-pressed={i === selected_step}
+            tabindex="0"
+          >
+            <circle
+              cx={2 * radius}
+              cy="0"
+              r={radius}
+              fill={`rgba(from ${color} r g b / 25%)`}
+              stroke={color}
+              stroke-width="2"
+              filter={i === selected_step ? "url(#shadow)" : "none"}
+            />
+            <text
+              x={2 * radius}
+              y="1.8"
+              text-anchor="middle"
+              dominant-baseline="middle"
+              fill={color}
+              font-size="18"
+              font-family="monospace"
+            >
+              {i}
+            </text>
+            <text
+              x={2 * radius}
+              y={radius + 20}
+              text-anchor="middle"
+              dominant-baseline="middle"
+              fill="var(--color-subtext)"
+              font-size="10"
+              font-family="monospace"
+            >
+              {step}
+            </text>
+          </g>
+
+          {#if i > 0}
+            <line
+              x1={radius * (4 * i - 1)}
+              y1="75"
+              x2={radius * (4 * i + 1)}
+              y2="75"
+              stroke={color}
+              stroke-width="2"
+            />
+          {/if}
+        {/each}
+      </svg>
     </div>
   </div>
 </div>
