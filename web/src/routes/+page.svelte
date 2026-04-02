@@ -47,66 +47,72 @@
     });
 
     timeline
-      .label("start")
-      .add(
-        ".anim",
-        {
-          opacity: [0, 1],
-          translateY: [20, 0],
-        },
-        "start",
-      )
-      .add(
-        ".anim-2",
-        {
-          opacity: [0, 1],
-          translateY: [50, 0],
-        },
-        "start+=200",
-      )
-      .add(
-        ".anim-3",
-        {
-          opacity: [0, 1],
-          translateX: [-20, 0],
-          delay: stagger(100),
-        },
-        "start+=500",
-      );
+      .add(".anim", {
+        opacity: [0, 1],
+        translateY: [20, 0],
+      })
+      .add(".anim-2", {
+        opacity: [0, 1],
+        translateY: [50, 0],
+        delay: 200,
+      })
+      .add(".anim-3", {
+        opacity: [0, 1],
+        translateX: [-20, 0],
+        delay: stagger(100),
+      });
   });
 </script>
 
-<div class="h-screen w-screen flex items-center justify-center flex-col">
-  <h1 class="text-8xl anim">Welcome to</h1>
-  <h1 class="text-8xl text-emphasis-2 anim">Harbor Browser</h1>
-  <div class="flex mb-6">
-    <HeroTag
-      href={GITHUB_URL}
-      icon="mdi:github"
-      color="var(--color-gh-green)"
-      text="View Source"
-    />
+<div class="w-[50%] mx-auto">
+  <div class="h-screen flex items-center justify-center flex-col">
+    <h1 class="text-8xl anim">Welcome to</h1>
+    <h1 class="text-8xl text-emphasis-2 anim">Harbor Browser</h1>
+    <div class="flex mb-6">
+      <HeroTag
+        href={GITHUB_URL}
+        icon="mdi:github"
+        color="var(--color-gh-green)"
+        text="View Source"
+      />
 
-    <HeroTag
-      href=""
-      icon="mdi:hammer"
-      color="var(--color-scratch-red)"
-      text="Built from Scratch"
-    />
+      <HeroTag
+        href=""
+        icon="mdi:hammer"
+        color="var(--color-scratch-red)"
+        text="Built from Scratch"
+      />
+    </div>
+
+    <p class="text-subtext text-center anim">
+      Harbor Browser is a custom web browser engine built from scratch with Rust
+      and Zig. <span class="text-text"
+        >Every core system - from networking to parsing to layouts to rendering,
+        and more - was implemented manually without relying on existing browser
+        engines or frameworks</span
+      >
+    </p>
+
+    <div class="grid grid-cols-4 gap-12 mt-12 anim-2">
+      {#each stats as stat}
+        <Stat {...stat} />
+      {/each}
+    </div>
   </div>
 
-  <p class="text-subtext w-[50%] text-center leading-[2] anim">
-    Harbor Browser is a custom web browser engine built from scratch with Rust
-    and Zig. <span class="text-text"
-      >Every core system - from networking to parsing to layouts to rendering,
-      and more - was implemented manually without relying on existing browser
-      engines or frameworks</span
-    >
-  </p>
+  <div class="h-screen">
+    <div class="h-[80%] py-[10%]">
+      <div class="flex gap-4 items-baseline my-2">
+        <span class="text-emphasis-1">01</span>
+        <div class="w-full bg-emphasis-1 h-0.5"></div>
+      </div>
+      <h1 class="text-emphasis-2 text-6xl my-4">The Pipeline</h1>
+      <p class="text-subtext">
+        Harbor Browser's architecture is divided into several core systems that
+        work together to process and render web content.
+      </p>
 
-  <div class="w-[50%] grid grid-cols-4 gap-12 mt-12 anim-2">
-    {#each stats as stat}
-      <Stat {...stat} />
-    {/each}
+      <div></div>
+    </div>
   </div>
 </div>

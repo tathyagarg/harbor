@@ -30,5 +30,8 @@
   });
 </script>
 
-<svelte:head><link rel="icon" href={favicon} /></svelte:head>
+<svelte:head>
+  <title>Harbor Browser</title>
+  <link rel="icon" href={favicon} />
+</svelte:head>
 {@render children()}
