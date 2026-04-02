@@ -5,7 +5,7 @@ use crate::js::{
 
 pub fn evaluate(exp: BinaryExpression) -> ReferenceOrValue {
     match exp.operator {
-        BinaryOperator::Exponentiation => todo!()
+        BinaryOperator::Exponentiation => todo!(),
         _ => todo!(),
     }
 }
