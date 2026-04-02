@@ -1,13 +1,26 @@
+<!-- svelte-ignore state_referenced_locally -->
+
 <script lang="ts">
   import { GITHUB_URL } from "$lib";
   import HeroTag from "$lib/components/HeroTag.svelte";
   import Stat from "$lib/components/Stat.svelte";
   import { animate, createTimeline, stagger } from "animejs";
   import { onMount } from "svelte";
+  import type { PageProps } from "./$types";
+
+  let { data }: PageProps = $props();
 
   let stats = [
-    { value: 53, title: "Lines of Code", suffix: "K+" },
-    { value: 100, title: "Files", suffix: "+" },
+    {
+      value: Math.floor(data.lines.total / 1000),
+      title: "Lines of Code",
+      suffix: "K+",
+    },
+    {
+      value: Math.floor(data.file_count / 10) * 10,
+      title: "Files",
+      suffix: "+",
+    },
     { value: 6, title: "Core Modules", suffix: null },
     { value: 0, title: "External Dependencies", suffix: null },
   ];

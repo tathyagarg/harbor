@@ -28,9 +28,11 @@ from typing import Any
 
 EXCLUDED = ['.ttc', '.ttf', '.png', '.gif', '.jpg', '.jpeg', '.bmp', '.ico', '.svg', '.webp', '.avif', '.mp4', '.avi', '.mkv', '.mp3', '.wav', '.flac', 'package-lock.json', '.lock']
 
-def parse_wc_output(text: str) -> dict[str, Any]:
+def parse_wc_output(text: str) -> tuple[dict[str, Any], int]:
     result = {}
     total = 0
+
+    file_count = 0
 
     for line in text.splitlines():
         parts = line.split()
@@ -41,6 +43,8 @@ def parse_wc_output(text: str) -> dict[str, Any]:
 
         result[file] = loc
         total += loc
+
+        file_count += 1
 
     files = result.copy()
 
@@ -53,13 +57,13 @@ def parse_wc_output(text: str) -> dict[str, Any]:
 
     result['total'] = total
 
-    return result
+    return (result, file_count)
 
 if __name__ == "__main__":
     aliases = json.loads(sys.argv[2])
 
     data = sys.stdin.read().strip()
-    result = parse_wc_output(data.rsplit('\n', 1)[0])
+    result, fc = parse_wc_output(data.rsplit('\n', 1)[0])
 
     result["ALIASES"] = {}
 
@@ -72,4 +76,9 @@ if __name__ == "__main__":
                 if p in result:
                     result["ALIASES"][alias] = result["ALIASES"].get(alias, 0) + result[p]
 
-    print(json.dumps(result, indent=4))
+    data = {
+        'lines': result,
+        'file_count': fc
+    }
+
+    print(json.dumps(data, indent=4))
