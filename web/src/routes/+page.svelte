@@ -20,7 +20,7 @@
     },
     {
       value: Math.floor(data.file_count / 10) * 10,
-      title: "Files",
+      title: "Files (kinda)",
       suffix: "+",
     },
     { value: 6, title: "Core Modules", suffix: null },
@@ -113,7 +113,7 @@
       short: "HTTP",
       title: "HTTP Client",
       description:
-        "Fetches resources over the network using the HTTP protocol. It handles DNS, making requests and parsing responses.",
+        "Fetches resources over the network using the HTTP protocol.",
       longDesc:
         "The HTTP Client is responsible for fetching resources from the network using the HTTP protocol. It handles DNS resolution, establishes connections, sends requests, and parses responses. Harbor's HTTP client uses <code>rustls</code> for TLS support.",
     },
@@ -276,7 +276,7 @@
         work together to process and render web content.
       </p>
 
-      <svg class="mx-auto" viewBox="0 0 900 150">
+      <svg class="mx-auto w-full" viewBox="0 0 900 200">
         <defs>
           <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
             <feDropShadow
@@ -288,6 +288,18 @@
             />
           </filter>
         </defs>
+
+        <path
+          d={`M ${6 * radius} ${4 * radius} 
+            C ${6 * radius} ${5 * radius + 75}, 
+              ${14 * radius} ${5 * radius + 75}, 
+              ${14 * radius} ${4 * radius}
+            `}
+          stroke="rgba(from var(--color-emphasis-1) r g b / 25%)"
+          stroke-dasharray="4 4"
+          stroke-width="2"
+          fill="none"
+        />
 
         {#each steps as step, i}
           {@const color =
@@ -325,14 +337,14 @@
               font-size="18"
               font-family="monospace"
             >
-              {i}
+              {i + 1}
             </text>
             <text
               x={2 * radius}
               y={radius + 20}
               text-anchor="middle"
               dominant-baseline="middle"
-              fill="var(--color-subtext)"
+              fill={color}
               font-size="10"
               font-family="var(--font-code)"
             >
@@ -391,7 +403,7 @@
         <div id="step-content">
           {#if steps[selected_step].longDesc}
             <div
-              class="mt-4 p-4 border-t-1 border-emphasis-1/25 rounded-b-lg text-sm"
+              class="mt-4 p-4 border-t-1 border-emphasis-1/25 rounded-b-lg text-sm max-h-16 overflow-y-scroll"
             >
               <p class="text-subtext">
                 {@html steps[selected_step].longDesc}
