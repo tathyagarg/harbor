@@ -195,11 +195,12 @@
         "web/src/lib/components/HeroTag.svelte": 25,
         "web/src/lib/components/Stat.svelte": 20,
         "web/src/lib/components/Steps/Font/Line.svelte": 8,
-        "web/src/lib/components/Steps/Font/Step.svelte": 299,
+        "web/src/lib/components/Steps/Font/Step.svelte": 293,
         "web/src/lib/components/Steps/Font/Table.svelte": 15,
+        "web/src/lib/components/Steps/HTTP.svelte": 1,
         "web/src/lib/index.ts": 3,
         "web/src/routes/+layout.svelte": 37,
-        "web/src/routes/+page.svelte": 270,
+        "web/src/routes/+page.svelte": 300,
         "web/src/routes/+page.ts": 10,
         "web/src/routes/layout.css": 54,
         "web/static/robots.txt": 3,
@@ -297,16 +298,16 @@
         "harbor/res": 160,
         "harbor/res/pages": 39,
         "scripts": 115,
-        "web": 926,
+        "web": 951,
         "web/.vscode": 11,
-        "web/src": 766,
-        "web/src/lib/components": 367,
-        "web/src/lib": 370,
-        "web/src/lib/components/Steps/Font": 322,
-        "web/src/lib/components/Steps": 322,
-        "web/src/routes": 371,
+        "web/src": 791,
+        "web/src/lib/components": 362,
+        "web/src/lib": 365,
+        "web/src/lib/components/Steps/Font": 316,
+        "web/src/lib/components/Steps": 317,
+        "web/src/routes": 401,
         "web/static": 3,
-        "total": 43609,
+        "total": 43634,
         "ALIASES": {
             "css": 7220,
             "js": 12479,
@@ -316,5 +317,5 @@
             "render": 2745
         }
     },
-    "file_count": 206
+    "file_count": 207
 }

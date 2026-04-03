@@ -8,6 +8,7 @@
   import { onMount } from "svelte";
   import type { PageProps } from "./$types";
   import Font from "$lib/components/Steps/Font/Step.svelte";
+  import HTTP from "$lib/components/Steps/HTTP.svelte";
 
   let { data }: PageProps = $props();
   let playStep = $state(false);
@@ -114,6 +115,29 @@
   const radius = 25;
 
   let selected_step = $state(0);
+
+  async function switchTo(n: number) {
+    await animate("#inner-step", {
+      opacity: [1, 0],
+      translateX: [0, -200],
+      duration: 250,
+      easing: "easeInOutQuad",
+    });
+
+    animate("#inner-step", {
+      translateX: 200,
+      duration: 0,
+    });
+
+    selected_step = n;
+
+    await animate("#inner-step", {
+      opacity: [0, 1],
+      translateX: [200, 0],
+      duration: 250,
+      easing: "easeInOutQuad",
+    });
+  }
 </script>
 
 <div class="w-[50%] mx-auto" id="page">
@@ -184,10 +208,10 @@
               : "var(--color-emphasis-1)"}
           <g
             transform={`translate(${i * 4 * radius}, 75)`}
-            onclick={() => (selected_step = i)}
+            onclick={() => switchTo(i)}
             onkeydown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
-                selected_step = i;
+                switchTo(i);
               }
             }}
             style="cursor: pointer"
@@ -262,7 +286,13 @@
           class="flex-1 w-full mt-4 border-1 border-emphasis-1 rounded-lg"
           id="step-container"
         >
-          <Font />
+          <div id="inner-step" class="w-full h-full">
+            {#if selected_step === 0}
+              <Font />
+            {:else if selected_step === 1}
+              <HTTP />
+            {/if}
+          </div>
         </div>
       </div>
     </div>

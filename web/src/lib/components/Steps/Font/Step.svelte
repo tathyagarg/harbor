@@ -23,7 +23,7 @@
       }),
       defaults: {
         ease: "easeInOutQuad",
-        duration: 500,
+        duration: 250,
       },
     });
 
@@ -45,20 +45,18 @@
 
     timeline
       .label("start", "+=1000")
-      .label("fadeaway", "+=2000")
+      .label("fadeaway", "+=1500")
       .label("lines", "+=3000")
       .label("tables", "+=5000")
       .add("#sub-fontfile", {
         opacity: [0, 1],
         scale: [0.25, 1],
-        duration: 500,
         easing: "easeInOutQuad",
       })
       .add(
         "#fontfile",
         {
           background: "#333",
-          duration: 500,
           easing: "easeInOutQuad",
         },
         "fadeaway",
@@ -67,7 +65,6 @@
         "#filetext",
         {
           opacity: [1, 0],
-          duration: 200,
           easing: "easeInOutQuad",
         },
         "fadeaway",
@@ -77,7 +74,6 @@
         {
           display: "block",
           width: ["0", "90%"],
-          duration: 500,
           easing: "easeInOutQuad",
           delay: stagger(100),
           onBegin: (_) => {
@@ -90,7 +86,6 @@
         "#sub-fontfile",
         {
           translateX: [0, -150],
-          duration: 500,
           easing: "easeInOutQuad",
         },
         "tables",
@@ -100,7 +95,6 @@
         {
           translateX: [300, 150],
           opacity: [0, 1],
-          duration: 500,
           easing: "easeInOutQuad",
         },
         "tables",
