@@ -9,6 +9,7 @@
   import type { PageProps } from "./$types";
   import Font from "$lib/components/Steps/Font/Step.svelte";
   import HTTP from "$lib/components/Steps/HTTP/Step.svelte";
+  import HTML from "$lib/components/Steps/HTML/Step.svelte";
 
   let { data }: PageProps = $props();
 
@@ -117,7 +118,13 @@
       longDesc:
         "The HTTP Client is responsible for fetching resources from the network using the HTTP protocol. It handles DNS resolution, establishes connections, sends requests, and parses responses. Harbor's HTTP client uses <code>rustls</code> for TLS support.",
     },
-    { short: "HTML", title: "HTML Parser" },
+    {
+      short: "HTML",
+      title: "HTML Parser",
+      description: "Parses HTML documents and constructs the DOM tree.",
+      longDesc:
+        "The HTML Parser takes raw HTML text and parses it according to the HTML5 specification. It constructs a Document Object Model (DOM) tree that represents the structure of the HTML document. The parser handles various edge cases and quirks of HTML parsing to ensure compatibility with real-world web content.",
+    },
     { short: "Links", title: "Link Resolver" },
     { short: "CSS", title: "CSS Parser" },
     { short: "Cascade", title: "Cascade & Inheritance" },
@@ -395,6 +402,8 @@
                 <Font />
               {:else if selected_step === 1}
                 <HTTP />
+              {:else if selected_step === 2}
+                <HTML />
               {/if}
             </div>
           </div>

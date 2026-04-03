@@ -198,10 +198,11 @@
         "web/src/lib/components/Steps/Font/Line.svelte": 8,
         "web/src/lib/components/Steps/Font/Step.svelte": 295,
         "web/src/lib/components/Steps/Font/Table.svelte": 15,
+        "web/src/lib/components/Steps/HTML/Step.svelte": 293,
         "web/src/lib/components/Steps/HTTP/Step.svelte": 133,
         "web/src/lib/index.ts": 3,
         "web/src/routes/+layout.svelte": 37,
-        "web/src/routes/+page.svelte": 417,
+        "web/src/routes/+page.svelte": 426,
         "web/src/routes/+page.ts": 10,
         "web/src/routes/layout.css": 54,
         "web/static/robots.txt": 3,
@@ -300,17 +301,18 @@
         "harbor/res": 160,
         "harbor/res/pages": 39,
         "scripts": 115,
-        "web": 1202,
+        "web": 1504,
         "web/.vscode": 11,
-        "web/src": 1042,
-        "web/src/lib/components": 496,
-        "web/src/lib": 499,
+        "web/src": 1344,
+        "web/src/lib/components": 789,
+        "web/src/lib": 792,
         "web/src/lib/components/Steps/Font": 318,
-        "web/src/lib/components/Steps": 451,
+        "web/src/lib/components/Steps": 744,
+        "web/src/lib/components/Steps/HTML": 293,
         "web/src/lib/components/Steps/HTTP": 133,
-        "web/src/routes": 518,
+        "web/src/routes": 527,
         "web/static": 3,
-        "total": 43900,
+        "total": 44202,
         "ALIASES": {
             "css": 7220,
             "js": 12479,
@@ -320,5 +322,5 @@
             "render": 2745
         }
     },
-    "file_count": 208
+    "file_count": 209
 }
