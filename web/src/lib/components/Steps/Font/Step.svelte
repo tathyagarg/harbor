@@ -242,7 +242,9 @@
           role="button"
           tabindex="0"
         >
-          <Line color="var(--color-subtext)" index={0} />
+          {#each Array(3) as _, i}
+            <Line color="var(--color-subtext)" index={i} />
+          {/each}
         </div>
       </div>
     </div>

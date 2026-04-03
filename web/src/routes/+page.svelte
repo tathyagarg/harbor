@@ -35,7 +35,13 @@
     },
   });
 
+  let scrollPos = $state(0);
+
   onMount(() => {
+    document.addEventListener("scroll", () => {
+      scrollPos = Math.floor((window.scrollY / window.innerHeight) * 1.05);
+    });
+
     animate(".anim-2", {
       opacity: 0,
       translateY: 50,
@@ -85,7 +91,7 @@
     animate("#pipeline", {
       opacity: [0, 1],
       translateY: [50, 0],
-      delay: 1000,
+      delay: 500,
       duration: 500,
       ease: "inOutQuad",
       autoplay: onScroll({
@@ -118,9 +124,15 @@
   let selected_step = $state(1);
 
   async function switchTo(n: number) {
-    await animate("#inner-step", {
+    animate("#inner-step", {
       opacity: [1, 0],
       translateX: [0, -200],
+      duration: 250,
+      easing: "easeInOutQuad",
+    });
+
+    await animate("#step-content", {
+      opacity: [1, 0],
       duration: 250,
       easing: "easeInOutQuad",
     });
@@ -132,14 +144,80 @@
 
     selected_step = n;
 
-    await animate("#inner-step", {
+    animate("#step-content", {
+      opacity: [0, 1],
+      duration: 250,
+      easing: "easeInOutQuad",
+    });
+
+    animate("#inner-step", {
       opacity: [0, 1],
       translateX: [200, 0],
       duration: 250,
       easing: "easeInOutQuad",
     });
   }
+
+  let contentsHovered = $state(false);
+  let labelEls: HTMLElement[] = [];
+  let items = [
+    { label: "The Pipeline", href: "#pipeline" },
+    { label: "The Team", href: "#team" },
+  ];
+
+  function expand() {
+    contentsHovered = true;
+
+    labelEls.forEach((el) => {
+      const w = el.scrollWidth;
+      el.style.width = w + "px";
+      el.style.opacity = "1";
+    });
+  }
+
+  function collapse() {
+    contentsHovered = false;
+
+    labelEls.forEach((el) => {
+      el.style.width = "0px";
+      el.style.opacity = "0";
+    });
+  }
 </script>
+
+<div
+  class="overflow-hidden transition-all duration-300 fixed top-1/2 left-4 -translate-y-1/2
+  flex flex-col items-start gap-1 z-10 border-1 border-emphasis-1/25 rounded-lg px-2 py-4 font-body
+  cursor-pointer text-sm"
+  onmouseenter={expand}
+  onmouseleave={collapse}
+  role="navigation"
+>
+  {#each items as item, i}
+    {@const selected = scrollPos == i + 1}
+    <button
+      class={`flex items-center whitespace-nowrap gap-2 tracking-wider
+      rounded-md p-2 duration-300 transition-all w-full
+      ${selected ? "bg-emphasis-2/25" : "hover:bg-emphasis-1/25"}`}
+    >
+      <span
+        class="shrink-0"
+        class:text-emphasis-2={selected}
+        class:text-subtext={!selected}>0{i + 1}</span
+      >
+
+      <a
+        bind:this={labelEls[i]}
+        class="overflow-hidden transition-all duration-300"
+        class:text-subtext={!selected}
+        style="width: 0px; opacity: 0"
+        href={item.href}
+      >
+        {item.label}
+      </a>
+    </button>
+  {/each}
+</div>
 
 <div class="w-[50%] mx-auto" id="page">
   <div class="h-screen flex items-center justify-center flex-col">
@@ -270,7 +348,10 @@
         class="h-full w-full flex-1 mt-8 border-1 border-emphasis-1/25 rounded-lg flex flex-col"
       >
         <div class="h-full w-full p-4 flex flex-col">
-          <div class="flex gap-2 items-center text-emphasis-1 mb-2">
+          <div
+            class="flex gap-2 items-center text-emphasis-1 mb-2"
+            id="step-content"
+          >
             <div
               class="text-emphasis-2 bg-emphasis-2/25 py-1 text-[12px] text-center h-[24px] aspect-square rounded-full"
             >
@@ -280,7 +361,7 @@
               {steps[selected_step].title}
             </span>
           </div>
-          <p class="text-subtext">
+          <p class="text-subtext" id="step-content">
             {@html steps[selected_step].description ||
               "Description coming soon..."}
           </p>
@@ -298,7 +379,7 @@
           </div>
         </div>
 
-        <div>
+        <div id="step-content">
           {#if steps[selected_step].longDesc}
             <div
               class="mt-4 p-4 border-t-1 border-emphasis-1/25 rounded-b-lg text-sm"
