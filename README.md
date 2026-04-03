@@ -17,7 +17,7 @@ Harbor Browser
 
 ⭐ Star us on GitHub — it motivates us a lot!
 
-[Harbor](https://arson.dev/harbor) is a web browser built using Rust and Zig, made to teach me the ins and outs of browser development. It's not meant to be a competitor to mainstream browsers, but rather a personal project to explore the complexities of web technologies and browser architecture.
+[Harbor](https://harbor.arson.dev) is a web browser built using Rust and Zig, made to teach me the ins and outs of browser development. It's not meant to be a competitor to mainstream browsers, but rather a personal project to explore the complexities of web technologies and browser architecture.
 
 **Every last pixel is rendered by me, and every line of code is written from scratch.**
 
