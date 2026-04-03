@@ -8,10 +8,9 @@
   import { onMount } from "svelte";
   import type { PageProps } from "./$types";
   import Font from "$lib/components/Steps/Font/Step.svelte";
-  import HTTP from "$lib/components/Steps/HTTP.svelte";
+  import HTTP from "$lib/components/Steps/HTTP/Step.svelte";
 
   let { data }: PageProps = $props();
-  let playStep = $state(false);
 
   let stats = [
     {
@@ -101,6 +100,8 @@
       title: "Font Reader",
       description:
         "Reads TrueType fonts and parses them into tables like <code>cmap</code>, <code>glyf</code>, etc.",
+      longDesc:
+        "The Font Reader is responsible for reading and parsing font files. It processes the binary data of the font file and extracts various tables such as <code>cmap</code>, <code>glyf</code>, and others. Harbor currently supports 13 different tables.",
     },
     { short: "HTTP", title: "HTTP Client" },
     { short: "HTML", title: "HTML Parser" },
@@ -114,7 +115,7 @@
 
   const radius = 25;
 
-  let selected_step = $state(0);
+  let selected_step = $state(1);
 
   async function switchTo(n: number) {
     await animate("#inner-step", {
@@ -177,7 +178,7 @@
   </div>
 
   <div class="h-screen" id="pipeline">
-    <div class="h-full py-[10%] flex flex-col">
+    <div class="h-full py-[5%] flex flex-col">
       <div class="flex gap-4 items-baseline my-2">
         <span class="text-emphasis-1">01</span>
         <div class="w-full bg-emphasis-1 h-0.5"></div>
@@ -266,33 +267,47 @@
       </svg>
 
       <div
-        class="w-full flex-1 my-8 border-1 border-emphasis-1 p-4 rounded-lg flex flex-col"
+        class="h-full w-full flex-1 mt-8 border-1 border-emphasis-1/25 rounded-lg flex flex-col"
       >
-        <div class="flex gap-2 items-center text-emphasis-1 mb-2">
+        <div class="h-full w-full p-4 flex flex-col">
+          <div class="flex gap-2 items-center text-emphasis-1 mb-2">
+            <div
+              class="text-emphasis-2 bg-emphasis-2/25 py-1 text-[12px] text-center h-[24px] aspect-square rounded-full"
+            >
+              {selected_step + 1}
+            </div>
+            <span class="text-2xl font-mono">
+              {steps[selected_step].title}
+            </span>
+          </div>
+          <p class="text-subtext">
+            {@html steps[selected_step].description ||
+              "Description coming soon..."}
+          </p>
           <div
-            class="text-emphasis-2 bg-emphasis-2/25 py-1 text-[12px] text-center h-[24px] aspect-square rounded-full"
+            class="flex-1 w-full mt-4 border-1 border-emphasis-1/25 rounded-lg"
+            id="step-container"
           >
-            {selected_step + 1}
+            <div id="inner-step" class="w-full h-full">
+              {#if selected_step === 0}
+                <Font />
+              {:else if selected_step === 1}
+                <HTTP />
+              {/if}
+            </div>
           </div>
-          <span class="text-2xl font-mono">
-            {steps[selected_step].title}
-          </span>
         </div>
-        <p class="text-subtext">
-          {@html steps[selected_step].description ||
-            "Description coming soon..."}
-        </p>
-        <div
-          class="flex-1 w-full mt-4 border-1 border-emphasis-1 rounded-lg"
-          id="step-container"
-        >
-          <div id="inner-step" class="w-full h-full">
-            {#if selected_step === 0}
-              <Font />
-            {:else if selected_step === 1}
-              <HTTP />
-            {/if}
-          </div>
+
+        <div>
+          {#if steps[selected_step].longDesc}
+            <div
+              class="mt-4 p-4 border-t-1 border-emphasis-1/25 rounded-b-lg text-sm"
+            >
+              <p class="text-subtext">
+                {@html steps[selected_step].longDesc}
+              </p>
+            </div>
+          {/if}
         </div>
       </div>
     </div>

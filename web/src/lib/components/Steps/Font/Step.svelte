@@ -56,7 +56,7 @@
       .add(
         "#fontfile",
         {
-          background: "#333",
+          background: "#00000000",
           easing: "easeInOutQuad",
         },
         "fadeaway",
@@ -102,7 +102,7 @@
   });
 </script>
 
-<div class="w-full h-full relative" id="step">
+<div class="w-full h-full relative p-4" id="step">
   <div
     class="w-fit flex flex-col items-center justify-center absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
     id="sub-fontfile"
@@ -110,7 +110,7 @@
     <div
       class="bg-text text-text-dark text-center w-[10vw] rounded-md
     aspect-[4/5] flex items-center justify-center relative overflow-hidden
-    cursor-default
+    cursor-default border-1 border-emphasis-1/25
     "
       id="fontfile"
     >
@@ -246,7 +246,7 @@
         </div>
       </div>
     </div>
-    <p class="m-0">Font.ttf</p>
+    <p class="m-0 font-mono text-subtext">font.ttf</p>
   </div>
 
   <div
