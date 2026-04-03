@@ -109,7 +109,14 @@
       longDesc:
         "The Font Reader is responsible for reading and parsing font files. It processes the binary data of the font file and extracts various tables such as <code>cmap</code>, <code>glyf</code>, and others. Harbor currently supports 13 different tables.",
     },
-    { short: "HTTP", title: "HTTP Client" },
+    {
+      short: "HTTP",
+      title: "HTTP Client",
+      description:
+        "Fetches resources over the network using the HTTP protocol. It handles DNS, making requests and parsing responses.",
+      longDesc:
+        "The HTTP Client is responsible for fetching resources from the network using the HTTP protocol. It handles DNS resolution, establishes connections, sends requests, and parses responses. Harbor's HTTP client uses <code>rustls</code> for TLS support.",
+    },
     { short: "HTML", title: "HTML Parser" },
     { short: "Links", title: "Link Resolver" },
     { short: "CSS", title: "CSS Parser" },
@@ -124,6 +131,8 @@
   let selected_step = $state(1);
 
   async function switchTo(n: number) {
+    if (n === selected_step) return;
+
     animate("#inner-step", {
       opacity: [1, 0],
       translateX: [0, -200],

@@ -215,7 +215,7 @@
         </div>
         <div
           id="grey-lines"
-          class="relative top-5 h-3"
+          class="relative top-5 h-11"
           onmouseover={() => {
             if (!interactable) return;
 

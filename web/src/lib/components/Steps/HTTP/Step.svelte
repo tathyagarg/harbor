@@ -1,13 +1,44 @@
 <script lang="ts">
-  import Icon from "@iconify/svelte";
+  import { animate, createTimeline, onScroll } from "animejs";
   import { onMount } from "svelte";
 
-  let serverColor = $state("#f00");
+  let packetColor = $state("rgba(from var(--color-subtext) r g b / 25%)");
+  let animationState = $state("client");
 
-  onMount(() => {
-    setInterval(() => {
-      serverColor = serverColor === "#f00" ? "#0f0" : "#f00";
-    }, 1000);
+  onMount(async () => {
+    animate("#packet", {
+      cx: 120,
+      duration: 0,
+    });
+
+    let timeline = createTimeline({
+      autoplay: onScroll({
+        target: "#pipeline",
+        container: document.getElementsByName("html")[0],
+      }),
+    });
+
+    packetColor = "rgba(from var(--color-pretty-blue) r g b / 75%)";
+
+    timeline
+      .add("#packet", {
+        cx: 280,
+        duration: 1000,
+        easing: "outCirc",
+        loop: 4,
+        delay: 1000,
+      })
+      .call(() => {
+        packetColor = "rgba(from var(--color-gh-green) r g b / 75%)";
+        animationState = "server";
+      })
+      .add("#packet", {
+        cx: 120,
+        duration: 1000,
+        easing: "outCirc",
+        loop: 4,
+        delay: 500,
+      });
   });
 </script>
 
@@ -35,6 +66,15 @@
       </filter>
     </defs>
 
+    <circle
+      cx="120"
+      cy="100"
+      r="5"
+      fill={packetColor}
+      filter={`url(#${animationState}-glow)`}
+      id="packet"
+    />
+
     <g>
       <rect
         x="10"
@@ -61,31 +101,6 @@
         [ client ]
       </text>
     </g>
-
-    <!-- arrow -->
-    <path
-      d="M 100 50 C 150 0, 250 0, 300 50"
-      stroke="#eee"
-      stroke-width="2"
-      fill="none"
-    />
-    <polygon
-      points="295,45 305,50 295,55"
-      transform="translate(90 -165) rotate(36 0 0)"
-      fill="#eee"
-    />
-
-    <polygon
-      points="95,145 105,150 95,155"
-      transform="translate(55 322) rotate(227 0 0)"
-      fill="#eee"
-    />
-    <path
-      d="M 100 150 C 150 200, 250 200, 300 150"
-      stroke="#eee"
-      stroke-width="2"
-      fill="none"
-    />
 
     <g>
       <rect
