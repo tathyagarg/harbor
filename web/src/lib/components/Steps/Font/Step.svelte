@@ -1,11 +1,9 @@
 <script lang="ts">
   import Icon from "@iconify/svelte";
-  import { animate, createTimeline, stagger } from "animejs";
+  import { animate, createTimeline, onScroll, stagger } from "animejs";
   import { onMount } from "svelte";
   import Table from "./Table.svelte";
   import Line from "./Line.svelte";
-
-  let timeline = createTimeline();
 
   let line: {
     x1: number;
@@ -15,7 +13,20 @@
     color: string;
   } | null = $state(null);
 
+  let interactable = $state(false);
+
   onMount(() => {
+    let timeline = createTimeline({
+      autoplay: onScroll({
+        target: "#pipeline",
+        container: document.getElementsByName("html")[0],
+      }),
+      defaults: {
+        ease: "easeInOutQuad",
+        duration: 500,
+      },
+    });
+
     animate(".line", {
       width: "0",
       duration: 0,
@@ -27,21 +38,22 @@
       duration: 0,
     });
 
+    animate(".line", {
+      display: "none",
+      duration: 0,
+    });
+
     timeline
-      .label("start")
-      .label("fadeaway", "+=1000")
-      .label("lines", "+=2000")
-      .label("tables", "+=4000")
-      .add(
-        "#sub-fontfile",
-        {
-          opacity: [0, 1],
-          scale: [0.25, 1],
-          duration: 500,
-          easing: "easeInOutQuad",
-        },
-        "start",
-      )
+      .label("start", "+=1000")
+      .label("fadeaway", "+=2000")
+      .label("lines", "+=3000")
+      .label("tables", "+=5000")
+      .add("#sub-fontfile", {
+        opacity: [0, 1],
+        scale: [0.25, 1],
+        duration: 500,
+        easing: "easeInOutQuad",
+      })
       .add(
         "#fontfile",
         {
@@ -63,10 +75,14 @@
       .add(
         ".line",
         {
+          display: "block",
           width: ["0", "90%"],
           duration: 500,
           easing: "easeInOutQuad",
           delay: stagger(100),
+          onBegin: (_) => {
+            interactable = true;
+          },
         },
         "lines",
       )
@@ -110,6 +126,8 @@
           id="red-lines"
           class="relative top-2 h-3"
           onmouseover={() => {
+            if (!interactable) return;
+
             const redLines = document.querySelector("#red-lines");
             const headTable = document.querySelector("#head");
             const stepContainer = document.querySelector("#step-container");
@@ -119,8 +137,6 @@
               const headRect = headTable.getBoundingClientRect();
               const fontRect = stepContainer.getBoundingClientRect();
 
-              console.log(redRect, headRect, fontRect);
-
               line = {
                 x1: redRect.right - fontRect.left - 10,
                 y1: redRect.top + redRect.height / 2 - fontRect.top,
@@ -128,12 +144,10 @@
                 y2: headRect.top + headRect.height / 2 - fontRect.top,
                 color: "var(--color-scratch-red)",
               };
-
-              console.log("mouseover");
             }
           }}
           onmouseleave={() => (line = null)}
-          onfocus={() => console.log("focus")}
+          onfocus={() => {}}
           role="button"
           tabindex="0"
         >
@@ -143,6 +157,8 @@
           id="blue-lines"
           class="relative top-3 h-7"
           onmouseover={() => {
+            if (!interactable) return;
+
             const blueLines = document.querySelector("#blue-lines");
             const cmapTable = document.querySelector("#cmap");
             const stepContainer = document.querySelector("#step-container");
@@ -152,8 +168,6 @@
               const cmapRect = cmapTable.getBoundingClientRect();
               const fontRect = stepContainer.getBoundingClientRect();
 
-              console.log(blueRect, cmapRect, fontRect);
-
               line = {
                 x1: blueRect.right - fontRect.left - 10,
                 y1: blueRect.top + blueRect.height / 2 - fontRect.top,
@@ -161,12 +175,10 @@
                 y2: cmapRect.top + cmapRect.height / 2 - fontRect.top,
                 color: "var(--color-pretty-blue)",
               };
-
-              console.log("mouseover");
             }
           }}
           onmouseleave={() => (line = null)}
-          onfocus={() => console.log("focus")}
+          onfocus={() => {}}
           role="button"
           tabindex="0"
         >
@@ -178,6 +190,8 @@
           id="green-lines"
           class="relative top-4 h-19"
           onmouseover={() => {
+            if (!interactable) return;
+
             const greenLines = document.querySelector("#green-lines");
             const glyfTable = document.querySelector("#glyf");
             const stepContainer = document.querySelector("#step-container");
@@ -187,8 +201,6 @@
               const glyfRect = glyfTable.getBoundingClientRect();
               const fontRect = stepContainer.getBoundingClientRect();
 
-              console.log(greenRect, glyfRect, fontRect);
-
               line = {
                 x1: greenRect.right - fontRect.left - 10,
                 y1: greenRect.top + greenRect.height / 2 - fontRect.top,
@@ -196,12 +208,10 @@
                 y2: glyfRect.top + glyfRect.height / 2 - fontRect.top,
                 color: "var(--color-gh-green)",
               };
-
-              console.log("mouseover");
             }
           }}
           onmouseleave={() => (line = null)}
-          onfocus={() => console.log("focus")}
+          onfocus={() => {}}
           role="button"
           tabindex="0"
         >
@@ -213,6 +223,8 @@
           id="grey-lines"
           class="relative top-5 h-3"
           onmouseover={() => {
+            if (!interactable) return;
+
             const greyLines = document.querySelector("#grey-lines");
             const otherTable = document.querySelector("#other");
             const stepContainer = document.querySelector("#step-container");
@@ -222,8 +234,6 @@
               const otherRect = otherTable.getBoundingClientRect();
               const fontRect = stepContainer.getBoundingClientRect();
 
-              console.log(greyRect, otherRect, fontRect);
-
               line = {
                 x1: greyRect.right - fontRect.left - 10,
                 y1: greyRect.top + greyRect.height / 2 - fontRect.top,
@@ -231,12 +241,10 @@
                 y2: otherRect.top + otherRect.height / 2 - fontRect.top,
                 color: "var(--color-subtext)",
               };
-
-              console.log("mouseover");
             }
           }}
           onmouseleave={() => (line = null)}
-          onfocus={() => console.log("focus")}
+          onfocus={() => {}}
           role="button"
           tabindex="0"
         >

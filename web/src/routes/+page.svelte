@@ -4,12 +4,13 @@
   import { GITHUB_URL } from "$lib";
   import HeroTag from "$lib/components/HeroTag.svelte";
   import Stat from "$lib/components/Stat.svelte";
-  import { animate, createTimeline, stagger } from "animejs";
+  import { animate, createTimeline, onScroll, stagger } from "animejs";
   import { onMount } from "svelte";
   import type { PageProps } from "./$types";
   import Font from "$lib/components/Steps/Font/Step.svelte";
 
   let { data }: PageProps = $props();
+  let playStep = $state(false);
 
   let stats = [
     {
@@ -48,20 +49,49 @@
     });
 
     timeline
-      .add(".anim", {
-        opacity: [0, 1],
-        translateY: [20, 0],
-      })
-      .add(".anim-2", {
-        opacity: [0, 1],
-        translateY: [50, 0],
-        delay: 200,
-      })
-      .add(".anim-3", {
-        opacity: [0, 1],
-        translateX: [-20, 0],
-        delay: stagger(100),
-      });
+      .label("start")
+      .add(
+        ".anim",
+        {
+          opacity: [0, 1],
+          translateY: [20, 0],
+        },
+        "start",
+      )
+      .add(
+        ".anim-2",
+        {
+          opacity: [0, 1],
+          translateY: [50, 0],
+        },
+        "start+=500",
+      )
+      .add(
+        ".anim-3",
+        {
+          opacity: [0, 1],
+          translateX: [-20, 0],
+          delay: stagger(100),
+        },
+        "start+=1000",
+      );
+
+    animate("#pipeline", {
+      opacity: 0,
+      translateY: 50,
+      duration: 0,
+    });
+
+    animate("#pipeline", {
+      opacity: [0, 1],
+      translateY: [50, 0],
+      delay: 1000,
+      duration: 500,
+      ease: "inOutQuad",
+      autoplay: onScroll({
+        container: document.getElementsByName("html")[0],
+      }),
+    });
   });
 
   const steps = [
@@ -86,7 +116,7 @@
   let selected_step = $state(0);
 </script>
 
-<div class="w-[50%] mx-auto">
+<div class="w-[50%] mx-auto" id="page">
   <div class="h-screen flex items-center justify-center flex-col">
     <h1 class="text-8xl anim">Welcome to</h1>
     <h1 class="text-8xl text-emphasis-2 anim">Harbor Browser</h1>
@@ -122,7 +152,7 @@
     </div>
   </div>
 
-  <div class="h-screen">
+  <div class="h-screen" id="pipeline">
     <div class="h-full py-[10%] flex flex-col">
       <div class="flex gap-4 items-baseline my-2">
         <span class="text-emphasis-1">01</span>

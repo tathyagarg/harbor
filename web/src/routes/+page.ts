@@ -6,7 +6,5 @@ export const load: PageLoad = async () => {
   const response = await fetch(FILE_URL);
   const data: { lines: { total: number }, file_count: number } = await response.json();
 
-  console.log("Data fetched from GitHub:", data);
-
   return data;
 };
