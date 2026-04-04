@@ -135,7 +135,7 @@
 
   const radius = 25;
 
-  let selected_step = $state(1);
+  let selected_step = $state(0);
 
   async function switchTo(n: number) {
     if (n === selected_step) return;

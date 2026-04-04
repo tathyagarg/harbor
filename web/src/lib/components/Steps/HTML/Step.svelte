@@ -11,7 +11,7 @@
       },
     });
 
-    animate(["#html", "#body", "#h1", "#p1", "#p2", "#p3"], {
+    animate(["#html", "#body", "#h1", "#p1", "#a", "#p3"], {
       width: 0,
       height: 0,
       duration: 0,
@@ -23,7 +23,7 @@
         "#body-text",
         "#h1-text",
         "#p1-text",
-        "#p2-text",
+        "#a-text",
         "#p3-text",
       ],
       {
@@ -84,7 +84,7 @@
         2750,
       )
       .add(
-        ["#p1", "#p2", "#p3"],
+        ["#p1", "#a", "#p3"],
         {
           width: 110,
           height: 40,
@@ -93,7 +93,7 @@
         3250,
       )
       .add(
-        ["#p1-text", "#p2-text", "#p3-text"],
+        ["#p1-text", "#a-text", "#p3-text"],
         {
           opacity: 1,
           delay: stagger(250),
@@ -124,7 +124,7 @@
         y="25"
         width="360"
         height="150"
-        fill="color-mix(in srgb, var(--color-scratch-red) 25%, var(--color-bg))"
+        fill="transparent"
         stroke="var(--color-scratch-red)"
         stroke-width="1"
         rx="8"
@@ -133,7 +133,7 @@
       />
       <text
         id="html-text"
-        x="50"
+        x="60"
         y="40"
         text-anchor="middle"
         fill="currentColor"
@@ -141,7 +141,7 @@
         font-family="monospace"
         dominant-baseline="middle"
       >
-        <tspan fill="var(--color-scratch-red)">{"<html>"}</tspan>
+        <tspan fill="var(--color-scratch-red)">{"[ <html> ]"}</tspan>
       </text>
     </g>
 
@@ -151,7 +151,7 @@
         y="55"
         width="350"
         height="115"
-        fill="color-mix(in srgb, var(--color-pretty-blue) 25%, var(--color-bg))"
+        fill="transparent"
         stroke="var(--color-pretty-blue)"
         stroke-width="1"
         rx="8"
@@ -160,7 +160,7 @@
       />
       <text
         id="body-text"
-        x="50"
+        x="65"
         y="70"
         text-anchor="middle"
         fill="currentColor"
@@ -168,7 +168,7 @@
         font-family="monospace"
         dominant-baseline="middle"
       >
-        <tspan fill="var(--color-pretty-blue)">{"<body>"}</tspan>
+        <tspan fill="var(--color-pretty-blue)">{"[ <body> ]"}</tspan>
       </text>
     </g>
 
@@ -178,7 +178,7 @@
         y="85"
         width="340"
         height="30"
-        fill="color-mix(in srgb, var(--color-gh-green) 25%, var(--color-bg))"
+        fill="transparent"
         stroke="var(--color-gh-green)"
         stroke-width="1"
         rx="8"
@@ -188,7 +188,7 @@
 
       <text
         id="h1-text"
-        x="50"
+        x="65"
         y="100"
         text-anchor="middle"
         fill="currentColor"
@@ -196,7 +196,7 @@
         font-family="monospace"
         dominant-baseline="middle"
       >
-        <tspan fill="var(--color-gh-green)">{`<h1>`}</tspan>
+        <tspan fill="var(--color-gh-green)">{`[ <h1> ]`}</tspan>
       </text>
     </g>
 
@@ -206,7 +206,7 @@
         y="120"
         width="110"
         height="40"
-        fill="color-mix(in srgb, var(--color-subtext) 25%, var(--color-bg))"
+        fill="transparent"
         stroke="var(--color-subtext)"
         stroke-width="1"
         rx="8"
@@ -223,7 +223,7 @@
         font-family="monospace"
         dominant-baseline="middle"
       >
-        <tspan fill="var(--color-subtext)">{`<p>`}</tspan>
+        <tspan fill="var(--color-subtext)">{`[ <p> ]`}</tspan>
       </text>
 
       <rect
@@ -231,15 +231,15 @@
         y="120"
         width="110"
         height="40"
-        fill="color-mix(in srgb, var(--color-subtext) 25%, var(--color-bg))"
+        fill="transparent"
         stroke="var(--color-subtext)"
         stroke-width="1"
         rx="8"
         ry="8"
-        id="p2"
+        id="a"
       />
       <text
-        id="p2-text"
+        id="a-text"
         x="200"
         y="140"
         text-anchor="middle"
@@ -248,7 +248,7 @@
         font-family="monospace"
         dominant-baseline="middle"
       >
-        <tspan fill="var(--color-subtext)">{`<p>`}</tspan>
+        <tspan fill="var(--color-subtext)">{`[ <a> ]`}</tspan>
       </text>
 
       <rect
@@ -256,7 +256,7 @@
         y="120"
         width="110"
         height="40"
-        fill="color-mix(in srgb, var(--color-subtext) 25%, var(--color-bg))"
+        fill="transparent"
         stroke="var(--color-subtext)"
         stroke-width="1"
         rx="8"
@@ -273,7 +273,7 @@
         font-family="monospace"
         dominant-baseline="middle"
       >
-        <tspan fill="var(--color-subtext)">{`<p>`}</tspan>
+        <tspan fill="var(--color-subtext)">{`[ <p> ]`}</tspan>
       </text>
     </g>
 
