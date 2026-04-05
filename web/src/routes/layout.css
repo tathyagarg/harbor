@@ -27,6 +27,10 @@
   --font-code: 'Fira Code', monospace;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   background-color: var(--color-bg);
   color: var(--color-text);

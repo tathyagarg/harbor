@@ -2,7 +2,7 @@
     "lines": {
         ".github/lines.json": 0,
         ".github/workflows/release.yml": 62,
-        ".gitignore": 12,
+        ".gitignore": 14,
         "LICENSE": 7,
         "README.md": 237,
         "TODO.md": 12,
@@ -202,9 +202,10 @@
         "web/src/lib/components/Steps/HTTP/Step.svelte": 196,
         "web/src/lib/index.ts": 3,
         "web/src/routes/+layout.svelte": 37,
-        "web/src/routes/+page.svelte": 426,
+        "web/src/routes/+page.svelte": 437,
         "web/src/routes/+page.ts": 10,
-        "web/src/routes/layout.css": 54,
+        "web/src/routes/layout.css": 58,
+        "web/src/routes/version/+server.ts": 7,
         "web/static/robots.txt": 3,
         "web/svelte.config.js": 24,
         "web/tsconfig.json": 20,
@@ -301,18 +302,19 @@
         "harbor/res": 160,
         "harbor/res/pages": 39,
         "scripts": 115,
-        "web": 1567,
+        "web": 1589,
         "web/.vscode": 11,
-        "web/src": 1407,
+        "web/src": 1429,
         "web/src/lib/components": 852,
         "web/src/lib": 855,
         "web/src/lib/components/Steps/Font": 318,
         "web/src/lib/components/Steps": 807,
         "web/src/lib/components/Steps/HTML": 293,
         "web/src/lib/components/Steps/HTTP": 196,
-        "web/src/routes": 527,
+        "web/src/routes": 549,
+        "web/src/routes/version": 7,
         "web/static": 3,
-        "total": 44265,
+        "total": 44289,
         "ALIASES": {
             "css": 7220,
             "js": 12479,
@@ -322,5 +324,5 @@
             "render": 2745
         }
     },
-    "file_count": 209
+    "file_count": 210
 }

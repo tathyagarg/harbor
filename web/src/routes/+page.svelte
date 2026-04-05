@@ -178,7 +178,7 @@
   let labelEls: HTMLElement[] = [];
   let items = [
     { label: "The Pipeline", href: "#pipeline" },
-    { label: "The Team", href: "#team" },
+    { label: "Architecture", href: "#architecture" },
   ];
 
   function expand() {
@@ -421,6 +421,17 @@
           {/if}
         </div>
       </div>
+    </div>
+  </div>
+
+  <div class="h-screen" id="architecture">
+    <div class="h-full py-[5%] flex flex-col">
+      <div class="flex gap-4 items-baseline my-2">
+        <span class="text-emphasis-1">02</span>
+        <div class="w-full bg-emphasis-1 h-0.5"></div>
+      </div>
+      <h1 class="text-emphasis-2 text-6xl my-4">Architecture</h1>
+      <p class="text-subtext">Explore what's inside Harbor Browser.</p>
     </div>
   </div>
 </div>
