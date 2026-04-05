@@ -1,10 +1,13 @@
 <script lang="ts">
-  import { animate, createTimeline, stagger } from "animejs";
+  import { animate, createTimeline, onScroll, stagger } from "animejs";
   import { onMount } from "svelte";
 
   onMount(async () => {
     let timeline = createTimeline({
-      autoplay: true,
+      autoplay: onScroll({
+        target: "#pipeline",
+        container: document.getElementsByName("html")[0],
+      }),
       defaults: {
         duration: 500,
         ease: "easeInOutQuad",

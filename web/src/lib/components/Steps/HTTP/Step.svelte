@@ -44,7 +44,7 @@
         easing: "outCirc",
         loop: 4,
         delay: 1000,
-        onLoop: (anim) => {
+        onLoop: (_) => {
           let codeLine = document.createElement("div");
           codeLine.textContent = client_lines[client_lines_index++];
 
@@ -74,7 +74,7 @@
         easing: "outCirc",
         loop: 4,
         delay: 500,
-        onLoop: (anim) => {
+        onLoop: (_) => {
           let codeLine = document.createElement("div");
           codeLine.textContent = server_lines[server_lines_index++];
 
