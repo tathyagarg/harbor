@@ -39,24 +39,30 @@
       .add("#filename", {
         opacity: [1, 0],
         translateY: [0, 20],
-        delay: 500,
+        delay: 1000,
       })
-      .add("#file-container", {
-        x: [140, 20],
-        width: [120, 360],
-        delay: 250,
-      })
-      .add("#html", {
-        width: 360,
-        height: 150,
-      })
+      .add(
+        "#file-container",
+        {
+          x: [140, 20],
+          width: [120, 360],
+        },
+        1500,
+      )
+      .add(
+        "#html",
+        {
+          width: 360,
+          height: 150,
+        },
+        2000,
+      )
       .add(
         "#html-text",
         {
           opacity: 1,
-          delay: 100,
         },
-        2250,
+        2750,
       )
       .add(
         "#body",
@@ -64,27 +70,29 @@
           width: 350,
           height: 115,
         },
-        2250,
+        2750,
       )
-      .add("#body-text", {
-        opacity: 1,
-        delay: 100,
-      })
+      .add(
+        "#body-text",
+        {
+          opacity: 1,
+        },
+        3000,
+      )
       .add(
         "#h1",
         {
           width: 340,
           height: 30,
         },
-        2750,
+        3250,
       )
       .add(
         "#h1-text",
         {
           opacity: 1,
-          delay: 100,
         },
-        2750,
+        3250,
       )
       .add(
         ["#p1", "#a", "#p3"],
@@ -93,7 +101,7 @@
           height: 40,
           delay: stagger(250),
         },
-        3250,
+        3750,
       )
       .add(
         ["#p1-text", "#a-text", "#p3-text"],
@@ -101,7 +109,7 @@
           opacity: 1,
           delay: stagger(250),
         },
-        3250,
+        3750,
       );
   });
 </script>
@@ -290,7 +298,7 @@
       font-family="monospace"
       dominant-baseline="middle"
     >
-      fontfile.ttf
+      index.html
     </text>
   </svg>
 </div>
