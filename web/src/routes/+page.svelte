@@ -7,9 +7,11 @@
   import { animate, createTimeline, onScroll, stagger } from "animejs";
   import { onMount } from "svelte";
   import type { PageProps } from "./$types";
-  import Font from "$lib/components/Steps/Font/Step.svelte";
-  import HTTP from "$lib/components/Steps/HTTP/Step.svelte";
-  import HTML from "$lib/components/Steps/HTML/Step.svelte";
+
+  import Font from "$lib/components/Steps/01_Font/Step.svelte";
+  import HTTP from "$lib/components/Steps/02_HTTP/Step.svelte";
+  import HTML from "$lib/components/Steps/03_HTML/Step.svelte";
+  import Link from "$lib/components/Steps/04_Link/Step.svelte";
 
   let { data }: PageProps = $props();
 
@@ -125,7 +127,13 @@
       longDesc:
         "The HTML Parser takes raw HTML text and parses it according to the HTML5 specification. It constructs a Document Object Model (DOM) tree that represents the structure of the HTML document. The parser handles various edge cases and quirks of HTML parsing to ensure compatibility with real-world web content.",
     },
-    { short: "Links", title: "Link Resolver" },
+    {
+      short: "Links",
+      title: "Link Resolver",
+      description: "Resolves links between resources.",
+      longDesc:
+        "The Link Resolver is responsible for resolving links between resources. It takes care of resolving relative URLs, handling redirects, and managing the relationships between different resources on a webpage.",
+    },
     { short: "CSS", title: "CSS Parser" },
     { short: "Cascade", title: "Cascade & Inheritance" },
     { short: "Layout", title: "Layout Engine" },
@@ -404,6 +412,8 @@
                 <HTTP />
               {:else if selected_step === 2}
                 <HTML />
+              {:else if selected_step === 3}
+                <Link />
               {/if}
             </div>
           </div>
