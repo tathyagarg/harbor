@@ -21,7 +21,7 @@
 
       data[i] = shade;
       data[i + 1] = shade;
-
+      data[i + 2] = shade;
       data[i + 3] = 10;
     }
 

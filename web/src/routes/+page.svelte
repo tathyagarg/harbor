@@ -182,7 +182,6 @@
     });
   }
 
-  let contentsHovered = $state(false);
   let labelEls: HTMLElement[] = [];
   let items = [
     { label: "The Pipeline", href: "#pipeline" },
@@ -190,8 +189,6 @@
   ];
 
   function expand() {
-    contentsHovered = true;
-
     labelEls.forEach((el) => {
       const w = el.scrollWidth;
       el.style.width = w + "px";
@@ -200,8 +197,6 @@
   }
 
   function collapse() {
-    contentsHovered = false;
-
     labelEls.forEach((el) => {
       el.style.width = "0px";
       el.style.opacity = "0";

@@ -10,8 +10,10 @@
     { name: "<link rel='stylesheet' href='/assets/style.css'>", detail: "" },
   ]);
 
+  let dots = $state(".");
+
   let y_offsets = $derived(
-    link_data.reduce((acc, curr, index) => {
+    link_data.reduce((acc, _, index) => {
       console.log(index, acc, link_data[index - 1]);
 
       acc.push(
@@ -28,8 +30,6 @@
       12.5,
   );
 
-  console.log(y_offsets);
-
   onMount(() => {
     let timeline = createTimeline({
       autoplay: onScroll({
@@ -44,6 +44,11 @@
 
     animate([".link-line-box", ".link-line"], {
       translateX: -10,
+      opacity: 0,
+      duration: 0,
+    });
+
+    animate("#loop", {
       opacity: 0,
       duration: 0,
     });
@@ -78,8 +83,14 @@
       )
       .call(() => {
         link_data = [
-          { name: "https://example.com/assets/example.css", detail: "hi" },
-          { name: "/assets/style.css", detail: "" },
+          {
+            name: "https://example.com/assets/example.css",
+            detail: "Fetching resource from HTTP client",
+          },
+          {
+            name: "/assets/style.css",
+            detail: "Fetching resource from HTTP client",
+          },
         ];
       })
       .add(
@@ -90,7 +101,21 @@
           delay: stagger(100),
         },
         2750,
-      );
+      )
+      .add(
+        "#loop",
+        {
+          opacity: 1,
+          duration: 250,
+        },
+        3500,
+      )
+      .call(() => {
+        setInterval(() => {
+          dots += ".";
+          if (dots.length > 3) dots = ".";
+        }, 500);
+      });
   });
 </script>
 
@@ -151,5 +176,16 @@
         {/if}
       </g>
     {/each}
+
+    <text
+      x="200"
+      y={total + 20}
+      fill="var(--color-emphasis-2)"
+      font-size="8"
+      text-anchor="middle"
+      id="loop"
+    >
+      &#10227; Looping back to the HTTP client to fetch the resource{dots}
+    </text>
   </svg>
 </div>
