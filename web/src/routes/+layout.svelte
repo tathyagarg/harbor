@@ -1,6 +1,7 @@
 <script lang="ts">
   import "./layout.css";
   import favicon from "$lib/assets/favicon.svg";
+  import waves from "$lib/assets/waves.svg";
   import { onMount } from "svelte";
 
   let { children } = $props();
@@ -34,4 +35,9 @@
   <title>Harbor Browser</title>
   <link rel="icon" href={favicon} />
 </svelte:head>
+
+<div class="fixed top-0 left-0 translate-y-1/2 w-full h-full overflow-hidden">
+  <img src={waves} alt="Waves" class="opacity-5" />
+</div>
+
 {@render children()}

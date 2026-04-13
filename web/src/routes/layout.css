@@ -36,6 +36,18 @@ body {
   color: var(--color-text);
 
   font-family: var(--font-body);
+
+  &::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0.2;
+    background-image: repeating-radial-gradient(circle at 0 0, transparent 0, #212121 10px ),
+    repeating-linear-gradient( #00000055, #000000 );
+  }
 }
 
 h1, h2, h3, h4, h5, h6 {
