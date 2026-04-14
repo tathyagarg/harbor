@@ -15,7 +15,7 @@ case "$OS-$ARCH" in
   ;;
 esac
 
-VERSION=$(curl -s https://arson.dev/harbor/version | grep -o '"version":[^,}]*' | sed 's/"version":"\([^"]*\)"/\1/')
+VERSION=$(curl -s https://harbor.arson.dev/version | grep -o '"version":[^,}]*' | sed 's/"version":"\([^"]*\)"/\1/')
 echo $VERSION
 
 BASE="https://github.com/tathyagarg/harbor/releases/download/${VERSION}"

@@ -10,3 +10,5 @@ flamegraph.svg
 .zig-cache
 
 libjs.a
+
+.env

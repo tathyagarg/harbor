@@ -7,8 +7,11 @@
   import { animate, createTimeline, onScroll, stagger } from "animejs";
   import { onMount } from "svelte";
   import type { PageProps } from "./$types";
-  import Font from "$lib/components/Steps/Font/Step.svelte";
-  import HTTP from "$lib/components/Steps/HTTP/Step.svelte";
+
+  import Font from "$lib/components/Steps/01_Font/Step.svelte";
+  import HTTP from "$lib/components/Steps/02_HTTP/Step.svelte";
+  import HTML from "$lib/components/Steps/03_HTML/Step.svelte";
+  import Link from "$lib/components/Steps/04_Link/Step.svelte";
 
   let { data }: PageProps = $props();
 
@@ -20,7 +23,7 @@
     },
     {
       value: Math.floor(data.file_count / 10) * 10,
-      title: "Files",
+      title: "Files (kinda)",
       suffix: "+",
     },
     { value: 6, title: "Core Modules", suffix: null },
@@ -35,7 +38,13 @@
     },
   });
 
+  let scrollPos = $state(0);
+
   onMount(() => {
+    document.addEventListener("scroll", () => {
+      scrollPos = Math.floor((window.scrollY / window.innerHeight) * 1.05);
+    });
+
     animate(".anim-2", {
       opacity: 0,
       translateY: 50,
@@ -85,7 +94,7 @@
     animate("#pipeline", {
       opacity: [0, 1],
       translateY: [50, 0],
-      delay: 1000,
+      delay: 500,
       duration: 500,
       ease: "inOutQuad",
       autoplay: onScroll({
@@ -103,9 +112,28 @@
       longDesc:
         "The Font Reader is responsible for reading and parsing font files. It processes the binary data of the font file and extracts various tables such as <code>cmap</code>, <code>glyf</code>, and others. Harbor currently supports 13 different tables.",
     },
-    { short: "HTTP", title: "HTTP Client" },
-    { short: "HTML", title: "HTML Parser" },
-    { short: "Links", title: "Link Resolver" },
+    {
+      short: "HTTP",
+      title: "HTTP Client",
+      description:
+        "Fetches resources over the network using the HTTP protocol.",
+      longDesc:
+        "The HTTP Client is responsible for fetching resources from the network using the HTTP protocol. It handles DNS resolution, establishes connections, sends requests, and parses responses. Harbor's HTTP client uses <code>rustls</code> for TLS support.",
+    },
+    {
+      short: "HTML",
+      title: "HTML Parser",
+      description: "Parses HTML documents and constructs the DOM tree.",
+      longDesc:
+        "The HTML Parser takes raw HTML text and parses it according to the HTML5 specification. It constructs a Document Object Model (DOM) tree that represents the structure of the HTML document. The parser handles various edge cases and quirks of HTML parsing to ensure compatibility with real-world web content.",
+    },
+    {
+      short: "Links",
+      title: "Link Resolver",
+      description: "Resolves links between resources.",
+      longDesc:
+        "The Link Resolver is responsible for resolving links between resources. It takes care of resolving relative URLs, handling redirects, and managing the relationships between different resources on a webpage.",
+    },
     { short: "CSS", title: "CSS Parser" },
     { short: "Cascade", title: "Cascade & Inheritance" },
     { short: "Layout", title: "Layout Engine" },
@@ -115,12 +143,20 @@
 
   const radius = 25;
 
-  let selected_step = $state(1);
+  let selected_step = $state(0);
 
   async function switchTo(n: number) {
-    await animate("#inner-step", {
+    if (n === selected_step) return;
+
+    animate("#inner-step", {
       opacity: [1, 0],
       translateX: [0, -200],
+      duration: 250,
+      easing: "easeInOutQuad",
+    });
+
+    await animate("#step-content", {
+      opacity: [1, 0],
       duration: 250,
       easing: "easeInOutQuad",
     });
@@ -132,14 +168,75 @@
 
     selected_step = n;
 
-    await animate("#inner-step", {
+    animate("#step-content", {
+      opacity: [0, 1],
+      duration: 250,
+      easing: "easeInOutQuad",
+    });
+
+    animate("#inner-step", {
       opacity: [0, 1],
       translateX: [200, 0],
       duration: 250,
       easing: "easeInOutQuad",
     });
   }
+
+  let labelEls: HTMLElement[] = [];
+  let items = [
+    { label: "The Pipeline", href: "#pipeline" },
+    { label: "Architecture", href: "#architecture" },
+  ];
+
+  function expand() {
+    labelEls.forEach((el) => {
+      const w = el.scrollWidth;
+      el.style.width = w + "px";
+      el.style.opacity = "1";
+    });
+  }
+
+  function collapse() {
+    labelEls.forEach((el) => {
+      el.style.width = "0px";
+      el.style.opacity = "0";
+    });
+  }
 </script>
+
+<div
+  class="overflow-hidden transition-all duration-300 fixed top-1/2 left-4 -translate-y-1/2
+  flex flex-col items-start gap-1 z-10 border-1 border-emphasis-1/25 rounded-lg px-2 py-4 font-body
+  cursor-pointer text-sm"
+  onmouseenter={expand}
+  onmouseleave={collapse}
+  role="navigation"
+>
+  {#each items as item, i}
+    {@const selected = scrollPos == i + 1}
+    <button
+      class={`flex items-center whitespace-nowrap gap-2 tracking-wider
+      rounded-md p-2 duration-300 transition-all w-full
+      ${selected ? "bg-emphasis-2/25" : "hover:bg-emphasis-1/25"}`}
+    >
+      <span
+        class="shrink-0"
+        class:text-emphasis-2={selected}
+        class:text-subtext={!selected}>0{i + 1}</span
+      >
+
+      <a
+        bind:this={labelEls[i]}
+        class="overflow-hidden transition-all duration-300"
+        class:text-subtext={!selected}
+        style="width: 0px; opacity: 0"
+        href={item.href}
+      >
+        {item.label}
+      </a>
+    </button>
+  {/each}
+</div>
 
 <div class="w-[50%] mx-auto" id="page">
   <div class="h-screen flex items-center justify-center flex-col">
@@ -189,7 +286,7 @@
         work together to process and render web content.
       </p>
 
-      <svg class="mx-auto" viewBox="0 0 900 150">
+      <svg class="mx-auto w-full" viewBox="0 0 900 200">
         <defs>
           <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
             <feDropShadow
@@ -201,6 +298,18 @@
             />
           </filter>
         </defs>
+
+        <path
+          d={`M ${6 * radius} ${4 * radius} 
+            C ${6 * radius} ${5 * radius + 75}, 
+              ${14 * radius} ${5 * radius + 75}, 
+              ${14 * radius} ${4 * radius}
+            `}
+          stroke="rgba(from var(--color-emphasis-1) r g b / 25%)"
+          stroke-dasharray="4 4"
+          stroke-width="2"
+          fill="none"
+        />
 
         {#each steps as step, i}
           {@const color =
@@ -238,14 +347,14 @@
               font-size="18"
               font-family="monospace"
             >
-              {i}
+              {i + 1}
             </text>
             <text
               x={2 * radius}
               y={radius + 20}
               text-anchor="middle"
               dominant-baseline="middle"
-              fill="var(--color-subtext)"
+              fill={color}
               font-size="10"
               font-family="var(--font-code)"
             >
@@ -270,7 +379,10 @@
         class="h-full w-full flex-1 mt-8 border-1 border-emphasis-1/25 rounded-lg flex flex-col"
       >
         <div class="h-full w-full p-4 flex flex-col">
-          <div class="flex gap-2 items-center text-emphasis-1 mb-2">
+          <div
+            class="flex gap-2 items-center text-emphasis-1 mb-2"
+            id="step-content"
+          >
             <div
               class="text-emphasis-2 bg-emphasis-2/25 py-1 text-[12px] text-center h-[24px] aspect-square rounded-full"
             >
@@ -280,7 +392,7 @@
               {steps[selected_step].title}
             </span>
           </div>
-          <p class="text-subtext">
+          <p class="text-subtext" id="step-content">
             {@html steps[selected_step].description ||
               "Description coming soon..."}
           </p>
@@ -293,15 +405,19 @@
                 <Font />
               {:else if selected_step === 1}
                 <HTTP />
+              {:else if selected_step === 2}
+                <HTML />
+              {:else if selected_step === 3}
+                <Link />
               {/if}
             </div>
           </div>
         </div>
 
-        <div>
+        <div id="step-content">
           {#if steps[selected_step].longDesc}
             <div
-              class="mt-4 p-4 border-t-1 border-emphasis-1/25 rounded-b-lg text-sm"
+              class="mt-4 p-4 border-t-1 border-emphasis-1/25 rounded-b-lg text-sm max-h-16 overflow-y-scroll"
             >
               <p class="text-subtext">
                 {@html steps[selected_step].longDesc}
@@ -310,6 +426,17 @@
           {/if}
         </div>
       </div>
+    </div>
+  </div>
+
+  <div class="h-screen" id="architecture">
+    <div class="h-full py-[5%] flex flex-col">
+      <div class="flex gap-4 items-baseline my-2">
+        <span class="text-emphasis-1">02</span>
+        <div class="w-full bg-emphasis-1 h-0.5"></div>
+      </div>
+      <h1 class="text-emphasis-2 text-6xl my-4">Architecture</h1>
+      <p class="text-subtext">Explore what's inside Harbor Browser.</p>
     </div>
   </div>
 </div>
