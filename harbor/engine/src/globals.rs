@@ -64,7 +64,7 @@ pub const TABS_BAR_OFFSET: fn(f64, f64) -> (f64, f64) = |window_width, window_he
     }
 };
 
-pub const ADDRESS_BAR_OFFSET: fn(f64, f64) -> (f64, f64) = |window_width, window_height| {
+pub const ADDRESS_BAR_OFFSET: fn(f64, f64) -> (f64, f64) = |_window_width, window_height| {
     if TAB_BAR_HORIZONTAL {
         (0.0, (window_height * 0.05).min(50.0))
     } else {
@@ -74,13 +74,14 @@ pub const ADDRESS_BAR_OFFSET: fn(f64, f64) -> (f64, f64) = |window_width, window
 
 // pub const ADDRESS_BAR_ADDRESS_OFFSET: fn(f64, f64) -> (f64, f64) =
 //     |window_width, _window_height| (window_width * 0.1, 0.0);
-pub const ADDRESS_BAR_ADDRESS_OFFSET: fn(f64, f64) -> (f64, f64) = |window_width, window_height| {
-    if TAB_BAR_HORIZONTAL {
-        (window_width * 0.1, 0.0)
-    } else {
-        (window_width * 0.1, 0.0)
-    }
-};
+pub const ADDRESS_BAR_ADDRESS_OFFSET: fn(f64, f64) -> (f64, f64) =
+    |window_width, _window_height| {
+        if TAB_BAR_HORIZONTAL {
+            (window_width * 0.1, 0.0)
+        } else {
+            (window_width * 0.1, 0.0)
+        }
+    };
 
 pub const TOOLBAR_OFFSET: fn(f64, f64) -> (f64, f64) = |window_width, window_height| {
     let tabs_bar_offset = TABS_BAR_OFFSET(window_width, window_height);

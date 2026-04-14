@@ -5,7 +5,7 @@ use crate::js::{
 };
 
 pub fn is_callable(arg: &Value) -> bool {
-    if let Value::Object(obj) = arg {
+    if arg.is_object() {
         todo!("Check if object is callable");
     }
 
@@ -13,7 +13,7 @@ pub fn is_callable(arg: &Value) -> bool {
 }
 
 pub fn is_constructor(arg: &Value) -> bool {
-    if let Value::Object(obj) = arg {
+    if arg.is_object() {
         todo!("Check if object is a constructor");
     }
 
