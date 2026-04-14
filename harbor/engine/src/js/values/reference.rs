@@ -145,7 +145,7 @@ pub fn get_value(
 
 pub fn put_value(
     reference: &mut ReferenceOrValue,
-    value: Value,
+    value: &Value,
 ) -> Result<CompletionRecord<UNUSED>, CompletionRecord<CompletionRecordError, CRKAbrupt>> {
     if let ReferenceOrValue::Value(_) = reference {
         panic!("put_value called on a value");

@@ -18,7 +18,7 @@ pub fn evaluate(update: &UnaryExpression) -> ReferenceOrValue {
             let old_value = to_number(get_value(&lhs).unwrap().value).unwrap().value;
             let new_value = old_value.add(&Number(1.0));
 
-            put_value(&mut lhs, Value::Number(new_value)).unwrap();
+            put_value(&mut lhs, &Value::Number(new_value)).unwrap();
 
             return ReferenceOrValue::Value(Value::Number(old_value));
         }
@@ -29,7 +29,7 @@ pub fn evaluate(update: &UnaryExpression) -> ReferenceOrValue {
             let old_value = to_number(get_value(&lhs).unwrap().value).unwrap().value;
             let new_value = old_value.subtract(&Number(1.0));
 
-            put_value(&mut lhs, Value::Number(new_value)).unwrap();
+            put_value(&mut lhs, &Value::Number(new_value)).unwrap();
 
             return ReferenceOrValue::Value(Value::Number(old_value));
         }
@@ -40,7 +40,7 @@ pub fn evaluate(update: &UnaryExpression) -> ReferenceOrValue {
             let old_value = to_number(get_value(&lhs).unwrap().value).unwrap().value;
             let new_value = old_value.add(&Number(1.0));
 
-            put_value(&mut lhs, Value::Number(new_value)).unwrap();
+            put_value(&mut lhs, &Value::Number(new_value)).unwrap();
 
             return ReferenceOrValue::Value(Value::Number(new_value));
         }
@@ -51,7 +51,7 @@ pub fn evaluate(update: &UnaryExpression) -> ReferenceOrValue {
             let old_value = to_number(get_value(&lhs).unwrap().value).unwrap().value;
             let new_value = old_value.subtract(&Number(1.0));
 
-            put_value(&mut lhs, Value::Number(new_value)).unwrap();
+            put_value(&mut lhs, &Value::Number(new_value)).unwrap();
 
             return ReferenceOrValue::Value(Value::Number(new_value));
         }

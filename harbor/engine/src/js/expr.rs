@@ -1626,14 +1626,14 @@ pub struct AssignmentExpression {
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub union AssignmentExpressionData {
-    _yield: *const YieldExpression,
-    raw_assignment: RawAssignmentData,
-    operator_assignment: OperatorAssignmentExpressionData,
-    ternary: *const TernaryExpression,
-    binary: *const BinaryExpression,
-    unary: *const UnaryExpression,
-    primary: *const PrimaryExpression,
-    lhs: *const LeftHandSideExpression,
+    pub _yield: *const YieldExpression,
+    pub raw_assignment: RawAssignmentData,
+    pub operator_assignment: OperatorAssignmentExpressionData,
+    pub ternary: *const TernaryExpression,
+    pub binary: *const BinaryExpression,
+    pub unary: *const UnaryExpression,
+    pub primary: *const PrimaryExpression,
+    pub lhs: *const LeftHandSideExpression,
 }
 
 pub const ASSIGNMENT_EXPR_CONDITIONAL: u8 = 0;

@@ -8,6 +8,7 @@ use crate::js::{
     values::{ReferenceOrValue, Value, number::Number},
 };
 
+pub mod assignment;
 pub mod binary;
 pub mod identifier;
 pub mod lhs;
@@ -31,20 +32,20 @@ pub enum EvaluateExpressionTag {
 }
 
 pub fn apply_string_or_numeric_binary_operator(
-    left: Value,
-    right: Value,
+    left: &Value,
+    right: &Value,
     operator: BinaryOperator,
 ) -> ReferenceOrValue {
     let (l_val, r_val) = if operator == BinaryOperator::Plus {
         let wrapped_l_prim = to_primitive(&left).unwrap();
         let wrapped_r_prim = to_primitive(&right).unwrap();
 
-        let l_prim = wrapped_l_prim.unwrapped();
-        let r_prim = wrapped_r_prim.unwrapped();
+        let l_prim = wrapped_l_prim.value;
+        let r_prim = wrapped_r_prim.value;
 
         if l_prim.is_string() || r_prim.is_string() {
-            let wrapped_l_str = to_string(l_prim).unwrap();
-            let wrapped_r_str = to_string(r_prim).unwrap();
+            let wrapped_l_str = to_string(&l_prim).unwrap();
+            let wrapped_r_str = to_string(&r_prim).unwrap();
 
             let l_str = wrapped_l_str.unwrapped();
             let r_str = wrapped_r_str.unwrapped();
@@ -52,9 +53,9 @@ pub fn apply_string_or_numeric_binary_operator(
             return ReferenceOrValue::Value(Value::String(l_str.concat(r_str)));
         }
 
-        (l_prim.clone(), r_prim.clone())
+        (l_prim, r_prim)
     } else {
-        (left, right)
+        (left.clone(), right.clone())
     };
 
     // NOTE: This should be to_numeric, not to_number
@@ -70,6 +71,12 @@ pub fn apply_string_or_numeric_binary_operator(
         BinaryOperator::Slash => Number::divide,
         BinaryOperator::Percent => Number::remainder,
         BinaryOperator::Exponentiation => Number::exponentiate,
+        BinaryOperator::LeftShift => Number::left_shift,
+        BinaryOperator::RightShift => Number::signed_right_shift,
+        BinaryOperator::UnsignedRightShift => Number::unsigned_right_shift,
+        BinaryOperator::BitwiseAnd => Number::bitwise_and,
+        BinaryOperator::BitwiseXor => Number::bitwise_xor,
+        BinaryOperator::BitwiseOr => Number::bitwise_or,
         _ => unreachable!(),
     };
 
@@ -87,7 +94,7 @@ pub fn eval_string_or_numeric_bin_expr(
     let left_val = left_ref.get_value().unwrap().value;
     let right_val = right_ref.get_value().unwrap().value;
 
-    apply_string_or_numeric_binary_operator(left_val, right_val, operator)
+    apply_string_or_numeric_binary_operator(&left_val, &right_val, operator)
 }
 
 pub fn general_evaluate(expression: &EvaluateExpressionTag) -> ReferenceOrValue {
