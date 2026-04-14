@@ -87,7 +87,7 @@ pub mod arrays {
     }
 }
 
-pub fn evaluate(primary: PrimaryExpression) -> ReferenceOrValue {
+pub fn evaluate(primary: &PrimaryExpression) -> ReferenceOrValue {
     match primary.tag {
         PRIMARY_EXPR_LITERAL => {
             let literal_data = unsafe { *primary.data.literal };

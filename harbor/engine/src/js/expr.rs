@@ -1074,9 +1074,9 @@ impl Debug for BinaryOrUnaryExpression {
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub union BinaryOrUnaryExpressionData {
-    binary: *const BinaryExpression,
-    unary: *const UnaryExpression,
-    none: (),
+    pub binary: *const BinaryExpression,
+    pub unary: *const UnaryExpression,
+    pub none: (),
 }
 
 pub const BINARY_OR_UNARY_EXPR_BINARY: u8 = 0;
@@ -1106,8 +1106,8 @@ impl Debug for UnaryExpressionOrNull {
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub union UnaryExpressionOrNullData {
-    unary: *const UnaryExpression,
-    none: (),
+    pub unary: *const UnaryExpression,
+    pub none: (),
 }
 
 pub const UNARY_EXPR_OR_NULL_UNARY: u8 = 0;

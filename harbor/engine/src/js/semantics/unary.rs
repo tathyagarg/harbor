@@ -9,11 +9,11 @@ use crate::js::{
     },
 };
 
-pub fn evaluate(update: UnaryExpression) -> ReferenceOrValue {
+pub fn evaluate(update: &UnaryExpression) -> ReferenceOrValue {
     match update.operator {
         UnaryOperator::PostfixIncrement => {
             let operand = unsafe { *(*update.operand).data.lhs };
-            let mut lhs = general_evaluate(EvaluateExpressionTag::LeftHandSideExpression(operand));
+            let mut lhs = general_evaluate(&EvaluateExpressionTag::LeftHandSideExpression(operand));
 
             let old_value = to_number(get_value(&lhs).unwrap().value).unwrap().value;
             let new_value = old_value.add(&Number(1.0));
@@ -24,7 +24,7 @@ pub fn evaluate(update: UnaryExpression) -> ReferenceOrValue {
         }
         UnaryOperator::PostfixDecrement => {
             let operand = unsafe { *(*update.operand).data.lhs };
-            let mut lhs = general_evaluate(EvaluateExpressionTag::LeftHandSideExpression(operand));
+            let mut lhs = general_evaluate(&EvaluateExpressionTag::LeftHandSideExpression(operand));
 
             let old_value = to_number(get_value(&lhs).unwrap().value).unwrap().value;
             let new_value = old_value.subtract(&Number(1.0));
@@ -35,7 +35,7 @@ pub fn evaluate(update: UnaryExpression) -> ReferenceOrValue {
         }
         UnaryOperator::PrefixIncrement => {
             let operand = unsafe { *(*update.operand).data.lhs };
-            let mut lhs = general_evaluate(EvaluateExpressionTag::LeftHandSideExpression(operand));
+            let mut lhs = general_evaluate(&EvaluateExpressionTag::LeftHandSideExpression(operand));
 
             let old_value = to_number(get_value(&lhs).unwrap().value).unwrap().value;
             let new_value = old_value.add(&Number(1.0));
@@ -46,7 +46,7 @@ pub fn evaluate(update: UnaryExpression) -> ReferenceOrValue {
         }
         UnaryOperator::PrefixDecrement => {
             let operand = unsafe { *(*update.operand).data.lhs };
-            let mut lhs = general_evaluate(EvaluateExpressionTag::LeftHandSideExpression(operand));
+            let mut lhs = general_evaluate(&EvaluateExpressionTag::LeftHandSideExpression(operand));
 
             let old_value = to_number(get_value(&lhs).unwrap().value).unwrap().value;
             let new_value = old_value.subtract(&Number(1.0));

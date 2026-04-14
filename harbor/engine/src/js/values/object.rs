@@ -6,7 +6,7 @@ use crate::js::{
         ordinary_get, ordinary_get_own_property, ordinary_set, ordinary_set_prototype_of,
     },
     executable::{
-        agent::{SURROUNDING_AGENT, running_execution_context},
+        agent::SURROUNDING_AGENT,
         context::{
             CodeExecutionContext, ExecutionContext, GenericExecutionContext, ScriptOrModule,
         },
@@ -370,11 +370,11 @@ impl ObjectTrait for OrdinaryObject {
         *res.unwrap().unwrapped()
     }
 
-    fn call(&self, this: &Value, args: Vec<Value>) -> Value {
+    fn call(&self, _this: &Value, _args: Vec<Value>) -> Value {
         panic!("Object is not callable")
     }
 
-    fn construct(&self, args: Vec<Value>, new_target: &Object) -> Object {
+    fn construct(&self, _args: Vec<Value>, _new_target: &Object) -> Object {
         panic!("Object is not a constructor")
     }
 }
@@ -477,11 +477,11 @@ impl ObjectTrait for MiscObject {
         Self::_SET(self, key, value, receiver)
     }
 
-    fn call(&self, this: &Value, args: Vec<Value>) -> Value {
+    fn call(&self, _this: &Value, _args: Vec<Value>) -> Value {
         panic!("MiscObject is not callable")
     }
 
-    fn construct(&self, args: Vec<Value>, new_target: &Object) -> Object {
+    fn construct(&self, _args: Vec<Value>, _new_target: &Object) -> Object {
         panic!("MiscObject is not a constructor")
     }
 }
@@ -699,8 +699,8 @@ pub fn ordinary_call_bind_this(
 }
 
 pub fn ordinary_call_evaluate_body(
-    func: &FunctionObject,
-    args: Vec<Value>,
+    _func: &FunctionObject,
+    _args: Vec<Value>,
 ) -> Result<CompletionRecord<Value, CRKReturn>, CompletionRecord<(), CRKThrow>> {
     todo!()
 }
@@ -755,7 +755,7 @@ impl ObjectTrait for FunctionObject {
         panic!("Function call threw an exception");
     }
 
-    fn construct(&self, args: Vec<Value>, new_target: &Object) -> Object {
+    fn construct(&self, _args: Vec<Value>, _new_target: &Object) -> Object {
         todo!("bleh")
     }
 }

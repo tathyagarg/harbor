@@ -1,6 +1,7 @@
 use std::str::FromStr;
 
 use crate::js::{
+    operations::get_method,
     types::completion_record::{
         CRKThrow, CompletionRecord, CompletionRecordError, CompletionRecordNormal,
         CompletionRecordThrow,
@@ -8,10 +9,37 @@ use crate::js::{
     values::{
         Value,
         number::Number,
-        object::Object,
+        object::{Object, PropertyKey},
         string::{_equals_raw, JsString},
+        symbol::{SYMBOL_TO_PRIMITIVE, Symbol},
     },
 };
+
+pub fn to_primitive(
+    input: &Value,
+) -> Result<CompletionRecord<Value>, CompletionRecord<CompletionRecordError, CRKThrow>> {
+    match input {
+        Value::Object(_) => {
+            let maybe_exotic_to_prim = get_method(
+                input,
+                &PropertyKey::Symbol(Symbol {
+                    id: SYMBOL_TO_PRIMITIVE,
+                    description: None,
+                }),
+            )
+            .unwrap();
+
+            let exotic_to_prim = maybe_exotic_to_prim.unwrapped();
+
+            if exotic_to_prim.is_none() {
+                todo!("to_primitive for object without exotic to_prim method");
+            }
+
+            todo!("to_primitive for object with exotic to_prim method");
+        }
+        _ => return Ok(CompletionRecordNormal(input.clone())),
+    }
+}
 
 pub fn to_boolean(argument: &Value) -> bool {
     match argument {
@@ -86,10 +114,10 @@ pub fn to_uint32(
 }
 
 pub fn to_string(
-    argument: Value,
+    argument: &Value,
 ) -> Result<CompletionRecord<JsString>, CompletionRecord<CompletionRecordError, CRKThrow>> {
     match argument {
-        Value::String(s) => return Ok(CompletionRecordNormal(s)),
+        Value::String(s) => return Ok(CompletionRecordNormal(s.clone())),
         Value::Symbol(_) => {
             return Err(CompletionRecordThrow(CompletionRecordError::TypeError));
         }
@@ -100,7 +128,7 @@ pub fn to_string(
         }
         Value::Null => return Ok(CompletionRecordNormal(JsString::from_str("null").unwrap())),
         Value::Boolean(b) => {
-            if b {
+            if *b {
                 return Ok(CompletionRecordNormal(JsString::from_str("true").unwrap()));
             } else {
                 return Ok(CompletionRecordNormal(JsString::from_str("false").unwrap()));
@@ -136,7 +164,7 @@ pub fn canonical_numeric_index_string(argument: &JsString) -> Option<Number> {
     match n {
         Err(_) => None,
         Ok(CompletionRecord { value, .. }) => {
-            if to_string(Value::Number(value)).unwrap().value == *argument {
+            if to_string(&Value::Number(value)).unwrap().value == *argument {
                 Some(value)
             } else {
                 None

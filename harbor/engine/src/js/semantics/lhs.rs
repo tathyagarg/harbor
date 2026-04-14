@@ -18,7 +18,7 @@ use crate::js::{
     },
 };
 
-pub fn evaluate(lhs: LeftHandSideExpression) -> ReferenceOrValue {
+pub fn evaluate(lhs: &LeftHandSideExpression) -> ReferenceOrValue {
     match lhs.tag {
         LEFT_HAND_SIDE_EXPR_NEW => {
             let new_data = unsafe { *lhs.data.new };
@@ -97,7 +97,7 @@ pub fn evaluate_member(member: &MemberExpression) -> ReferenceOrValue {
     match member.tag {
         MEMBER_EXPR_PRIMARY => {
             let primary_data = unsafe { *member.data.primary };
-            return primary::evaluate(primary_data);
+            return primary::evaluate(&primary_data);
         }
         MEMBER_EXPR_MEMBER => {
             let object_data = unsafe { *member.data.member.object };
@@ -155,7 +155,7 @@ pub fn evaluate_property_access_with_expression_key(
     expression: EvaluateExpressionTag,
     strict: bool,
 ) -> Result<CompletionRecord<Reference>, CompletionRecord<CompletionRecordError, CRKAbrupt>> {
-    let property_name_reference = general_evaluate(expression);
+    let property_name_reference = general_evaluate(&expression);
     let maybe_property_name_value = get_value(&property_name_reference);
 
     if let Err(e) = maybe_property_name_value {
@@ -207,11 +207,11 @@ pub fn evaluate_new(
     let reference = match construct_expr {
         NewOrMember::New(new) => {
             let eval_expr = EvaluateExpressionTag::NewExpression(new);
-            general_evaluate(eval_expr)
+            general_evaluate(&eval_expr)
         }
         NewOrMember::Member(member) => {
             let eval_expr = EvaluateExpressionTag::MemberExpression(member);
-            general_evaluate(eval_expr)
+            general_evaluate(&eval_expr)
         }
     };
 
@@ -248,7 +248,7 @@ pub fn argument_list_evaluation(
 
     for (i, arg) in seq.iter().enumerate() {
         if is_spread_elems[i] {
-            let spread_ref = general_evaluate(EvaluateExpressionTag::AssignmentExpression(*arg));
+            let spread_ref = general_evaluate(&EvaluateExpressionTag::AssignmentExpression(*arg));
             let spread_obj = get_value(&spread_ref)?.value;
 
             let mut iterator_rec = get_iterator(&spread_obj, IteratorKind::Sync).unwrap().value;
@@ -262,7 +262,7 @@ pub fn argument_list_evaluation(
                 }
             }
         } else {
-            let arg_ref = general_evaluate(EvaluateExpressionTag::AssignmentExpression(*arg));
+            let arg_ref = general_evaluate(&EvaluateExpressionTag::AssignmentExpression(*arg));
             let arg_value = get_value(&arg_ref)?.value;
 
             args_list.push(arg_value);

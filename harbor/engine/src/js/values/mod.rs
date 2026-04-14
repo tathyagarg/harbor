@@ -1,5 +1,12 @@
-use crate::js::values::{
-    number::Number, object::Object, reference::Reference, string::JsString, symbol::Symbol,
+use crate::js::{
+    types::completion_record::{CRKAbrupt, CompletionRecord, CompletionRecordError},
+    values::{
+        number::Number,
+        object::Object,
+        reference::{Reference, get_value},
+        string::JsString,
+        symbol::Symbol,
+    },
 };
 
 pub mod number;
@@ -12,11 +19,35 @@ pub enum ReferenceOrValue {
     Value(Value),
 }
 
+impl ReferenceOrValue {
+    pub fn get_value(
+        &self,
+    ) -> Result<CompletionRecord<Value>, CompletionRecord<CompletionRecordError, CRKAbrupt>> {
+        get_value(self)
+    }
+}
+
 pub mod string {
     use std::{ops::Add, str::FromStr};
 
     #[derive(Debug, Clone, Hash, Eq, PartialEq)]
     pub struct JsString(pub Vec<u16>);
+
+    impl JsString {
+        pub fn concat(&self, other: &JsString) -> JsString {
+            let mut combined = self.0.clone();
+            combined.extend(other.0.iter());
+            JsString(combined)
+        }
+
+        pub fn len(&self) -> usize {
+            self.0.len()
+        }
+
+        pub fn code_point_at(&self, index: usize) -> Option<u16> {
+            self.0.get(index).cloned()
+        }
+    }
 
     impl FromStr for JsString {
         type Err = ();
@@ -104,6 +135,8 @@ pub mod symbol {
 
     pub type SymbolId = u64;
 
+    pub const SYMBOL_TO_PRIMITIVE: SymbolId = 0;
+
     #[derive(Debug, Clone, Hash, Eq, PartialEq)]
     pub struct Symbol {
         pub id: SymbolId,
@@ -175,5 +208,33 @@ impl Value {
 
     pub fn is_property_key(&self) -> bool {
         matches!(self, Value::String(_) | Value::Symbol(_))
+    }
+
+    pub fn is_string(&self) -> bool {
+        matches!(self, Value::String(_))
+    }
+
+    pub fn is_null(&self) -> bool {
+        matches!(self, Value::Null)
+    }
+
+    pub fn is_undefined(&self) -> bool {
+        matches!(self, Value::Undefined)
+    }
+
+    pub fn is_number(&self) -> bool {
+        matches!(self, Value::Number(_))
+    }
+
+    pub fn is_boolean(&self) -> bool {
+        matches!(self, Value::Boolean(_))
+    }
+
+    pub fn is_symbol(&self) -> bool {
+        matches!(self, Value::Symbol(_))
+    }
+
+    pub fn is_object(&self) -> bool {
+        matches!(self, Value::Object(_))
     }
 }

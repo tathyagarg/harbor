@@ -21,7 +21,7 @@ pub fn string_value(identifier: IdentifierNameTokenData) -> JsString {
 
 /// RS: Evaluation
 /// https://tc39.es/ecma262/#sec-identifiers-runtime-semantics-evaluation
-pub fn evaluate(identifier: IdentifierNameTokenData) -> ReferenceOrValue {
+pub fn evaluate(identifier: &IdentifierNameTokenData) -> ReferenceOrValue {
     ReferenceOrValue::Reference(
         resolve_binding(JsString(collect_seq(identifier.name)), None)
             .unwrap()
