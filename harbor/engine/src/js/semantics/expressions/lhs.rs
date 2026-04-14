@@ -8,7 +8,7 @@ use crate::js::{
         NEW_EXPR_NEW, NewExpression,
     },
     operations::{IteratorKind, get_iterator, is_constructor, iterator_step_value},
-    semantics::{EvaluateExpressionTag, general_evaluate, identifier, primary},
+    semantics::expressions::{EvaluateExpressionTag, general_evaluate, identifier, primary},
     types::completion_record::{
         CRKAbrupt, CRKNormal, CompletionRecord, CompletionRecordError, CompletionRecordNormal,
     },

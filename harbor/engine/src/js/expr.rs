@@ -1562,8 +1562,8 @@ pub struct UnaryExpressionOrLHS {
     pub data: UnaryExpressionOrLHSData,
 }
 
-const UNARY_EXPR_OR_LHS_UNARY: u8 = 0;
-const UNARY_EXPR_OR_LHS_LHS: u8 = 1;
+pub const UNARY_EXPR_OR_LHS_UNARY: u8 = 0;
+pub const UNARY_EXPR_OR_LHS_LHS: u8 = 1;
 
 impl Debug for UnaryExpressionOrLHS {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
