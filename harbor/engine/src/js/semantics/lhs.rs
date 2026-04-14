@@ -238,7 +238,7 @@ pub fn argument_list_evaluation(
     arguments: Arguments,
 ) -> Result<CompletionRecord<Vec<Value>>, CompletionRecord<CompletionRecordError, CRKAbrupt>> {
     let mut args_list = Vec::<Value>::new();
-    let seq = collect_seq(arguments.arguments);
+    let seq = collect_seq(&arguments.arguments);
 
     let is_spread_elems =
         unsafe { std::slice::from_raw_parts(arguments.is_spread, arguments.arguments.len) }

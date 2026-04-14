@@ -1,4 +1,5 @@
 use crate::js::{
+    collect_seq,
     expr::{
         AssignmentExpression, BinaryExpression, BinaryOperator, Expression,
         IdentifierNameTokenData, LeftHandSideExpression, MemberExpression, NewExpression,
@@ -109,6 +110,19 @@ pub fn general_evaluate(expression: &EvaluateExpressionTag) -> ReferenceOrValue 
         EvaluateExpressionTag::UnaryExpression(expr) => unary::evaluate(expr),
         EvaluateExpressionTag::BinaryExpression(expr) => binary::evaluate(expr),
 
-        _ => todo!("General expression evaluation for tag: {:?}", expression),
+        EvaluateExpressionTag::AssignmentExpression(expr) => assignment::evaluate(expr),
+
+        EvaluateExpressionTag::Expression(expr) => {
+            let exprs = collect_seq(expr);
+            for e in exprs[..exprs.len() - 1].iter() {
+                general_evaluate(&EvaluateExpressionTag::AssignmentExpression(e.clone()));
+            }
+
+            let right_expr = exprs.last().unwrap();
+
+            general_evaluate(&EvaluateExpressionTag::AssignmentExpression(
+                right_expr.clone(),
+            ))
+        }
     }
 }

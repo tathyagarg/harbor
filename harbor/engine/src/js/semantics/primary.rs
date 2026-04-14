@@ -47,7 +47,7 @@ pub mod arrays {
         array_syntax: ArrayLiteral,
         mut next_index: usize,
     ) -> Result<CompletionRecord<usize>, CompletionRecord<CompletionRecordError, CRKAbrupt>> {
-        let elements = collect_seq(array_syntax.elements);
+        let elements = collect_seq(&array_syntax.elements);
         let mut obj = Object::Array(array.clone());
 
         for elem in elements.iter() {

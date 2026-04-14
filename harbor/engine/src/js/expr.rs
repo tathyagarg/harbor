@@ -225,6 +225,18 @@ pub struct Expression {
     pub len: usize,
 }
 
+impl Seq for Expression {
+    type Item = AssignmentExpression;
+
+    fn data(&self) -> *const Self::Item {
+        self.data
+    }
+
+    fn len(&self) -> usize {
+        self.len
+    }
+}
+
 impl Debug for Expression {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let slice = unsafe { std::slice::from_raw_parts(self.data, self.len) };

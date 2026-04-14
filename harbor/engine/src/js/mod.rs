@@ -11,7 +11,7 @@ use expr::{CodePoint, CodePointAtResult, CodePointSeq, TokenSeq, ZigString};
 
 use crate::js::{expr::Seq, values::string::JsString};
 
-pub fn collect_seq<T: Seq>(seq: T) -> Vec<T::Item>
+pub fn collect_seq<T: Seq>(seq: &T) -> Vec<T::Item>
 where
     T::Item: Copy,
 {
@@ -61,13 +61,13 @@ unsafe extern "C" {
 
 pub fn utf16_encode_cp_rs(cp: CodePoint) -> String {
     let zs = unsafe { utf16_encode_cp(cp) };
-    let s = String::from_utf16(&collect_seq(zs)).unwrap();
+    let s = String::from_utf16(&collect_seq(&zs)).unwrap();
     s
 }
 
 pub fn cps_to_string_rs(cps: &[CodePoint]) -> String {
     let zs = unsafe { cps_to_string(cps.as_ptr(), cps.len()) };
-    let s = String::from_utf16(&collect_seq(zs)).unwrap();
+    let s = String::from_utf16(&collect_seq(&zs)).unwrap();
     s
 }
 
@@ -127,7 +127,7 @@ pub fn parse_text_cps_rs(text: &[CodePoint], goal: u8) -> Vec<expr::Token> {
 }
 
 pub fn zs_to_js_string(zs: ZigString) -> JsString {
-    let s = String::from_utf16(&collect_seq(zs)).unwrap();
+    let s = String::from_utf16(&collect_seq(&zs)).unwrap();
     unsafe { free_string(zs) };
     JsString(s.encode_utf16().collect())
 }
