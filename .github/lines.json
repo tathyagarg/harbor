@@ -4,7 +4,7 @@
         ".github/workflows/release.yml": 62,
         ".gitignore": 14,
         "LICENSE": 7,
-        "README.md": 237,
+        "README.md": 179,
         "TODO.md": 12,
         "assets/css/gist1059266.css": 21,
         "assets/html/css001.html": 13,
@@ -328,7 +328,7 @@
         "web/src/routes": 572,
         "web/src/routes/version": 7,
         "web/static": 3,
-        "total": 45698,
+        "total": 45640,
         "ALIASES": {
             "css": 7220,
             "js": 13582,

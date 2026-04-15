@@ -24,7 +24,9 @@ Harbor Browser
 > [!IMPORTANT]
 > If you don't want to build/download the browser, that's fine! Please check out the [screenshots](#screenshots) section to see the browser in action.
 
-## Table of Contents
+<details>
+
+<summary> <h2>Table of Contents</h2> </summary>
 
 - [Install](#install)
 - [Screenshots](#screenshots)
@@ -39,6 +41,8 @@ Harbor Browser
   - [TTF Parser](#ttf-parser)
   - [JavaScript Engine](#javascript-engine)
   - [Renderer](#renderer)
+
+</details>
 
 ## Install
 
@@ -100,68 +104,6 @@ cargo run --release
 
 > [!TIP]
 > Most of these features seem basic but are actually the result of hundreds, if not thousands, of lines of code.
-
-## Pipeline
-This diagram depicts an (incomplete) overview of the browser's pipeline:
-
-```
-┌───────────Font─Reader────────────┐
-│┌────────────────────────────────┐│
-││           Font File            ││
-│└───────────────┬────────────────┘│
-│                │parsing          │
-│┌───────────────▼────────────────┐│
-││┌────────┐ ┌────────┐ ┌────────┐││
-│││        │ │        │ │        │││
-│││ Table: │ │ Table: │ │ More   │││
-│││ (cmap) │ │ (glyf) │ │ Tables │││
-│││        │ │        │ │        │││
-││└────────┘ └───┬────┘ └────────┘││
-│└───────────────┼────────────────┘│
-│┌───────────────▼────────────────┐│
-││                                ││
-││          GLYPH DATA            ││
-││                                ││
-│└────────────────────────────────┘│
-└────────────────┬─────────────────┘
-                 ▼                  
-┌────────────HTTP─Client───────────┐
-│┌─────────────┐   ┌──────────────┐│
-││             │   │              ││
-││             │   │              ││
-││             │   │              ││
-││   REQUEST   ┼───►   RESPONSE   ││
-││             │   │              ││
-││             │   │              ││
-││             │   │              ││
-││             │   │              ││
-│└─────────────┘   └──────────────┘│
-└────────────────┬─────────────────┘
-                 ▼                  
-┌───────────HTML─Parser────────────┐
-│┌────────────────────────────────┐│
-││         HTML Document          ││
-│└───────────────┬────────────────┘│
-│                ▼                 │
-│┌DOM─────────────────────────────┐│
-││┌html──────────────────────────┐││
-│││┌head────────────────────────┐│││
-││││┌meta───┐┌title┐┌etc..─────┐││││
-│││││charset││.....││          │││││
-││││└───────┘└─────┘└──────────┘││││
-│││└────────────────────────────┘│││
-│││┌body────────────────────────┐│││
-││││┌h1────────────────────────┐││││
-│││││Heading stuff             │││││
-││││└──────────────────────────┘││││
-││││┌p─────────────────────────┐││││
-│││││Paragraph Stuff           │││││
-││││└──────────────────────────┘││││
-│││└────────────────────────────┘│││
-││└──────────────────────────────┘││
-│└────────────────────────────────┘│
-└──────────────────────────────────┘
-```
 
 ## Components
 Harbor is comprised of 6 main components:
@@ -228,7 +170,7 @@ The CSS parser processes the CSS stylesheets associated with the webpage. It par
 The TTF (TrueType Font) parser is responsible for parsing font files to extract glyph information. This allows the browser to render text using the correct fonts specified in the CSS. This enables me to render text manually from glyphs, which is a fun challenge.
 
 ### JavaScript Engine
-The JavaScript engine executes JavaScript code embedded in web pages. WIP
+The JavaScript engine executes JavaScript code embedded in web pages. Currently it can evaluate simple expressions and some statements.
 
 ### Renderer
 The renderer takes the structured data from the HTML and CSS parsers and renders it onto the screen. It uses the `wgpu` library for GPU-accelerated rendering and `winit` for window management. The renderer is responsible for drawing all visual elements of the webpage. The renderer uses ear clipping to render glyphs from contours into filled triangles[^2]
