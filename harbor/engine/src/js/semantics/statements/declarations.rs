@@ -7,6 +7,7 @@ use crate::js::{
 };
 
 pub fn evaluate(declaration: &LexicalDeclaration) {
+    println!("Evaluating lexical declaration: {}", declaration);
     let binding_list = collect_seq(&declaration.bindings);
     evaluate_binding_list(&binding_list);
 }

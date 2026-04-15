@@ -2,8 +2,10 @@ pub mod behaviours;
 pub mod executable;
 pub mod expr;
 pub mod operations;
+pub mod script;
 pub mod semantics;
 pub mod stmt;
+pub mod syntax;
 pub mod types;
 pub mod values;
 
@@ -56,7 +58,7 @@ unsafe extern "C" {
     pub fn free_code_point_seq(cps: CodePointSeq);
     pub fn free_token_seq(tokens: TokenSeq);
 
-    pub fn parse_script(text: ZigString) -> stmt::Script;
+    pub fn parse_text(text: ZigString) -> stmt::Script;
 }
 
 pub fn utf16_encode_cp_rs(cp: CodePoint) -> String {
@@ -128,6 +130,5 @@ pub fn parse_text_cps_rs(text: &[CodePoint], goal: u8) -> Vec<expr::Token> {
 
 pub fn zs_to_js_string(zs: ZigString) -> JsString {
     let s = String::from_utf16(&collect_seq(&zs)).unwrap();
-    unsafe { free_string(zs) };
     JsString(s.encode_utf16().collect())
 }

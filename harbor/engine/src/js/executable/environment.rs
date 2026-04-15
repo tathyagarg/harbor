@@ -41,7 +41,7 @@ pub enum EnvironmentRecordKind {
     Global {
         object: ObjectEnvironmentRecord,
         global_this_value: Rc<RefCell<Object>>,
-        declarative_record: Rc<EnvironmentRecord>,
+        declarative_record: Rc<RefCell<EnvironmentRecord>>,
     },
 }
 
@@ -84,7 +84,7 @@ impl EnvironmentRecord {
             }
             EnvironmentRecordKind::Global {
                 declarative_record, ..
-            } => declarative_record.has_binding(name),
+            } => declarative_record.borrow().has_binding(name),
             _ => todo!(
                 "has_binding is only implemented for declarative environment records, not {:?} (for binding: {:?})",
                 self.kind,
@@ -126,7 +126,7 @@ impl EnvironmentRecord {
         name: JsString,
         strict: bool,
     ) -> Result<CompletionRecord<UNUSED>, CompletionRecord<UNUSED, CRKThrow>> {
-        match self.kind {
+        match &self.kind {
             EnvironmentRecordKind::Declarative => {
                 if self.bindings.contains_key(&name) {
                     return Err(CompletionRecordThrow(()));
@@ -145,6 +145,11 @@ impl EnvironmentRecord {
 
                 Ok(CompletionRecordNormal(()))
             }
+            EnvironmentRecordKind::Global {
+                declarative_record, ..
+            } => declarative_record
+                .borrow_mut()
+                .create_immutable_binding(name, strict),
             _ => todo!(),
         }
     }
@@ -154,7 +159,7 @@ impl EnvironmentRecord {
         name: JsString,
         value: &Value,
     ) -> Result<CompletionRecord<UNUSED>, CompletionRecord<UNUSED, CRKThrow>> {
-        match self.kind {
+        match &self.kind {
             EnvironmentRecordKind::Declarative => {
                 if !self.bindings.contains_key(&name) {
                     return Err(CompletionRecordThrow(()));
@@ -170,6 +175,11 @@ impl EnvironmentRecord {
 
                 Ok(CompletionRecordNormal(()))
             }
+            EnvironmentRecordKind::Global {
+                declarative_record, ..
+            } => declarative_record
+                .borrow_mut()
+                .initialize_binding(name, value),
             _ => todo!(),
         }
     }
@@ -204,7 +214,7 @@ impl EnvironmentRecord {
         name: JsString,
         strict: bool,
     ) -> Result<CompletionRecord<Value>, CompletionRecord<CompletionRecordError, CRKThrow>> {
-        match self.kind {
+        match &self.kind {
             EnvironmentRecordKind::Declarative => {
                 if !self.bindings.contains_key(&name) {
                     if strict {
@@ -221,6 +231,9 @@ impl EnvironmentRecord {
 
                 Ok(CompletionRecordNormal(binding.value.clone()))
             }
+            EnvironmentRecordKind::Global {
+                declarative_record, ..
+            } => declarative_record.borrow().get_binding_value(name, strict),
             _ => todo!(),
         }
     }
@@ -349,7 +362,7 @@ pub fn new_global_environment(
         kind: EnvironmentRecordKind::Global {
             object: obj_rec,
             global_this_value: this_value.clone(),
-            declarative_record: Rc::new(dcl_rec),
+            declarative_record: Rc::new(RefCell::new(dcl_rec)),
         },
     }
 }

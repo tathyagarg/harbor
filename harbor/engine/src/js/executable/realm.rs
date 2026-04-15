@@ -1,9 +1,9 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, ops::Deref, rc::Rc};
 
 use crate::js::{
     behaviours::ordinary_object_create,
     executable::{
-        agent::{AgentSignifier, agent_signifier},
+        agent::{AgentSignifier, agent_signifier, running_execution_context},
         context::{
             CodeExecutionContext, ExecutionContext, GenericExecutionContext, push_execution_context,
         },
@@ -33,6 +33,18 @@ pub struct Realm {
     pub loaded_modules: Vec<()>,
 
     pub host_defined: (),
+}
+
+pub fn current_realm() -> Rc<RefCell<Realm>> {
+    let ec = running_execution_context();
+    if let Some(ec) = ec {
+        match ec.deref() {
+            ExecutionContext::Generic(generic) => generic.realm.clone(),
+            ExecutionContext::Code(code) => code.execution_context.realm.clone(),
+        }
+    } else {
+        panic!("No current execution context found");
+    }
 }
 
 pub fn initialize_host_defined_realm()

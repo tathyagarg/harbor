@@ -139,10 +139,33 @@ pub struct SeqStatementOrDeclaration {
     pub len: usize,
 }
 
+impl Seq for SeqStatementOrDeclaration {
+    type Item = StatementOrDeclaration;
+
+    fn len(&self) -> usize {
+        self.len
+    }
+
+    fn data(&self) -> *const Self::Item {
+        self.items
+    }
+}
+
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Script {
     pub body: SeqStatementOrDeclaration,
+}
+
+impl Display for Script {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let items = unsafe { std::slice::from_raw_parts(self.body.items, self.body.len) };
+        write!(f, "Script {{\n")?;
+        for item in items {
+            write!(f, "  {},\n", item)?;
+        }
+        write!(f, "}}")
+    }
 }
 
 #[repr(C)]
@@ -411,8 +434,8 @@ impl Display for LexicalDeclaration {
 
         write!(
             f,
-            "LexicalDeclaration {{ is_const: {}, bindings: [\n",
-            self.is_const
+            "LexicalDeclaration {{ is_const: {}, len: {}, bindings: [\n",
+            self.is_const, self.bindings.len
         )?;
         for binding in bindings {
             write!(f, "  {},\n", binding)?;
@@ -443,6 +466,18 @@ impl Display for BlockStatement {
 pub struct SeqLexicalDeclaration {
     pub items: *const LexicalDeclaration,
     pub len: usize,
+}
+
+impl Seq for SeqLexicalDeclaration {
+    type Item = LexicalDeclaration;
+
+    fn len(&self) -> usize {
+        self.len
+    }
+
+    fn data(&self) -> *const Self::Item {
+        self.items
+    }
 }
 
 #[repr(C)]

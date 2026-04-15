@@ -25,7 +25,7 @@ fn is_keyword(data: *CommonTokenData, keyword: []const u8) bool {
         testing.are_equal_strings_pure(identifier_data.name, keyword);
 }
 
-pub fn parse_script(parser: *Parser) error{ UnexpectedEndOfTokens, OutOfMemory }!*stmt.Script {
+pub fn parse_text(parser: *Parser) error{ UnexpectedEndOfTokens, OutOfMemory }!*stmt.Script {
     var body = std.ArrayList(stmt.StatementOrDeclaration).empty;
     defer body.deinit(parser.allocator);
 
@@ -51,7 +51,7 @@ pub fn parse_script(parser: *Parser) error{ UnexpectedEndOfTokens, OutOfMemory }
 }
 
 test "parse basic script" {
-    const result = try get_parse_result(stmt.Script, parse_script, "let a;");
+    const result = try get_parse_result(stmt.Script, parse_text, "let a;");
 
     std.debug.assert(result.body.len == 1);
     std.debug.assert(result.body.data[0].tag == stmt.STATEMENT_OR_DECLARATION_DECLARATION);

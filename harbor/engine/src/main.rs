@@ -1,4 +1,15 @@
+use std::str::FromStr;
 use std::{cell::RefCell, rc::Rc};
+
+use crate::js::stmt::STATEMENT_OR_DECLARATION_DECLARATION;
+
+use crate::js::collect_seq;
+
+use crate::js::executable::agent::running_execution_context;
+use crate::js::script::global_declaration_instantiation;
+use crate::js::stmt::DECLARATION_LEXICAL_DECLARATION;
+use crate::js::values::string::JsString;
+use crate::js::{executable::realm::current_realm, script::parse_script};
 
 use crate::js::{
     executable::{
@@ -30,6 +41,8 @@ pub mod user_agent;
 fn main() {
     env_logger::init();
 
+    let text = r#"const a = 1 + 2;"#;
+
     SURROUNDING_AGENT.with(|cell| {
         *cell.borrow_mut() = Some(Rc::new(RefCell::new(Agent {
             execution_context_stack: Vec::new(),
@@ -50,21 +63,41 @@ fn main() {
         initialize_host_defined_realm().unwrap();
     });
 
-    let text = r#"const a = 1 + 2 + 3;"#;
-    let text_utf16: Vec<u16> = text.encode_utf16().collect();
-
-    let zig_string = js::expr::ZigString {
-        data: text_utf16.as_ptr(),
-        len: text.len(),
-    };
-
     unsafe {
-        let script = js::parse_script(zig_string);
+        let script = parse_script(text, current_realm());
+        println!("Script: {}", script.ecma_script_code);
 
-        let slice = std::slice::from_raw_parts(script.body.items, script.body.len);
+        global_declaration_instantiation(
+            &script.ecma_script_code,
+            current_realm()
+                .borrow()
+                .global_env
+                .as_ref()
+                .unwrap()
+                .clone(),
+        );
+
+        println!("Script 2: {}", script.ecma_script_code);
+
+        let slice = collect_seq(&script.ecma_script_code.body);
+
+        for item in &slice {
+            println!("Item: {}", item);
+        }
+
         let stmt = *(*slice[0].data.declaration).data.lex_decl;
-
         statements::declarations::evaluate(&stmt);
+
+        let test = JsString::from_str("a").unwrap();
+        let env = current_realm()
+            .borrow()
+            .global_env
+            .as_ref()
+            .unwrap()
+            .clone();
+
+        let res = env.borrow().get_binding_value(test, false).unwrap().value;
+        println!("Value of a: {:?}", res);
 
         // let bindings = (*(*slice[0].data.declaration).data.lex_decl).bindings;
         // let bindings_slice = std::slice::from_raw_parts(bindings.items, bindings.len);
@@ -78,8 +111,6 @@ fn main() {
         // .value;
 
         // println!("Evaluated value: {:?}", evaluated);
-
-        js::free_string(zig_string);
     }
 
     // let ua = Agent::new();
