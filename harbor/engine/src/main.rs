@@ -29,9 +29,12 @@ pub mod user_agent;
 fn main() {
     env_logger::init();
 
-    let text = r#"const a = 1 + 2;
-let b = a * 2;
-b++;
+    let text = r#"let b;
+if (1 == 2) {
+    let a = 1;
+} else {
+    b = 2;
+}
 "#;
     println!("Running script:\n{}\n", text);
 

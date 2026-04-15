@@ -64,7 +64,7 @@ pub struct EnvironmentRecord {
     /// > An Environment Record may serve as the outer environment for multiple inner Environment Records
     /// [^]: https://tc39.es/ecma262/#sec-environment-records
     /// Such a structure is not possible with Box, but Rc allows for multiple ownership.
-    pub outer_env: Option<Rc<EnvironmentRecord>>,
+    pub outer_env: Option<Rc<RefCell<EnvironmentRecord>>>,
 
     pub kind: EnvironmentRecordKind,
 
@@ -275,7 +275,7 @@ impl EnvironmentRecord {
 
 pub fn get_identifier_reference(
     name: JsString,
-    env: Option<EnvironmentRecord>,
+    env: Option<Rc<RefCell<EnvironmentRecord>>>,
     strict: bool,
 ) -> Result<CompletionRecord<Reference>, CompletionRecord<(), CRKThrow>> {
     match env {
@@ -286,7 +286,7 @@ pub fn get_identifier_reference(
             this_value: None,
         })),
         Some(env) => {
-            let exists = env.has_binding(name.clone())?;
+            let exists = env.borrow().has_binding(name.clone())?;
             if exists.value {
                 Ok(CompletionRecordNormal(Reference {
                     base: ReferenceBase::EnvironmentRecord(env),
@@ -295,20 +295,18 @@ pub fn get_identifier_reference(
                     this_value: None,
                 }))
             } else {
-                get_identifier_reference(
-                    name,
-                    env.outer_env.clone().map(|rc| (*rc).clone()),
-                    strict,
-                )
+                get_identifier_reference(name, env.borrow().outer_env.clone(), strict)
             }
         }
     }
 }
 
-pub fn new_declarative_environment(outer_env: Option<EnvironmentRecord>) -> EnvironmentRecord {
+pub fn new_declarative_environment(
+    outer_env: Option<Rc<RefCell<EnvironmentRecord>>>,
+) -> EnvironmentRecord {
     EnvironmentRecord {
         bindings: HashMap::new(),
-        outer_env: outer_env.map(|env| Rc::new(env)),
+        outer_env,
         kind: EnvironmentRecordKind::Declarative,
     }
 }
@@ -316,11 +314,11 @@ pub fn new_declarative_environment(outer_env: Option<EnvironmentRecord>) -> Envi
 pub fn new_object_environment(
     obj: &Rc<RefCell<Object>>,
     is_with_environment: bool,
-    outer_env: Option<EnvironmentRecord>,
+    outer_env: Option<Rc<RefCell<EnvironmentRecord>>>,
 ) -> EnvironmentRecord {
     EnvironmentRecord {
         bindings: HashMap::new(),
-        outer_env: outer_env.map(|env| Rc::new(env)),
+        outer_env,
         kind: EnvironmentRecordKind::Object(ObjectEnvironmentRecord {
             object: obj.clone(),
             is_with_environment,
@@ -333,7 +331,7 @@ pub fn new_function_environment(
     new_target: Option<Object>,
 ) -> EnvironmentRecord {
     EnvironmentRecord {
-        outer_env: Some(Rc::new(func.environment.clone())),
+        outer_env: Some(Rc::new(RefCell::new(func.environment.clone()))),
         kind: EnvironmentRecordKind::Function {
             function_object: Rc::new(func.clone()),
             this_binding_status: if matches!(func.this_mode, ThisMode::Lexical) {

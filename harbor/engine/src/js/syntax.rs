@@ -48,7 +48,29 @@ pub fn lexically_declared_names_script(script: &Script) -> Vec<JsString> {
     return top_level_lexically_declared_names_script(&script.body);
 }
 
-pub fn lexically_scoped_declarations(script: &Script) -> Vec<Declaration> {
+pub fn lexically_scope_declarations_stmt_lis(list: &SeqStatementOrDeclaration) -> Vec<Declaration> {
+    let mut decls = Vec::new();
+    let slice = collect_seq(list);
+
+    for stmt in slice {
+        match stmt.tag {
+            STATEMENT_OR_DECLARATION_STATEMENT => {}
+            STATEMENT_OR_DECLARATION_DECLARATION => {
+                let decl = unsafe { stmt.data.declaration };
+                let decl = unsafe { &*decl };
+
+                if decl.tag == DECLARATION_LEXICAL_DECLARATION {
+                    decls.push(*decl);
+                }
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    decls
+}
+
+pub fn lexically_scoped_declarations_script(script: &Script) -> Vec<Declaration> {
     let mut decls = Vec::new();
     let slice = collect_seq(&script.body);
 

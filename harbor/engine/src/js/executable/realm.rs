@@ -38,7 +38,7 @@ pub struct Realm {
 pub fn current_realm() -> Rc<RefCell<Realm>> {
     let ec = running_execution_context();
     if let Some(ec) = ec {
-        match ec.deref() {
+        match ec.borrow().deref() {
             ExecutionContext::Generic(generic) => generic.realm.clone(),
             ExecutionContext::Code(code) => code.execution_context.realm.clone(),
         }
@@ -71,7 +71,7 @@ pub fn initialize_host_defined_realm()
         &global, &global,
     ))));
 
-    let ec = Rc::new(ExecutionContext::Code(CodeExecutionContext {
+    let ec = Rc::new(RefCell::new(ExecutionContext::Code(CodeExecutionContext {
         execution_context: GenericExecutionContext {
             function: None,
             realm: realm.clone(),
@@ -79,7 +79,7 @@ pub fn initialize_host_defined_realm()
         },
         lexical_env: realm.borrow().global_env.as_ref().unwrap().clone(),
         variable_env: realm.borrow().global_env.as_ref().unwrap().clone(),
-    }));
+    })));
 
     push_execution_context(ec);
 

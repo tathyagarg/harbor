@@ -4,7 +4,7 @@ use crate::js::{
     executable::{environment::EnvironmentRecord, realm::Realm},
     expr::ZigString,
     stmt::Script,
-    syntax::{bound_names_declaration, is_constant_decl, lexically_scoped_declarations},
+    syntax::{bound_names_declaration, is_constant_decl, lexically_scoped_declarations_script},
 };
 
 pub struct ScriptRecord {
@@ -35,7 +35,7 @@ pub fn global_declaration_instantiation(script: &Script, env: Rc<RefCell<Environ
     // let lex_names = lexically_declared_names_script(script);
     // let var_names = var_declared_names_script(script);
 
-    let lex_decls = lexically_scoped_declarations(script);
+    let lex_decls = lexically_scoped_declarations_script(script);
 
     for decl in lex_decls {
         for name in bound_names_declaration(&decl) {

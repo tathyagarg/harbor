@@ -640,7 +640,7 @@ impl Debug for FunctionObject {
 pub fn prepare_for_ordinary_call(
     func: &FunctionObject,
     new_target: Option<Object>,
-) -> Rc<ExecutionContext> {
+) -> Rc<RefCell<ExecutionContext>> {
     let local_env = Rc::new(RefCell::new(new_function_environment(func, new_target)));
 
     let callee_context = CodeExecutionContext {
@@ -653,7 +653,7 @@ pub fn prepare_for_ordinary_call(
         variable_env: local_env,
     };
 
-    let ec = Rc::new(ExecutionContext::Code(callee_context));
+    let ec = Rc::new(RefCell::new(ExecutionContext::Code(callee_context)));
 
     SURROUNDING_AGENT.with(|agent| {
         if let Some(agent) = agent.borrow().as_ref() {
@@ -668,7 +668,7 @@ pub fn prepare_for_ordinary_call(
 
 pub fn ordinary_call_bind_this(
     func: &FunctionObject,
-    callee_context: Rc<ExecutionContext>,
+    callee_context: Rc<RefCell<ExecutionContext>>,
     this_arg: &Value,
 ) -> UNUSED {
     let this_mode = func.this_mode;
@@ -677,7 +677,7 @@ pub fn ordinary_call_bind_this(
     }
 
     let callee_realm = func.realm.clone();
-    let local_env = callee_context.lexical_env().unwrap();
+    let local_env = callee_context.borrow().lexical_env().unwrap();
 
     let this_value = if let ThisMode::Strict = this_mode {
         this_arg.clone()

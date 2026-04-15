@@ -1,3 +1,5 @@
+use std::{cell::RefCell, rc::Rc};
+
 use crate::js::{
     executable::environment::EnvironmentRecord,
     operations::to_object,
@@ -14,7 +16,7 @@ use crate::js::{
 pub enum ReferenceBase {
     Unresolvable,
     Value(Value),
-    EnvironmentRecord(EnvironmentRecord),
+    EnvironmentRecord(Rc<RefCell<EnvironmentRecord>>),
 }
 
 #[derive(Debug, Clone)]
@@ -138,7 +140,7 @@ pub fn get_value(
         _ => unreachable!(),
     };
 
-    let res = base_env.get_binding_value(name, reference.strict);
+    let res = base_env.borrow().get_binding_value(name, reference.strict);
 
     match res {
         Ok(rec) => return Ok(rec),
@@ -216,16 +218,17 @@ pub fn put_value(
         _ => unreachable!(),
     };
 
-    env.set_mutable_binding(
-        reference
-            .referenced_name
-            .unwrap_value()
-            .unwrap_string()
-            .unwrap(),
-        value.clone(),
-        reference.strict,
-    )
-    .unwrap();
+    env.borrow_mut()
+        .set_mutable_binding(
+            reference
+                .referenced_name
+                .unwrap_value()
+                .unwrap_string()
+                .unwrap(),
+            value.clone(),
+            reference.strict,
+        )
+        .unwrap();
 
     return Ok(CompletionRecordNormal(()));
 }
@@ -245,7 +248,7 @@ pub fn initialize_referenced_binding(
     reference: &mut Reference,
     value: &Value,
 ) -> Result<CompletionRecord<UNUSED>, CompletionRecord<CompletionRecordError, CRKAbrupt>> {
-    let base = &mut reference.base;
+    let base = &reference.base;
     assert!(
         matches!(base, ReferenceBase::EnvironmentRecord(_)),
         "initialize_referenced_binding called on a non-environment record reference: {:?}",
@@ -258,6 +261,7 @@ pub fn initialize_referenced_binding(
     };
 
     return env
+        .borrow_mut()
         .initialize_binding(
             reference
                 .referenced_name
