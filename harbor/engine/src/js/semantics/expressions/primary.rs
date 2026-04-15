@@ -1,7 +1,5 @@
 use crate::js::{
-    executable::context::resolve_binding,
     expr::{PRIMARY_EXPR_ARRAY, PRIMARY_EXPR_IDENTIFIER, PRIMARY_EXPR_LITERAL, PrimaryExpression},
-    semantics::expressions::identifier::string_value,
     values::ReferenceOrValue,
 };
 

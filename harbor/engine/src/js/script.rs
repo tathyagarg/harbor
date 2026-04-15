@@ -4,10 +4,7 @@ use crate::js::{
     executable::{environment::EnvironmentRecord, realm::Realm},
     expr::ZigString,
     stmt::Script,
-    syntax::{
-        bound_names_declaration, is_constant_decl, lexically_declared_names_script,
-        lexically_scoped_declarations, var_declared_names_script,
-    },
+    syntax::{bound_names_declaration, is_constant_decl, lexically_scoped_declarations},
 };
 
 pub struct ScriptRecord {

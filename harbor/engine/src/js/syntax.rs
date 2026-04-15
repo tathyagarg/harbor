@@ -75,7 +75,7 @@ pub fn var_declared_names_script(script: &Script) -> Vec<JsString> {
 }
 
 /// TODO: I haven't implemented parsing of var declarations
-pub fn var_declared_names_statement(stmt: &Statement) -> Vec<JsString> {
+pub fn var_declared_names_statement(_stmt: &Statement) -> Vec<JsString> {
     vec![]
 
     // let mut names = Vec::new();

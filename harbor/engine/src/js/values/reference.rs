@@ -266,7 +266,7 @@ pub fn initialize_referenced_binding(
                 .unwrap(),
             value,
         )
-        .map_err(|e| CompletionRecord {
+        .map_err(|_| CompletionRecord {
             kind: CRKAbrupt::Throw,
             value: CompletionRecordError::Misc(format!(
                 "Failed to initialize binding: {:?}",
