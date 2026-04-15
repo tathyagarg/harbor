@@ -556,9 +556,9 @@ pub struct IdentifierReference {
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub union IdentifierReferenceData {
-    identifier: *const IdentifierNameTokenData,
-    _yield: (),
-    _await: (),
+    pub identifier: *const IdentifierNameTokenData,
+    pub _yield: (),
+    pub _await: (),
 }
 
 pub const IDENTIFIER_REF_IDENTIFIER: u8 = 0;

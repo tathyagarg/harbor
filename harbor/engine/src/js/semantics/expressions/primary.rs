@@ -1,5 +1,7 @@
 use crate::js::{
-    expr::{PRIMARY_EXPR_ARRAY, PRIMARY_EXPR_LITERAL, PrimaryExpression},
+    executable::context::resolve_binding,
+    expr::{PRIMARY_EXPR_ARRAY, PRIMARY_EXPR_IDENTIFIER, PRIMARY_EXPR_LITERAL, PrimaryExpression},
+    semantics::expressions::identifier::string_value,
     values::ReferenceOrValue,
 };
 
@@ -96,6 +98,10 @@ pub fn evaluate(primary: &PrimaryExpression) -> ReferenceOrValue {
         PRIMARY_EXPR_ARRAY => {
             let array_data = unsafe { *primary.data.array };
             return arrays::evaluate(array_data);
+        }
+        PRIMARY_EXPR_IDENTIFIER => {
+            let identifier_data = unsafe { *(*primary.data.identifier).data.identifier };
+            return super::identifier::evaluate(&identifier_data);
         }
         _ => todo!("Implement evaluation of primaries of tag {}", primary.tag),
     }

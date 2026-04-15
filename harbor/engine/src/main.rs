@@ -1,32 +1,20 @@
 use std::str::FromStr;
 use std::{cell::RefCell, rc::Rc};
 
-use crate::js::stmt::STATEMENT_OR_DECLARATION_DECLARATION;
-
 use crate::js::collect_seq;
-
-use crate::js::executable::agent::running_execution_context;
 use crate::js::script::global_declaration_instantiation;
-use crate::js::stmt::DECLARATION_LEXICAL_DECLARATION;
 use crate::js::values::string::JsString;
 use crate::js::{executable::realm::current_realm, script::parse_script};
 
 use crate::js::{
     executable::{
         agent::{Agent, AgentRecord, SURROUNDING_AGENT},
-        context::{CodeExecutionContext, ExecutionContext, GenericExecutionContext},
-        realm::{Realm, initialize_host_defined_realm},
+        realm::initialize_host_defined_realm,
     },
     semantics::statements,
 };
 
-use crate::{
-    js::{
-        executable::environment::EnvironmentRecord, semantics::expressions::EvaluateExpressionTag,
-    },
-    render::App,
-    user_agent::Agent as UAgent,
-};
+use crate::{render::App, user_agent::Agent as UAgent};
 
 pub mod css;
 pub mod font;
@@ -41,8 +29,9 @@ pub mod user_agent;
 fn main() {
     env_logger::init();
 
-    let text = r#"const a = 1 + 2;"#;
-    println!("Running script:\n {}\n", text);
+    let text = r#"const a = 1 + 2;
+const b = a * 2;"#;
+    println!("Running script:\n{}\n", text);
 
     SURROUNDING_AGENT.with(|cell| {
         *cell.borrow_mut() = Some(Rc::new(RefCell::new(Agent {
@@ -64,48 +53,34 @@ fn main() {
         initialize_host_defined_realm().unwrap();
     });
 
-    unsafe {
-        let script = parse_script(text, current_realm());
+    let script = parse_script(text, current_realm());
 
-        global_declaration_instantiation(
-            &script.ecma_script_code,
-            current_realm()
-                .borrow()
-                .global_env
-                .as_ref()
-                .unwrap()
-                .clone(),
-        );
-
-        let slice = collect_seq(&script.ecma_script_code.body);
-
-        let stmt = *(*slice[0].data.declaration).data.lex_decl;
-        statements::declarations::evaluate(&stmt);
-
-        let test = JsString::from_str("a").unwrap();
-        let env = current_realm()
+    global_declaration_instantiation(
+        &script.ecma_script_code,
+        current_realm()
             .borrow()
             .global_env
             .as_ref()
             .unwrap()
-            .clone();
+            .clone(),
+    );
 
-        let res = env.borrow().get_binding_value(test, false).unwrap().value;
-        println!("Value of a: {:?}", res);
+    let slice = collect_seq(&script.ecma_script_code.body);
 
-        // let bindings = (*(*slice[0].data.declaration).data.lex_decl).bindings;
-        // let bindings_slice = std::slice::from_raw_parts(bindings.items, bindings.len);
-        // let binding_val = (*bindings_slice[0].initializer).value.value;
-
-        // let evaluated = js::semantics::expressions::expression_evaluate(
-        //     &EvaluateExpressionTag::AssignmentExpression(binding_val),
-        // )
-        // .get_value()
-        // .unwrap()
-        // .value;
-
-        // println!("Evaluated value: {:?}", evaluated);
+    for stmt in slice.iter() {
+        statements::statement_or_declaration_evaluate(stmt);
     }
+
+    let test = JsString::from_str("b").unwrap();
+    let env = current_realm()
+        .borrow()
+        .global_env
+        .as_ref()
+        .unwrap()
+        .clone();
+
+    let res = env.borrow().get_binding_value(test, false).unwrap().value;
+    println!("Value of b: {:?}", res);
 
     // let ua = Agent::new();
     // let mut app = App::new(
