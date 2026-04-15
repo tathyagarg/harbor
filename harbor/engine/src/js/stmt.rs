@@ -1,6 +1,6 @@
 use std::fmt::{Debug, Display};
 
-use crate::js::expr::{AssignmentExpression, Expression, IdentifierNameTokenData};
+use crate::js::expr::{AssignmentExpression, Expression, IdentifierNameTokenData, Seq};
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -383,6 +383,18 @@ impl Display for LexicalBinding {
 pub struct SeqLexicalBinding {
     pub items: *const LexicalBinding,
     pub len: usize,
+}
+
+impl Seq for SeqLexicalBinding {
+    type Item = LexicalBinding;
+
+    fn len(&self) -> usize {
+        self.len
+    }
+
+    fn data(&self) -> *const Self::Item {
+        self.items
+    }
 }
 
 #[repr(C)]

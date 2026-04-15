@@ -5,7 +5,7 @@ use crate::js::{
     },
     operations::{is_less_than, is_loosely_equal, is_strictly_equal, to_boolean},
     semantics::expressions::{
-        EvaluateExpressionTag, eval_string_or_numeric_bin_expr, general_evaluate,
+        EvaluateExpressionTag, eval_string_or_numeric_bin_expr, expression_evaluate,
     },
     values::{ReferenceOrValue, Value},
 };
@@ -48,47 +48,47 @@ pub fn evaluate(exp: &BinaryExpression) -> ReferenceOrValue {
         | BinaryOperator::BitwiseXor
         | BinaryOperator::BitwiseOr => eval_string_or_numeric_bin_expr(&left, &right, exp.operator),
         BinaryOperator::LogicalAnd => {
-            let left_ref = general_evaluate(&left);
+            let left_ref = expression_evaluate(&left);
             let left_val = left_ref.get_value().unwrap().value;
 
             if !to_boolean(&left_val) {
                 return ReferenceOrValue::Value(left_val);
             }
 
-            let right_ref = general_evaluate(&right);
+            let right_ref = expression_evaluate(&right);
             let right_val = right_ref.get_value().unwrap().value;
 
             ReferenceOrValue::Value(right_val)
         }
         BinaryOperator::LogicalOr => {
-            let left_ref = general_evaluate(&left);
+            let left_ref = expression_evaluate(&left);
             let left_val = left_ref.get_value().unwrap().value;
 
             if to_boolean(&left_val) {
                 return ReferenceOrValue::Value(left_val);
             }
 
-            let right_ref = general_evaluate(&right);
+            let right_ref = expression_evaluate(&right);
             let right_val = right_ref.get_value().unwrap().value;
 
             ReferenceOrValue::Value(right_val)
         }
         BinaryOperator::NullishCoalescing => {
-            let left_ref = general_evaluate(&left);
+            let left_ref = expression_evaluate(&left);
             let left_val = left_ref.get_value().unwrap().value;
 
             if !left_val.is_null() && !left_val.is_undefined() {
                 return ReferenceOrValue::Value(left_val);
             }
 
-            let right_ref = general_evaluate(&right);
+            let right_ref = expression_evaluate(&right);
             let right_val = right_ref.get_value().unwrap().value;
 
             ReferenceOrValue::Value(right_val)
         }
         _ => {
-            let left_ref = general_evaluate(&left);
-            let right_ref = general_evaluate(&right);
+            let left_ref = expression_evaluate(&left);
+            let right_ref = expression_evaluate(&right);
 
             let left_val = left_ref.get_value().unwrap().value;
             let right_val = right_ref.get_value().unwrap().value;

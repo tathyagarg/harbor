@@ -23,6 +23,15 @@ pub enum ReferenceName {
     Private(()),
 }
 
+impl ReferenceName {
+    pub fn unwrap_value(&self) -> Value {
+        match self {
+            ReferenceName::Value(val) => val.clone(),
+            _ => panic!("unwrap_value called on a non-value reference name"),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Reference {
     pub base: ReferenceBase,
@@ -213,4 +222,39 @@ pub fn get_this_value(reference: &Reference) -> Value {
         ReferenceBase::Value(val) => val.clone(),
         _ => Value::Undefined,
     };
+}
+
+pub fn initialize_referenced_binding(
+    reference: &mut Reference,
+    value: &Value,
+) -> Result<CompletionRecord<UNUSED>, CompletionRecord<CompletionRecordError, CRKAbrupt>> {
+    let base = &mut reference.base;
+    assert!(
+        matches!(base, ReferenceBase::EnvironmentRecord(_)),
+        "initialize_referenced_binding called on a non-environment record reference: {:?}",
+        reference
+    );
+
+    let env = match base {
+        ReferenceBase::EnvironmentRecord(env) => env,
+        _ => unreachable!(),
+    };
+
+    return env
+        .initialize_binding(
+            reference
+                .referenced_name
+                .unwrap_value()
+                .unwrap_string()
+                .unwrap(),
+            value,
+        )
+        .map_err(|e| CompletionRecord {
+            kind: CRKAbrupt::Throw,
+            value: CompletionRecordError::Misc(format!(
+                "Failed to initialize binding: {:?}",
+                reference
+            )),
+            target: None,
+        });
 }

@@ -1,7 +1,7 @@
 use crate::js::{
     expr::{UNARY_EXPR_OR_LHS_LHS, UNARY_EXPR_OR_LHS_UNARY, UnaryExpression, UnaryOperator},
     operations::to_number,
-    semantics::expressions::{EvaluateExpressionTag, general_evaluate},
+    semantics::expressions::{EvaluateExpressionTag, expression_evaluate},
     values::{
         ReferenceOrValue, Value,
         number::Number,
@@ -13,7 +13,8 @@ pub fn evaluate(update: &UnaryExpression) -> ReferenceOrValue {
     match update.operator {
         UnaryOperator::PostfixIncrement => {
             let operand = unsafe { *(*update.operand).data.lhs };
-            let mut lhs = general_evaluate(&EvaluateExpressionTag::LeftHandSideExpression(operand));
+            let mut lhs =
+                expression_evaluate(&EvaluateExpressionTag::LeftHandSideExpression(operand));
 
             let old_value = to_number(get_value(&lhs).unwrap().value).unwrap().value;
             let new_value = old_value.add(&Number(1.0));
@@ -24,7 +25,8 @@ pub fn evaluate(update: &UnaryExpression) -> ReferenceOrValue {
         }
         UnaryOperator::PostfixDecrement => {
             let operand = unsafe { *(*update.operand).data.lhs };
-            let mut lhs = general_evaluate(&EvaluateExpressionTag::LeftHandSideExpression(operand));
+            let mut lhs =
+                expression_evaluate(&EvaluateExpressionTag::LeftHandSideExpression(operand));
 
             let old_value = to_number(get_value(&lhs).unwrap().value).unwrap().value;
             let new_value = old_value.subtract(&Number(1.0));
@@ -35,7 +37,8 @@ pub fn evaluate(update: &UnaryExpression) -> ReferenceOrValue {
         }
         UnaryOperator::PrefixIncrement => {
             let operand = unsafe { *(*update.operand).data.lhs };
-            let mut lhs = general_evaluate(&EvaluateExpressionTag::LeftHandSideExpression(operand));
+            let mut lhs =
+                expression_evaluate(&EvaluateExpressionTag::LeftHandSideExpression(operand));
 
             let old_value = to_number(get_value(&lhs).unwrap().value).unwrap().value;
             let new_value = old_value.add(&Number(1.0));
@@ -46,7 +49,8 @@ pub fn evaluate(update: &UnaryExpression) -> ReferenceOrValue {
         }
         UnaryOperator::PrefixDecrement => {
             let operand = unsafe { *(*update.operand).data.lhs };
-            let mut lhs = general_evaluate(&EvaluateExpressionTag::LeftHandSideExpression(operand));
+            let mut lhs =
+                expression_evaluate(&EvaluateExpressionTag::LeftHandSideExpression(operand));
 
             let old_value = to_number(get_value(&lhs).unwrap().value).unwrap().value;
             let new_value = old_value.subtract(&Number(1.0));

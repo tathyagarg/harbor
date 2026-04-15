@@ -1,13 +1,31 @@
-use crate::js::executable::{agent::AgentSignifier, environment::EnvironmentRecord};
+use std::{cell::RefCell, rc::Rc};
+
+use crate::js::{
+    behaviours::ordinary_object_create,
+    executable::{
+        agent::{AgentSignifier, agent_signifier},
+        context::{
+            CodeExecutionContext, ExecutionContext, GenericExecutionContext, push_execution_context,
+        },
+        environment::{EnvironmentRecord, new_global_environment},
+    },
+    types::completion_record::{CRKThrow, CompletionRecord, CompletionRecordNormal, UNUSED},
+    values::object::{Object, OrdinaryObject},
+};
 
 #[derive(Debug, Clone)]
 pub struct Realm {
     pub agent_signifier: AgentSignifier,
 
     pub intrinsics: (),
-    pub global_object: (),
 
-    pub global_env: EnvironmentRecord,
+    /// NOTE: This is optional only because it needs to be empty during initialization. It will be set to
+    /// Some(Object) before any code is executed in the realm.
+    pub global_object: Option<Rc<RefCell<Object>>>,
+
+    /// NOTE: This is optional only because it needs to be empty during initialization. It will be set to
+    /// Some(EnvironmentRecord) before any code is executed in the realm.
+    pub global_env: Option<Rc<RefCell<EnvironmentRecord>>>,
 
     /// WARN: This likely will NOT be implemented!
     pub template_map: (),
@@ -15,4 +33,43 @@ pub struct Realm {
     pub loaded_modules: Vec<()>,
 
     pub host_defined: (),
+}
+
+pub fn initialize_host_defined_realm()
+-> Result<CompletionRecord<UNUSED>, CompletionRecord<(), CRKThrow>> {
+    let realm = Rc::new(RefCell::new(Realm {
+        intrinsics: (),
+        agent_signifier: agent_signifier(),
+        template_map: (),
+
+        global_object: None,
+        global_env: None,
+
+        loaded_modules: Vec::new(),
+        host_defined: (),
+    }));
+
+    let global = Rc::new(RefCell::new(ordinary_object_create(
+        Some(Object::Ordinary(OrdinaryObject::prototype())),
+        Vec::new(),
+    )));
+
+    realm.borrow_mut().global_object = Some(global.clone());
+    realm.borrow_mut().global_env = Some(Rc::new(RefCell::new(new_global_environment(
+        &global, &global,
+    ))));
+
+    let ec = Rc::new(ExecutionContext::Code(CodeExecutionContext {
+        execution_context: GenericExecutionContext {
+            function: None,
+            realm: realm.clone(),
+            script_or_module: None,
+        },
+        lexical_env: realm.borrow().global_env.as_ref().unwrap().clone(),
+        variable_env: realm.borrow().global_env.as_ref().unwrap().clone(),
+    }));
+
+    push_execution_context(ec);
+
+    Ok(CompletionRecordNormal(()))
 }

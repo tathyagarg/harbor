@@ -89,8 +89,8 @@ pub fn eval_string_or_numeric_bin_expr(
     right: &EvaluateExpressionTag,
     operator: BinaryOperator,
 ) -> ReferenceOrValue {
-    let left_ref = general_evaluate(left);
-    let right_ref = general_evaluate(right);
+    let left_ref = expression_evaluate(left);
+    let right_ref = expression_evaluate(right);
 
     let left_val = left_ref.get_value().unwrap().value;
     let right_val = right_ref.get_value().unwrap().value;
@@ -98,7 +98,7 @@ pub fn eval_string_or_numeric_bin_expr(
     apply_string_or_numeric_binary_operator(&left_val, &right_val, operator)
 }
 
-pub fn general_evaluate(expression: &EvaluateExpressionTag) -> ReferenceOrValue {
+pub fn expression_evaluate(expression: &EvaluateExpressionTag) -> ReferenceOrValue {
     match expression {
         EvaluateExpressionTag::Identifier(data) => identifier::evaluate(data),
         EvaluateExpressionTag::LeftHandSideExpression(expr) => lhs::evaluate(expr),
@@ -115,12 +115,12 @@ pub fn general_evaluate(expression: &EvaluateExpressionTag) -> ReferenceOrValue 
         EvaluateExpressionTag::Expression(expr) => {
             let exprs = collect_seq(expr);
             for e in exprs[..exprs.len() - 1].iter() {
-                general_evaluate(&EvaluateExpressionTag::AssignmentExpression(e.clone()));
+                expression_evaluate(&EvaluateExpressionTag::AssignmentExpression(e.clone()));
             }
 
             let right_expr = exprs.last().unwrap();
 
-            general_evaluate(&EvaluateExpressionTag::AssignmentExpression(
+            expression_evaluate(&EvaluateExpressionTag::AssignmentExpression(
                 right_expr.clone(),
             ))
         }

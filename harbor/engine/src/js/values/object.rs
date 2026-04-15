@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc, str::FromStr};
+use std::{cell::RefCell, collections::HashMap, fmt::Debug, ops::Deref, rc::Rc, str::FromStr};
 
 use crate::js::{
     SLOT_PROTOTYPE,
@@ -313,6 +313,8 @@ pub struct OrdinaryObject {
 }
 
 impl OrdinaryObject {
+    /// NOTE: This can be treated as %Object.prototype%
+    /// https://tc39.es/ecma262/#sec-properties-of-the-object-prototype-object
     pub fn prototype() -> OrdinaryObject {
         OrdinaryObject {
             prototype: Rc::new(RefCell::new(None)),
@@ -601,7 +603,7 @@ pub struct FunctionObject {
     pub ecmascript_code: Vec<Statement>,
 
     pub constructor_kind: ConstructorKind,
-    pub realm: Realm,
+    pub realm: Rc<RefCell<Realm>>,
 
     pub script_or_module: ScriptOrModule,
     pub this_mode: ThisMode,
@@ -681,12 +683,12 @@ pub fn ordinary_call_bind_this(
         this_arg.clone()
     } else {
         if matches!(this_arg, Value::Undefined | Value::Null) {
-            let global_env = callee_realm.global_env.clone();
+            let global_env = callee_realm.borrow().global_env.clone();
             if let EnvironmentRecordKind::Global {
                 global_this_value, ..
-            } = &global_env.kind
+            } = &global_env.unwrap().borrow().kind
             {
-                Value::Object(Rc::try_unwrap(global_this_value.clone()).unwrap())
+                Value::Object(global_this_value.clone().borrow().deref().clone())
             } else {
                 panic!("Global environment record does not have a global this value");
             }

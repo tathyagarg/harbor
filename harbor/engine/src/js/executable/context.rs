@@ -41,7 +41,7 @@ impl ExecutionContext {
 #[derive(Clone, Debug)]
 pub struct GenericExecutionContext {
     pub function: Option<FunctionObject>,
-    pub realm: Realm,
+    pub realm: Rc<RefCell<Realm>>,
 
     pub script_or_module: Option<ScriptOrModule>,
 }
@@ -84,4 +84,14 @@ pub fn resolve_binding(
     let strict = true;
 
     return get_identifier_reference(name, Some(env), strict);
+}
+
+pub fn push_execution_context(context: Rc<ExecutionContext>) {
+    SURROUNDING_AGENT.with(|agent| {
+        if let Some(agent) = agent.borrow_mut().as_mut() {
+            agent.borrow_mut().execution_context_stack.push(context);
+        } else {
+            panic!("No surrounding agent found");
+        }
+    })
 }

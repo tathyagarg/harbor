@@ -22,7 +22,7 @@ pub enum BindingStatus {
 
 #[derive(Clone, Debug)]
 pub struct ObjectEnvironmentRecord {
-    pub object: Rc<Object>,
+    pub object: Rc<RefCell<Object>>,
 
     pub is_with_environment: bool,
 }
@@ -40,7 +40,7 @@ pub enum EnvironmentRecordKind {
     Module,
     Global {
         object: ObjectEnvironmentRecord,
-        global_this_value: Rc<Object>,
+        global_this_value: Rc<RefCell<Object>>,
         declarative_record: Rc<EnvironmentRecord>,
     },
 }
@@ -76,13 +76,20 @@ impl EnvironmentRecord {
         &self,
         name: JsString,
     ) -> Result<CompletionRecord<bool>, CompletionRecord<UNUSED, CRKThrow>> {
-        match self.kind {
+        match &self.kind {
             EnvironmentRecordKind::Declarative => {
                 let has_binding = self.bindings.contains_key(&name);
 
                 Ok(CompletionRecordNormal(has_binding))
             }
-            _ => todo!(),
+            EnvironmentRecordKind::Global {
+                declarative_record, ..
+            } => declarative_record.has_binding(name),
+            _ => todo!(
+                "has_binding is only implemented for declarative environment records, not {:?} (for binding: {:?})",
+                self.kind,
+                name
+            ),
         }
     }
 
@@ -145,7 +152,7 @@ impl EnvironmentRecord {
     pub fn initialize_binding(
         &mut self,
         name: JsString,
-        value: Value,
+        value: &Value,
     ) -> Result<CompletionRecord<UNUSED>, CompletionRecord<UNUSED, CRKThrow>> {
         match self.kind {
             EnvironmentRecordKind::Declarative => {
@@ -158,7 +165,7 @@ impl EnvironmentRecord {
                     return Err(CompletionRecordThrow(()));
                 }
 
-                binding.value = value;
+                binding.value = value.clone();
                 binding.initialized = true;
 
                 Ok(CompletionRecordNormal(()))
@@ -275,6 +282,29 @@ pub fn get_identifier_reference(
     }
 }
 
+pub fn new_declarative_environment(outer_env: Option<EnvironmentRecord>) -> EnvironmentRecord {
+    EnvironmentRecord {
+        bindings: HashMap::new(),
+        outer_env: outer_env.map(|env| Rc::new(env)),
+        kind: EnvironmentRecordKind::Declarative,
+    }
+}
+
+pub fn new_object_environment(
+    obj: &Rc<RefCell<Object>>,
+    is_with_environment: bool,
+    outer_env: Option<EnvironmentRecord>,
+) -> EnvironmentRecord {
+    EnvironmentRecord {
+        bindings: HashMap::new(),
+        outer_env: outer_env.map(|env| Rc::new(env)),
+        kind: EnvironmentRecordKind::Object(ObjectEnvironmentRecord {
+            object: obj.clone(),
+            is_with_environment,
+        }),
+    }
+}
+
 pub fn new_function_environment(
     func: &FunctionObject,
     new_target: Option<Object>,
@@ -298,6 +328,29 @@ pub fn new_function_environment(
             this_value: Rc::new(Value::Undefined),
         },
         bindings: HashMap::new(),
+    }
+}
+
+pub fn new_global_environment(
+    global_object: &Rc<RefCell<Object>>,
+    this_value: &Rc<RefCell<Object>>,
+) -> EnvironmentRecord {
+    let obj_rec_wrapped = new_object_environment(global_object, false, None);
+    let obj_rec = match obj_rec_wrapped.kind {
+        EnvironmentRecordKind::Object(obj_rec) => obj_rec,
+        _ => unreachable!(),
+    };
+
+    let dcl_rec = new_declarative_environment(None);
+
+    EnvironmentRecord {
+        outer_env: None,
+        bindings: HashMap::new(),
+        kind: EnvironmentRecordKind::Global {
+            object: obj_rec,
+            global_this_value: this_value.clone(),
+            declarative_record: Rc::new(dcl_rec),
+        },
     }
 }
 
