@@ -27,9 +27,7 @@ fn bound_names_lexical_declaration(lex_decl: &LexicalDeclaration) -> Vec<JsStrin
 pub fn bound_names_declaration(declaration: &Declaration) -> Vec<JsString> {
     match declaration.tag {
         DECLARATION_LEXICAL_DECLARATION => {
-            println!("Found lexical declaration");
             let lexical_decl = unsafe { *declaration.data.lex_decl };
-            println!("Lexical declaration: {}", lexical_decl);
             bound_names_lexical_declaration(&lexical_decl)
         }
         _ => vec![],

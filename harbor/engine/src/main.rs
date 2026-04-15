@@ -42,6 +42,7 @@ fn main() {
     env_logger::init();
 
     let text = r#"const a = 1 + 2;"#;
+    println!("Running script:\n {}\n", text);
 
     SURROUNDING_AGENT.with(|cell| {
         *cell.borrow_mut() = Some(Rc::new(RefCell::new(Agent {
@@ -65,7 +66,6 @@ fn main() {
 
     unsafe {
         let script = parse_script(text, current_realm());
-        println!("Script: {}", script.ecma_script_code);
 
         global_declaration_instantiation(
             &script.ecma_script_code,
@@ -77,13 +77,7 @@ fn main() {
                 .clone(),
         );
 
-        println!("Script 2: {}", script.ecma_script_code);
-
         let slice = collect_seq(&script.ecma_script_code.body);
-
-        for item in &slice {
-            println!("Item: {}", item);
-        }
 
         let stmt = *(*slice[0].data.declaration).data.lex_decl;
         statements::declarations::evaluate(&stmt);
