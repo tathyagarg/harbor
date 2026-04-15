@@ -15,6 +15,8 @@ Harbor Browser
 
 </div>
 
+---
+
 ⭐ Star us on GitHub — it motivates us a lot!
 
 [Harbor](https://harbor.arson.dev) is a web browser built using Rust and Zig, made to teach me the ins and outs of browser development. It's not meant to be a competitor to mainstream browsers, but rather a personal project to explore the complexities of web technologies and browser architecture.
@@ -41,6 +43,7 @@ Harbor Browser
   - [TTF Parser](#ttf-parser)
   - [JavaScript Engine](#javascript-engine)
   - [Renderer](#renderer)
+- [License](#license)
 
 </details>
 
@@ -174,6 +177,9 @@ The JavaScript engine executes JavaScript code embedded in web pages. Currently 
 
 ### Renderer
 The renderer takes the structured data from the HTML and CSS parsers and renders it onto the screen. It uses the `wgpu` library for GPU-accelerated rendering and `winit` for window management. The renderer is responsible for drawing all visual elements of the webpage. The renderer uses ear clipping to render glyphs from contours into filled triangles[^2]
+
+## License
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for more details.
 
 [^1]: [HTML Parsing](https://html.spec.whatwg.org/multipage/parsing.html)
 [^2]: [Triangulation by Ear Clipping](https://www.geometrictools.com/Documentation/TriangulationByEarClipping.pdf)

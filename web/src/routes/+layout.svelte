@@ -36,7 +36,9 @@
   <link rel="icon" href={favicon} />
 </svelte:head>
 
-<div class="fixed top-0 left-0 translate-y-1/2 w-full h-full overflow-hidden">
+<div
+  class="fixed top-0 left-0 translate-y-1/2 -z-2 w-full h-full overflow-hidden"
+>
   <img src={waves} alt="Waves" class="opacity-5" />
 </div>
 
