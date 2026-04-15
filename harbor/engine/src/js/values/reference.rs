@@ -210,7 +210,24 @@ pub fn put_value(
         return Ok(CompletionRecordNormal(()));
     }
 
-    todo!("set mutable binding for environment record reference")
+    let base = &mut reference.base;
+    let env = match base {
+        ReferenceBase::EnvironmentRecord(env) => env,
+        _ => unreachable!(),
+    };
+
+    env.set_mutable_binding(
+        reference
+            .referenced_name
+            .unwrap_value()
+            .unwrap_string()
+            .unwrap(),
+        value.clone(),
+        reference.strict,
+    )
+    .unwrap();
+
+    return Ok(CompletionRecordNormal(()));
 }
 
 pub fn get_this_value(reference: &Reference) -> Value {

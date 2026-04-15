@@ -30,7 +30,9 @@ fn main() {
     env_logger::init();
 
     let text = r#"const a = 1 + 2;
-const b = a * 2;"#;
+let b = a * 2;
+b++;
+"#;
     println!("Running script:\n{}\n", text);
 
     SURROUNDING_AGENT.with(|cell| {

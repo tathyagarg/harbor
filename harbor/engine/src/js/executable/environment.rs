@@ -98,7 +98,7 @@ impl EnvironmentRecord {
         name: JsString,
         deletable: bool,
     ) -> Result<CompletionRecord<UNUSED>, CompletionRecord<UNUSED, CRKThrow>> {
-        match self.kind {
+        match &self.kind {
             EnvironmentRecordKind::Declarative => {
                 if self.bindings.contains_key(&name) && !self.bindings[&name].deletable {
                     return Err(CompletionRecordThrow(()));
@@ -117,6 +117,11 @@ impl EnvironmentRecord {
 
                 Ok(CompletionRecordNormal(()))
             }
+            EnvironmentRecordKind::Global {
+                declarative_record, ..
+            } => declarative_record
+                .borrow_mut()
+                .create_mutable_binding(name, deletable),
             _ => todo!(),
         }
     }
@@ -190,14 +195,14 @@ impl EnvironmentRecord {
         value: Value,
         strict: bool,
     ) -> Result<CompletionRecord<UNUSED>, CompletionRecord<UNUSED, CRKThrow>> {
-        match self.kind {
+        match &self.kind {
             EnvironmentRecordKind::Declarative => {
                 if !self.bindings.contains_key(&name) {
                     return Err(CompletionRecordThrow(()));
                 }
 
                 let binding = self.bindings.get_mut(&name).unwrap();
-                if (strict && !binding.mutable) || binding.initialized {
+                if !binding.initialized {
                     return Err(CompletionRecordThrow(()));
                 }
 
@@ -205,6 +210,11 @@ impl EnvironmentRecord {
 
                 Ok(CompletionRecordNormal(()))
             }
+            EnvironmentRecordKind::Global {
+                declarative_record, ..
+            } => declarative_record
+                .borrow_mut()
+                .set_mutable_binding(name, value, strict),
             _ => todo!(),
         }
     }
