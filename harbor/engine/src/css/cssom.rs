@@ -16,7 +16,7 @@ use crate::{
             WidthValue,
         },
         selectors::SelectorList,
-        tokenize::{CSSToken, Dimension},
+        tokenize::{CSSToken, Dimension, NumberType},
     },
     html5::dom::{Document, Element},
     http::url::URL,
@@ -192,12 +192,90 @@ impl CSSDeclaration {
                     CSSDeclaration::new("padding-left".to_string(), vec![left]),
                 ]
             }
+            "font" => {
+                let mut actual_tokens = self
+                    .value
+                    .iter()
+                    .filter(|cv| !matches!(cv, ComponentValue::Token(CSSToken::Whitespace)))
+                    .cloned()
+                    .collect::<Vec<ComponentValue>>();
+
+                let mut declarations = Vec::new();
+
+                let font_weight = find_font_weight(&mut actual_tokens);
+                if let Some(weight) = font_weight {
+                    declarations.push(CSSDeclaration::new("font-weight".to_string(), vec![weight]));
+                }
+
+                let font_style = find_font_style(&mut actual_tokens);
+                if let Some(style) = font_style {
+                    declarations.push(CSSDeclaration::new("font-style".to_string(), vec![style]));
+                }
+
+                let font_size = actual_tokens.remove(0);
+                declarations.push(CSSDeclaration::new(
+                    "font-size".to_string(),
+                    vec![font_size],
+                ));
+
+                declarations.push(CSSDeclaration::new(
+                    "font-family".to_string(),
+                    actual_tokens
+                        .into_iter()
+                        .filter(|cv| !matches!(cv, ComponentValue::Token(CSSToken::Comma)))
+                        .collect(),
+                ));
+
+                declarations
+            }
             name => todo!(
-                "Expand shorthand property into longhand properties: {}",
-                name
+                "Expand shorthand property into longhand properties: {} (value: {:?})",
+                name,
+                self.value
             ),
         }
     }
+}
+
+pub fn find_font_style(tokens: &mut Vec<ComponentValue>) -> Option<ComponentValue> {
+    for (i, token) in tokens.iter().enumerate() {
+        if let ComponentValue::Token(CSSToken::Ident(ident)) = token {
+            if matches!(ident.as_str(), "normal" | "italic" | "oblique") {
+                let result = token.clone();
+                tokens.remove(i);
+
+                return Some(result);
+            }
+        }
+    }
+    None
+}
+
+pub fn find_font_weight(tokens: &mut Vec<ComponentValue>) -> Option<ComponentValue> {
+    for (i, token) in tokens.iter().enumerate() {
+        if let ComponentValue::Token(CSSToken::Ident(ident)) = token {
+            if matches!(ident.as_str(), "normal" | "bold" | "bolder" | "lighter") {
+                let res = token.clone();
+                tokens.remove(i);
+
+                return Some(res);
+            }
+        }
+
+        if let ComponentValue::Token(CSSToken::Number {
+            value,
+            number_type: NumberType::Integer,
+        }) = token
+        {
+            if (1..=1000).contains(&(*value as i32)) {
+                let res = token.clone();
+                tokens.remove(i);
+
+                return Some(res);
+            }
+        }
+    }
+    None
 }
 
 impl Serializable for CSSDeclaration {

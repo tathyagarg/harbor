@@ -412,6 +412,10 @@ fn is_declaration_start(token: _text.Token) bool {
 pub fn parse_statement_or_declaration(parser: *Parser) error{ UnexpectedEndOfTokens, OutOfMemory }!*stmt.StatementOrDeclaration {
     const statement_or_declaration = try parser.allocator.create(stmt.StatementOrDeclaration);
 
+    while (p.peek(parser) != null and p.peek(parser).?.kind != .CommonToken) {
+        _ = p.next(parser);
+    }
+
     if (is_declaration_start(p.peek(parser) orelse return error.UnexpectedEndOfTokens)) {
         const declaration = try parse_declaration(parser);
 

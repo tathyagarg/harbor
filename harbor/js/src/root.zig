@@ -81,7 +81,7 @@ pub export fn free_token_seq(seq: source_text.TokenSeq) void {
     source_text.free_token_seq(seq);
 }
 
-pub export fn parse_text(text: source_text.String) stmt.Script {
+pub export fn parse_script(text: source_text.String) stmt.Script {
     const tokens = parse_text_string(text, .InputElementHashbangOrRegExp);
 
     var parser = p.Parser{
@@ -91,8 +91,6 @@ pub export fn parse_text(text: source_text.String) stmt.Script {
         .allocator = undefined,
     };
     parser.allocator = parser.arena.allocator();
-
-    std.debug.print("Starting to parse script\n", .{});
 
     const result = stmt_parser.parse_text(&parser) catch {
         const script = parser.allocator.create(stmt.Script) catch {

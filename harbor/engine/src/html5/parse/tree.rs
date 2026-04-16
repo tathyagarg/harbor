@@ -1246,7 +1246,8 @@ impl InsertMode {
             }
             Token::EndTag(ref tag) if tag.name.as_str() == "script" => {
                 let script_raw = parser.open_elements_stack.pop().unwrap();
-                let script = ScriptElement::new(script_raw, Some(parser.document.document.clone()));
+                let mut script =
+                    ScriptElement::new(script_raw, Some(parser.document.document.clone()));
 
                 parser.insertion_mode = parser.original_insertion_mode.clone().unwrap();
 
@@ -1254,6 +1255,11 @@ impl InsertMode {
                 parser.insertion_point = Some(parser.stream.pos);
 
                 parser.script_nesting_level += 1;
+
+                script.prepare();
+
+                parser.script_nesting_level -= 1;
+                parser.insertion_point = old_insertion_point;
             }
             Token::EndTag(ref tag) => {
                 let popped_elem = parser.open_elements_stack.pop().unwrap();

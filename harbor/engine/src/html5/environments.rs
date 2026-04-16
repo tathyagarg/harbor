@@ -19,13 +19,13 @@ pub struct Environment {
 
 #[derive(Clone, Debug)]
 pub struct EnvironmentSettings {
-    pub realm: Rc<RefCell<Realm>>,
-    pub realm_execution_context: Rc<RefCell<ExecutionContext>>,
+    pub realm: Option<Rc<RefCell<Realm>>>,
+    pub realm_execution_context: Option<Rc<RefCell<ExecutionContext>>>,
 }
 
 impl EnvironmentSettings {
     pub fn prepare_to_run(&mut self) {
-        push_execution_context(self.realm_execution_context.clone());
+        push_execution_context(self.realm_execution_context.clone().unwrap());
     }
 
     pub fn cleanup_after_running(&mut self) {
@@ -35,10 +35,15 @@ impl EnvironmentSettings {
 
 impl PartialEq for EnvironmentSettings {
     fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(
-            &self.realm_execution_context,
-            &other.realm_execution_context,
-        )
+        self.realm.is_some()
+            && other.realm.is_some()
+            && Rc::ptr_eq(self.realm.as_ref().unwrap(), other.realm.as_ref().unwrap())
+            && self.realm_execution_context.is_some()
+            && other.realm_execution_context.is_some()
+            && Rc::ptr_eq(
+                self.realm_execution_context.as_ref().unwrap(),
+                other.realm_execution_context.as_ref().unwrap(),
+            )
     }
 }
 

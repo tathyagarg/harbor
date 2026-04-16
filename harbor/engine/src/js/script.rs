@@ -35,6 +35,8 @@ pub fn parse_script(
     realm: Rc<RefCell<Realm>>,
     host_defined: &HostDefined,
 ) -> ScriptRecord {
+    println!("text: {}", text);
+
     let utf16 = text.encode_utf16().collect::<Vec<u16>>();
     let zs = ZigString {
         data: utf16.as_ptr(),
@@ -42,6 +44,7 @@ pub fn parse_script(
     };
 
     let script = unsafe { crate::js::parse_script(zs) };
+    println!("Script: {:?}", script);
     unsafe { crate::js::free_string(zs) };
 
     ScriptRecord {

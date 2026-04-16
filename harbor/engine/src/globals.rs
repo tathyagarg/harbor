@@ -53,7 +53,7 @@ pub const ERROR_PAGE_PATH: ResPath = || page_path!("error.html");
 
 pub const FONTS_PATH: ResPath = || RES_PATH().join("fonts");
 
-pub const TAB_BAR_HORIZONTAL: bool = false;
+pub const TAB_BAR_HORIZONTAL: bool = true;
 
 // TODO: Make this configurable
 pub const TABS_BAR_OFFSET: fn(f64, f64) -> (f64, f64) = |window_width, window_height| {

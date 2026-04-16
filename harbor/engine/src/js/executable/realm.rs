@@ -64,11 +64,13 @@ pub fn initialize_host_defined_realm()
         loaded_modules: Vec::new(),
         host_defined: HostDefined {
             settings: EnvironmentSettings {
-                realm: current_realm(),
-                realm_execution_context: running_execution_context().unwrap(),
+                realm: None,
+                realm_execution_context: None,
             },
         },
     }));
+
+    realm.borrow_mut().host_defined.settings.realm = Some(realm.clone());
 
     let global = Rc::new(RefCell::new(ordinary_object_create(
         Some(Object::Ordinary(OrdinaryObject::prototype())),
@@ -91,6 +93,12 @@ pub fn initialize_host_defined_realm()
     })));
 
     push_execution_context(ec);
+
+    realm
+        .borrow_mut()
+        .host_defined
+        .settings
+        .realm_execution_context = Some(running_execution_context().unwrap());
 
     Ok(CompletionRecordNormal(()))
 }

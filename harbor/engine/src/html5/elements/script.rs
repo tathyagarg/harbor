@@ -59,8 +59,8 @@ pub struct Script {
 
 impl Script {
     pub fn classic(source: String, base_url: URL, settings: EnvironmentSettings) -> Self {
-        let realm = settings.realm.clone();
-        let host_defined = settings.realm.borrow().host_defined.clone();
+        let realm = settings.realm.clone().unwrap();
+        let host_defined = realm.borrow().host_defined.clone();
 
         let script = Self {
             settings,
@@ -82,6 +82,8 @@ impl Script {
 
         let eval_status = script_evaluation(Rc::new(self.record.clone().unwrap()));
         settings.cleanup_after_running();
+
+        println!("Script evaluation completed with status: {:?}", eval_status);
 
         eval_status.value
     }
