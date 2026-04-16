@@ -6,13 +6,14 @@ use crate::js::{
         environment::{EnvironmentRecord, get_identifier_reference},
         realm::Realm,
     },
+    script::ScriptRecord,
     types::completion_record::{CRKThrow, CompletionRecord},
     values::{object::FunctionObject, reference::Reference, string::JsString},
 };
 
 #[derive(Clone, Debug)]
 pub enum ScriptOrModule {
-    Script,
+    Script(Rc<ScriptRecord>),
     Module,
 }
 
@@ -98,6 +99,16 @@ pub fn push_execution_context(context: Rc<RefCell<ExecutionContext>>) {
     SURROUNDING_AGENT.with(|agent| {
         if let Some(agent) = agent.borrow_mut().as_mut() {
             agent.borrow_mut().execution_context_stack.push(context);
+        } else {
+            panic!("No surrounding agent found");
+        }
+    })
+}
+
+pub fn pop_execution_context() {
+    SURROUNDING_AGENT.with(|agent| {
+        if let Some(agent) = agent.borrow_mut().as_mut() {
+            agent.borrow_mut().execution_context_stack.pop();
         } else {
             panic!("No surrounding agent found");
         }

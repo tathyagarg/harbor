@@ -11,7 +11,10 @@ pub mod values;
 
 use expr::{CodePoint, CodePointAtResult, CodePointSeq, TokenSeq, ZigString};
 
-use crate::js::{expr::Seq, values::string::JsString};
+use crate::{
+    html5::environments::HostDefined,
+    js::{executable::realm::Realm, expr::Seq, script::ScriptRecord, values::string::JsString},
+};
 
 pub fn collect_seq<T: Seq>(seq: &T) -> Vec<T::Item>
 where
@@ -58,7 +61,7 @@ unsafe extern "C" {
     pub fn free_code_point_seq(cps: CodePointSeq);
     pub fn free_token_seq(tokens: TokenSeq);
 
-    pub fn parse_text(text: ZigString) -> stmt::Script;
+    pub fn parse_script(text: ZigString) -> stmt::Script;
 }
 
 pub fn utf16_encode_cp_rs(cp: CodePoint) -> String {

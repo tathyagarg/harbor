@@ -14,6 +14,7 @@ pub mod object;
 
 pub mod reference;
 
+#[derive(Clone, Debug)]
 pub enum ReferenceOrValue {
     Reference(Reference),
     Value(Value),

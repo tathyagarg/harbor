@@ -1,13 +1,19 @@
+#![allow(dead_code)]
+
 use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     html5::{
         cors::CORSSettingsAttr,
         dom::{Document, Element},
+        environments::EnvironmentSettings,
         mime_types::IS_JS_MIME,
     },
     http::url::URL,
-    js::script::ScriptRecord,
+    js::{
+        script::{ScriptRecord, parse_script, script_evaluation},
+        values::ReferenceOrValue,
+    },
 };
 
 #[derive(Debug, Clone)]
@@ -24,7 +30,7 @@ pub(crate) type ScriptId = usize;
 pub(crate) enum ScriptResult {
     Uninitialized,
     Error,
-    Script(ScriptId),
+    Script(Script),
     ImportMap,
     SpeculationRules,
 }
@@ -46,18 +52,38 @@ pub(crate) struct ScriptInternalState {
 }
 
 pub struct Script {
+    pub settings: EnvironmentSettings,
     pub record: Option<ScriptRecord>,
     pub base_url: Option<URL>,
 }
 
 impl Script {
-    pub fn classic(source: String, base_url: URL) -> Self {
+    pub fn classic(source: String, base_url: URL, settings: EnvironmentSettings) -> Self {
+        let realm = settings.realm.clone();
+        let host_defined = settings.realm.borrow().host_defined.clone();
+
         let script = Self {
+            settings,
             record: None,
             base_url: Some(base_url),
         };
 
-        todo!()
+        let record = parse_script(&source, realm, &host_defined);
+
+        Script {
+            record: Some(record),
+            ..script
+        }
+    }
+
+    pub fn run(&mut self) -> ReferenceOrValue {
+        let settings = &mut self.settings;
+        settings.prepare_to_run();
+
+        let eval_status = script_evaluation(Rc::new(self.record.clone().unwrap()));
+        settings.cleanup_after_running();
+
+        eval_status.value
     }
 }
 
@@ -229,7 +255,7 @@ impl ScriptElement {
 
         let classic_script_cors = self.cross_origin.as_ref().map(|c| c.to_lowercase());
         let cors_settings_attr = CORSSettingsAttr::from(classic_script_cors);
-        let credentials_mode = cors_settings_attr.credentials_mode();
+        // let credentials_mode = cors_settings_attr.credentials_mode();
 
         let node_document = self.raw.borrow().node_document().unwrap();
         let settings_obj = &node_document.borrow().settings;
@@ -238,13 +264,49 @@ impl ScriptElement {
             let base_url = self.raw.borrow()._node.borrow().base_uri();
 
             match self.internal_state.type_ {
-                ScriptType::Classic => {}
+                ScriptType::Classic => {
+                    let script = Script::classic(
+                        source_text.clone(),
+                        URL::pure_parse(base_url).unwrap(),
+                        settings_obj.clone(),
+                    );
+
+                    self.mark_as_ready(script);
+                }
                 _ => unimplemented!(
                     "Script type {:?} is not implemented yet",
                     self.internal_state.type_
                 ),
             }
         }
+
+        self.internal_state.ready_to_be_executed = true;
+        self.execute();
+    }
+
+    pub fn execute(&mut self) {
+        match &self.internal_state.type_ {
+            ScriptType::Classic => {
+                if let ScriptResult::Script(script) = &mut self.internal_state.result {
+                    script.run();
+                }
+            }
+            _ => unimplemented!(
+                "Script type {:?} is not implemented yet",
+                self.internal_state.type_
+            ),
+        }
+    }
+
+    pub fn mark_as_ready(&mut self, result: Script) {
+        self.internal_state.result = ScriptResult::Script(result);
+        if !self.internal_state.steps_to_run_when_ready.is_empty() {
+            for step in self.internal_state.steps_to_run_when_ready.drain(..) {
+                step();
+            }
+        }
+
+        self.internal_state.delay_load_event = false;
     }
 
     pub fn supports(&self, type_: String) -> bool {

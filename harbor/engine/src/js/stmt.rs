@@ -157,7 +157,7 @@ pub struct Script {
     pub body: SeqStatementOrDeclaration,
 }
 
-impl Display for Script {
+impl Debug for Script {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let items = unsafe { std::slice::from_raw_parts(self.body.items, self.body.len) };
         write!(f, "Script {{\n")?;

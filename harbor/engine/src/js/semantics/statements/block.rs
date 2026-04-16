@@ -11,6 +11,14 @@ use crate::js::{
     values::{ReferenceOrValue, Value},
 };
 
+pub fn statement_list_evaluate(stmt_list: &SeqStatementOrDeclaration) -> ReferenceOrValue {
+    for stmt_or_decl in collect_seq(stmt_list) {
+        super::statement_or_declaration_evaluate(&stmt_or_decl);
+    }
+
+    ReferenceOrValue::Value(Value::Undefined)
+}
+
 pub fn evaluate(stmt: &BlockStatement) -> ReferenceOrValue {
     let old_env = running_execution_context()
         .unwrap()
@@ -28,16 +36,14 @@ pub fn evaluate(stmt: &BlockStatement) -> ReferenceOrValue {
         .borrow_mut()
         .replace_lexical_env(block_env);
 
-    for stmt_or_decl in collect_seq(&stmt.body) {
-        super::statement_or_declaration_evaluate(&stmt_or_decl);
-    }
+    let result = statement_list_evaluate(&stmt.body);
 
     running_execution_context()
         .unwrap()
         .borrow_mut()
         .replace_lexical_env(old_env);
 
-    ReferenceOrValue::Value(Value::Undefined)
+    result
 }
 
 fn block_declaration_instantiation(

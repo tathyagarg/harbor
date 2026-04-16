@@ -29,14 +29,15 @@ pub mod user_agent;
 fn main() {
     env_logger::init();
 
-    let text = r#"let b;
-if (1 == 2) {
-    let a = 1;
-} else {
-    b = 2;
-}
-"#;
-    println!("Running script:\n{}\n", text);
+    //     let text = r#"let b;
+    // if (1 == 2) {
+    //     let a = 1;
+    // } else {
+    //     b = 2;
+    // }
+    // "#;
+    //     println!("Running script:\n{}\n", text);
+    //
 
     SURROUNDING_AGENT.with(|cell| {
         *cell.borrow_mut() = Some(Rc::new(RefCell::new(Agent {
@@ -58,48 +59,49 @@ if (1 == 2) {
         initialize_host_defined_realm().unwrap();
     });
 
-    let script = parse_script(text, current_realm());
+    //
+    //     let script = parse_script(text, current_realm());
+    //
+    //     global_declaration_instantiation(
+    //         &script.ecma_script_code,
+    //         current_realm()
+    //             .borrow()
+    //             .global_env
+    //             .as_ref()
+    //             .unwrap()
+    //             .clone(),
+    //     );
+    //
+    //     let slice = collect_seq(&script.ecma_script_code.body);
+    //
+    //     for stmt in slice.iter() {
+    //         statements::statement_or_declaration_evaluate(stmt);
+    //     }
+    //
+    //     let test = JsString::from_str("b").unwrap();
+    //     let env = current_realm()
+    //         .borrow()
+    //         .global_env
+    //         .as_ref()
+    //         .unwrap()
+    //         .clone();
+    //
+    //     let res = env.borrow().get_binding_value(test, false).unwrap().value;
+    //     println!("Value of b: {:?}", res);
 
-    global_declaration_instantiation(
-        &script.ecma_script_code,
-        current_realm()
-            .borrow()
-            .global_env
-            .as_ref()
-            .unwrap()
-            .clone(),
+    let ua = UAgent::new();
+    let mut app = App::new(
+        render::WindowOptions {
+            use_transparent: true,
+            background_color: wgpu::Color {
+                r: 1.0,
+                g: 1.0,
+                b: 1.0,
+                a: 1.0,
+            },
+        },
+        Some(Rc::clone(&ua)),
     );
 
-    let slice = collect_seq(&script.ecma_script_code.body);
-
-    for stmt in slice.iter() {
-        statements::statement_or_declaration_evaluate(stmt);
-    }
-
-    let test = JsString::from_str("b").unwrap();
-    let env = current_realm()
-        .borrow()
-        .global_env
-        .as_ref()
-        .unwrap()
-        .clone();
-
-    let res = env.borrow().get_binding_value(test, false).unwrap().value;
-    println!("Value of b: {:?}", res);
-
-    // let ua = Agent::new();
-    // let mut app = App::new(
-    //     render::WindowOptions {
-    //         use_transparent: true,
-    //         background_color: wgpu::Color {
-    //             r: 1.0,
-    //             g: 1.0,
-    //             b: 1.0,
-    //             a: 1.0,
-    //         },
-    //     },
-    //     Some(Rc::clone(&ua)),
-    // );
-
-    // app.run();
+    app.run();
 }

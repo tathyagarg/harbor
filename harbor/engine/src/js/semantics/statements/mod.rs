@@ -4,8 +4,8 @@ use crate::js::{
     stmt::{
         BlockStatement, DECLARATION_LEXICAL_DECLARATION, IfStatement, LexicalDeclaration,
         STATEMENT_BLOCK_STATEMENT, STATEMENT_EXPR_STATEMENT, STATEMENT_IF_STATEMENT,
-        STATEMENT_OR_DECLARATION_DECLARATION, STATEMENT_OR_DECLARATION_STATEMENT, Statement,
-        StatementOrDeclaration,
+        STATEMENT_OR_DECLARATION_DECLARATION, STATEMENT_OR_DECLARATION_STATEMENT, Script,
+        Statement, StatementOrDeclaration,
     },
     values::{ReferenceOrValue, Value},
 };
@@ -19,6 +19,7 @@ pub enum EvaluateStatementTag {
     Expression(Expression),
     IfStatement(IfStatement),
     BlockStatement(BlockStatement),
+    Script(Script),
 
     Statement(Statement),
 }
@@ -48,6 +49,10 @@ pub fn statement_or_declaration_evaluate(val: &StatementOrDeclaration) -> Refere
     }
 }
 
+pub fn script_evaluate(script: &Script) -> ReferenceOrValue {
+    block::statement_list_evaluate(&script.body)
+}
+
 pub fn statement_evaluate(tag: &EvaluateStatementTag) -> ReferenceOrValue {
     match tag {
         EvaluateStatementTag::LexicalDeclaration(decl) => {
@@ -59,6 +64,8 @@ pub fn statement_evaluate(tag: &EvaluateStatementTag) -> ReferenceOrValue {
         ),
         EvaluateStatementTag::IfStatement(stmt) => if_stmt::evaluate(stmt),
         EvaluateStatementTag::BlockStatement(stmt) => block::evaluate(stmt),
+        EvaluateStatementTag::Script(script) => script_evaluate(script),
+
         EvaluateStatementTag::Statement(stmt) => match stmt.tag {
             STATEMENT_EXPR_STATEMENT => {
                 let expr_stmt = unsafe { *stmt.data.expression };

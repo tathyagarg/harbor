@@ -1,7 +1,7 @@
 use std::{cell::RefCell, ops::Deref, rc::Rc};
 
 use crate::{
-    html5::environments::EnvironmentSettings,
+    html5::environments::{EnvironmentSettings, HostDefined},
     js::{
         behaviours::ordinary_object_create,
         executable::{
@@ -36,7 +36,7 @@ pub struct Realm {
 
     pub loaded_modules: Vec<()>,
 
-    pub host_defined: EnvironmentSettings,
+    pub host_defined: HostDefined,
 }
 
 pub fn current_realm() -> Rc<RefCell<Realm>> {
@@ -62,8 +62,11 @@ pub fn initialize_host_defined_realm()
         global_env: None,
 
         loaded_modules: Vec::new(),
-        host_defined: EnvironmentSettings {
-            realm_execution_context: running_execution_context().unwrap(),
+        host_defined: HostDefined {
+            settings: EnvironmentSettings {
+                realm: current_realm(),
+                realm_execution_context: running_execution_context().unwrap(),
+            },
         },
     }));
 
