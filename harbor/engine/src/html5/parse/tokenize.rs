@@ -154,7 +154,6 @@ impl<'a> Parser<'a> {
             original_insertion_mode: None,
 
             leave_callback: None,
-
             return_state: None,
 
             tag_token: None,
@@ -178,6 +177,11 @@ impl<'a> Parser<'a> {
 
             flag_scripting: false,
             flag_frameset_ok: true,
+
+            script_nesting_level: 0,
+            parser_pause_flag: false,
+
+            insertion_point: None,
         }
     }
 

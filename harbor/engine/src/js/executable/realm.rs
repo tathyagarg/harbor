@@ -1,16 +1,20 @@
 use std::{cell::RefCell, ops::Deref, rc::Rc};
 
-use crate::js::{
-    behaviours::ordinary_object_create,
-    executable::{
-        agent::{AgentSignifier, agent_signifier, running_execution_context},
-        context::{
-            CodeExecutionContext, ExecutionContext, GenericExecutionContext, push_execution_context,
+use crate::{
+    html5::environments::EnvironmentSettings,
+    js::{
+        behaviours::ordinary_object_create,
+        executable::{
+            agent::{AgentSignifier, agent_signifier, running_execution_context},
+            context::{
+                CodeExecutionContext, ExecutionContext, GenericExecutionContext,
+                push_execution_context,
+            },
+            environment::{EnvironmentRecord, new_global_environment},
         },
-        environment::{EnvironmentRecord, new_global_environment},
+        types::completion_record::{CRKThrow, CompletionRecord, CompletionRecordNormal, UNUSED},
+        values::object::{Object, OrdinaryObject},
     },
-    types::completion_record::{CRKThrow, CompletionRecord, CompletionRecordNormal, UNUSED},
-    values::object::{Object, OrdinaryObject},
 };
 
 #[derive(Debug, Clone)]
@@ -32,7 +36,7 @@ pub struct Realm {
 
     pub loaded_modules: Vec<()>,
 
-    pub host_defined: (),
+    pub host_defined: EnvironmentSettings,
 }
 
 pub fn current_realm() -> Rc<RefCell<Realm>> {
@@ -58,7 +62,9 @@ pub fn initialize_host_defined_realm()
         global_env: None,
 
         loaded_modules: Vec::new(),
-        host_defined: (),
+        host_defined: EnvironmentSettings {
+            realm_execution_context: running_execution_context().unwrap(),
+        },
     }));
 
     let global = Rc::new(RefCell::new(ordinary_object_create(

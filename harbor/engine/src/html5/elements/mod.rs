@@ -5,6 +5,7 @@ use crate::{
 
 pub mod anchor;
 pub mod link;
+pub mod script;
 
 pub struct HyperlinkUtils {
     pub href: String,

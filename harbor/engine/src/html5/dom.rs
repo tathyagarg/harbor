@@ -11,8 +11,11 @@ use crate::css::cssom::{
 };
 use crate::css::selectors::{ComplexSelector, MatchesElement, Specificity};
 use crate::html5::elements::link::LinkElement;
+use crate::html5::environments::EnvironmentSettings;
 use crate::http::url::URL;
 use crate::infra::Serializable;
+use crate::js::executable::agent::{SURROUNDING_AGENT, running_execution_context};
+use crate::js::executable::realm::current_realm;
 use crate::{
     html5::{parse::Token, tag_groups::*},
     http::{self},
@@ -1176,6 +1179,12 @@ impl Element {
         self.attribute_list.push(attr);
     }
 
+    pub fn has_attribute(&self, name: &str) -> bool {
+        self.attribute_list
+            .iter()
+            .any(|attr| attr.local_name() == name)
+    }
+
     pub fn get_attribute(&self, name: &str) -> Option<&str> {
         for attr in &self.attribute_list {
             if attr.local_name() == name {
@@ -1191,6 +1200,14 @@ impl Element {
 
     pub fn namespace_uri(&self) -> Option<&str> {
         self.namespace.as_deref()
+    }
+
+    pub fn node_document(&self) -> Option<Rc<RefCell<Document>>> {
+        self._node
+            .borrow()
+            .node_document
+            .as_ref()
+            .and_then(|weak_doc| weak_doc.upgrade())
     }
 }
 
@@ -1382,6 +1399,7 @@ pub struct DOMImplementation {
 #[derive(Clone, PartialEq, Eq)]
 pub struct Document {
     pub _node: Rc<RefCell<Node>>,
+    pub settings: EnvironmentSettings,
 
     _encoding: &'static encoding_rs::Encoding,
 
@@ -1431,6 +1449,8 @@ impl Default for Document {
                 _parent_node: None,
                 _child_nodes: NodeList::new(),
             })),
+            settings: current_realm().borrow().host_defined.clone(),
+
             _encoding: encoding_rs::Encoding::for_label(b"utf-8").unwrap(),
 
             _content_type: "application/xml",

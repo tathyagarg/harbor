@@ -45,6 +45,7 @@ pub enum EnvironmentRecordKind {
     },
 }
 
+// WARN: This note may not be accurate
 // NOTE: This is a placeholder type. In a complete implementation, this would likely be a more
 // complex type that can represent any JavaScript value, such as a union of different types or an
 // enum.
