@@ -1,6 +1,9 @@
 use crate::js::{
     executable::agent::running_execution_context,
-    semantics::r#static::{BoundNames, bound_names, contains_expression, is_simple_parameter_list},
+    semantics::r#static::{
+        BoundNames, VarDeclaredNames, VarScopedDeclarations, bound_names, contains_expression,
+        is_simple_parameter_list, var_declared_names, var_scoped_declarations,
+    },
     types::completion_record::{CRKThrow, CompletionRecord, UNUSED},
     values::{Value, object::FunctionObject},
 };
@@ -27,6 +30,9 @@ pub fn function_declaration_instantiation(
 
     let simple_param_list = is_simple_parameter_list(formals.clone());
     let has_parameter_expressions = contains_expression(formals.clone());
+
+    let var_names = var_declared_names(VarDeclaredNames::BlockStatement(&code));
+    let var_decls = var_scoped_declarations(VarScopedDeclarations::BlockStatement(&code));
 
     todo!()
 }

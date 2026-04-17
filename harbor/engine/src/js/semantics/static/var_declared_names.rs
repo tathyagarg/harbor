@@ -53,13 +53,13 @@ fn var_declared_names_block_statement(block_stmt: &BlockStatement) -> Vec<JsStri
 
 fn var_declared_names_statement(statement: &Statement) -> Vec<JsString> {
     match statement.tag {
-        STATEMENT_EMPTY_STATEMENT => vec![],
-        STATEMENT_EXPR_STATEMENT => vec![],
-        STATEMENT_CONTINUE_STATEMENT => vec![],
-        STATEMENT_BREAK_STATEMENT => vec![],
-        STATEMENT_RETURN_STATEMENT => vec![],
-        STATEMENT_THROW_STATEMENT => vec![],
-        STATEMENT_DEBUGGER_STATEMENT => vec![],
+        STATEMENT_EMPTY_STATEMENT
+        | STATEMENT_EXPR_STATEMENT
+        | STATEMENT_CONTINUE_STATEMENT
+        | STATEMENT_BREAK_STATEMENT
+        | STATEMENT_RETURN_STATEMENT
+        | STATEMENT_THROW_STATEMENT
+        | STATEMENT_DEBUGGER_STATEMENT => vec![],
         STATEMENT_BLOCK_STATEMENT => {
             let block_stmt = unsafe { *statement.data.block };
             var_declared_names_block_statement(&block_stmt)
