@@ -72,10 +72,10 @@ pub fn initialize_host_defined_realm()
 
     realm.borrow_mut().host_defined.settings.realm = Some(realm.clone());
 
-    let global = Rc::new(RefCell::new(ordinary_object_create(
+    let global = Rc::new(RefCell::new(Object::Ordinary(ordinary_object_create(
         Some(Object::Ordinary(OrdinaryObject::prototype())),
         Vec::new(),
-    )));
+    ))));
 
     realm.borrow_mut().global_object = Some(global.clone());
     realm.borrow_mut().global_env = Some(Rc::new(RefCell::new(new_global_environment(

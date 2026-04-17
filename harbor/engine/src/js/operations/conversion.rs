@@ -152,6 +152,8 @@ pub fn to_object(
         Value::Symbol(_symbol) => todo!("Symbol object"),
         Value::BigInt(_big) => todo!("big int object??"),
         Value::Object(obj) => Ok(CompletionRecordNormal(obj.clone())),
+
+        Value::InternalFunction(_) => panic!("to_object for internal function"),
     }
 }
 

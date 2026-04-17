@@ -24,6 +24,7 @@ where
 pub const SLOT_PROTOTYPE: &str = "Prototype";
 pub const SLOT_EXTENSIBLE: &str = "Extensible";
 pub const SLOT_PRIVATE_ELEMENTS: &str = "PrivateElements";
+pub const SLOT_PARAMETER_MAP: &str = "ParameterMap";
 
 // pub fn zs_to_str(zs: ZigString) -> &'static str {
 //     unsafe {

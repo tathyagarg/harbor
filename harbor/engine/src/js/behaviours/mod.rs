@@ -1,7 +1,8 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::js::{
-    SLOT_EXTENSIBLE, SLOT_PROTOTYPE,
+    SLOT_EXTENSIBLE, SLOT_PARAMETER_MAP, SLOT_PROTOTYPE,
+    behaviours::exotics::arguments::ArgumentsObject,
     operations::{create_data_property, make_basic_object, same_value},
     types::completion_record::{
         CRKThrow, CompletionRecord, CompletionRecordError, CompletionRecordNormal,
@@ -10,8 +11,8 @@ use crate::js::{
     values::{
         Value,
         object::{
-            ArrayObject, FunctionObject, Object, ObjectTrait, OrdinaryObject, PropertyDescriptor,
-            PropertyKey, SlotValue,
+            ArrayObject, FunctionObject, MiscObject, Object, ObjectTrait, OrdinaryObject,
+            PropertyDescriptor, PropertyKey, SlotValue,
         },
     },
 };
@@ -22,10 +23,65 @@ pub mod exotics;
 // 10.2
 pub mod functions;
 
+pub fn _ordinary_from_misc(misc: &MiscObject) -> OrdinaryObject {
+    let mut ordinary = OrdinaryObject {
+        properties: HashMap::new(),
+        prototype: Rc::new(RefCell::new(None)),
+        extensible: true,
+    };
+
+    let ordinary_value = Value::Object(Object::Ordinary(ordinary.clone()));
+
+    ordinary.prototype = Rc::new(RefCell::new(Some(
+        misc.get(&PropertyKey::from(SLOT_PROTOTYPE), &ordinary_value)
+            .unwrap_or(Value::Null)
+            .unwrap_object()
+            .unwrap(),
+    )));
+
+    ordinary.extensible = misc
+        .get(&PropertyKey::from(SLOT_EXTENSIBLE), &ordinary_value)
+        .unwrap_or(Value::Boolean(true))
+        .unwrap_bool()
+        .unwrap();
+
+    ordinary.properties = misc
+        .properties
+        .clone()
+        .into_iter()
+        .filter(|(k, _)| {
+            k != &PropertyKey::from(SLOT_PROTOTYPE) && k != &PropertyKey::from(SLOT_EXTENSIBLE)
+        })
+        .collect();
+
+    ordinary
+}
+
+pub fn _arguments_from_ordinary(ordinary: &OrdinaryObject) -> ArgumentsObject {
+    let parameter_map = if let Object::Ordinary(ord) = ordinary
+        .properties
+        .get(&PropertyKey::from(SLOT_PARAMETER_MAP))
+        .unwrap()
+        .field("value")
+        .unwrap()
+        .unwrap_object()
+        .unwrap()
+    {
+        ord.clone()
+    } else {
+        unreachable!()
+    };
+
+    ArgumentsObject {
+        ordinary: ordinary.clone(),
+        parameter_map,
+    }
+}
+
 pub fn ordinary_object_create(
     prototype: Option<Object>,
     additional_internal_slots_list: Vec<String>,
-) -> Object {
+) -> OrdinaryObject {
     let mut internal_slots_list = vec![SLOT_PROTOTYPE.to_string(), SLOT_EXTENSIBLE.to_string()];
     internal_slots_list.extend(additional_internal_slots_list);
 
@@ -37,7 +93,11 @@ pub fn ordinary_object_create(
     // be fine
     obj.set_prototype_of(prototype);
 
-    obj
+    if let Object::Misc(misc) = &mut obj {
+        _ordinary_from_misc(misc)
+    } else {
+        unreachable!()
+    }
 }
 
 pub fn ordinary_get_prototype_of(object: &Object) -> Rc<RefCell<Option<Object>>> {

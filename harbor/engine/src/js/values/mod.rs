@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::js::{
     types::completion_record::{CRKAbrupt, CompletionRecord, CompletionRecordError},
     values::{
@@ -160,6 +162,8 @@ pub enum Value {
     Number(Number),
     BigInt(()),
     Object(Object),
+
+    InternalFunction(Rc<fn(Vec<Value>) -> Value>),
 }
 
 impl Value {

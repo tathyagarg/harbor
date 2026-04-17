@@ -1,11 +1,13 @@
 // pub fn array_create(length: u32, )
 
 pub mod array {
-    use std::{cell::RefCell, collections::HashMap, rc::Rc};
+    use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::LazyLock};
 
     use crate::js::{
         behaviours::{ordinary_define_own_property, ordinary_get_own_property},
-        operations::{canonical_numeric_index_string, same_value_zero, to_number, to_uint32},
+        operations::{
+            canonical_numeric_index_string, same_value_zero, to_number, to_object, to_uint32,
+        },
         types::completion_record::{
             CRKThrow, CompletionRecord, CompletionRecordError, CompletionRecordNormal,
             CompletionRecordThrow,
@@ -13,7 +15,10 @@ pub mod array {
         values::{
             Value,
             number::Number,
-            object::{ArrayObject, Object, OrdinaryObject, PropertyDescriptor, PropertyKey},
+            object::{
+                ArrayObject, FunctionObject, Object, OrdinaryObject, PropertyDescriptor,
+                PropertyKey,
+            },
         },
     };
 
@@ -208,29 +213,55 @@ pub mod array {
 
         return Ok(CompletionRecordNormal(true));
     }
+
+    pub enum IterationKind {
+        KeyValue,
+        Key,
+        Value,
+    }
+
+    pub fn array_prototype_values_internal(args: Vec<Value>) -> Value {
+        assert!(args.len() == 1);
+        let this = &args[0];
+
+        let _obj = to_object(this).unwrap().value;
+        todo!("Implement array iterator prototype and shi")
+    }
 }
 
 pub mod arguments {
     use std::{cell::RefCell, rc::Rc};
 
     use crate::js::{
+        SLOT_EXTENSIBLE, SLOT_PARAMETER_MAP, SLOT_PROTOTYPE,
         behaviours::{
-            ordinary_define_own_property, ordinary_delete, ordinary_get, ordinary_get_own_property,
-            ordinary_get_prototype_of, ordinary_set, ordinary_set_prototype_of,
+            _arguments_from_ordinary, _ordinary_from_misc,
+            exotics::array::array_prototype_values_internal, ordinary_define_own_property,
+            ordinary_delete, ordinary_get, ordinary_get_own_property, ordinary_get_prototype_of,
+            ordinary_object_create, ordinary_set, ordinary_set_prototype_of,
         },
-        operations::{get, has_own_property, same_value, set},
+        executable::environment::EnvironmentRecord,
+        operations::{
+            create_data_property_or_throw, define_property_or_throw, get, has_own_property,
+            make_basic_object, same_value, set,
+        },
+        semantics::r#static::{ParseNode, StaticSemantics},
         values::{
             Value,
+            number::Number,
             object::{
-                MiscObject, Object, ObjectTrait, OrdinaryObject, PropertyDescriptor, PropertyKey,
+                FunctionObject, MiscObject, Object, ObjectTrait, OrdinaryObject,
+                PropertyDescriptor, PropertyKey,
             },
+            string::JsString,
+            symbol::SYMBOL_ITERATOR,
         },
     };
 
     #[derive(Clone, Debug)]
     pub struct ArgumentsObject {
         pub ordinary: OrdinaryObject,
-        pub parameter_map: MiscObject,
+        pub parameter_map: OrdinaryObject,
     }
 
     impl ObjectTrait for ArgumentsObject {
@@ -261,7 +292,7 @@ pub mod arguments {
             let mut desc = desc.unwrap();
 
             let map = &self.parameter_map;
-            let map_object = Object::Misc(map.clone());
+            let map_object = Object::Ordinary(map.clone());
 
             let is_mapped = has_own_property(&map_object, key).unwrap().value;
 
@@ -276,7 +307,7 @@ pub mod arguments {
             let mut obj = Object::Arguments(self.clone());
 
             let map = &self.parameter_map;
-            let mut map_object = Object::Misc(map.clone());
+            let mut map_object = Object::Ordinary(map.clone());
 
             let is_mapped = has_own_property(&map_object, key).unwrap().value;
             let new_args_desc = &desc;
@@ -311,7 +342,7 @@ pub mod arguments {
                 *self = args;
             }
 
-            if let Object::Misc(map) = map_object {
+            if let Object::Ordinary(map) = map_object {
                 self.parameter_map = map;
             }
 
@@ -320,7 +351,7 @@ pub mod arguments {
 
         fn get(&self, key: &PropertyKey, receiver: &Value) -> Option<Value> {
             let map = &self.parameter_map;
-            let map_object = Object::Misc(map.clone());
+            let map_object = Object::Ordinary(map.clone());
 
             let is_mapped = has_own_property(&map_object, key).unwrap().value;
             if is_mapped {
@@ -336,7 +367,7 @@ pub mod arguments {
             let mut args_object = Object::Arguments(self.clone());
 
             let map = &self.parameter_map;
-            let mut map_object = Object::Misc(map.clone());
+            let mut map_object = Object::Ordinary(map.clone());
 
             let is_mapped = if !same_value(&Value::Object(args_object.clone()), receiver) {
                 false
@@ -346,7 +377,7 @@ pub mod arguments {
 
             if is_mapped {
                 set(&mut map_object, key, value, false).unwrap();
-                if let Object::Misc(map) = &map_object {
+                if let Object::Ordinary(map) = &map_object {
                     self.parameter_map = map.clone();
                     args_object = Object::Arguments(self.clone());
                 }
@@ -365,13 +396,13 @@ pub mod arguments {
             let mut args_object = Object::Arguments(self.clone());
 
             let map = &self.parameter_map;
-            let mut map_object = Object::Misc(map.clone());
+            let mut map_object = Object::Ordinary(map.clone());
 
             let is_mapped = has_own_property(&map_object, key).unwrap().value;
 
             if is_mapped {
                 map_object.delete(key);
-                if let Object::Misc(map) = &map_object {
+                if let Object::Ordinary(map) = &map_object {
                     self.parameter_map = map.clone();
                     args_object = Object::Arguments(self.clone());
                 }
@@ -392,6 +423,162 @@ pub mod arguments {
 
         fn construct(&self, _args: Vec<Value>, _new_target: &Object) -> Object {
             panic!("Arguments object is not a constructor");
+        }
+    }
+
+    pub fn create_unmapped_arguments_object(args: Vec<Value>) -> OrdinaryObject {
+        let len = args.len();
+        let mut obj = ordinary_object_create(
+            Some(Object::Ordinary(OrdinaryObject::prototype())),
+            vec![String::from(SLOT_PARAMETER_MAP)],
+        );
+
+        obj.properties.insert(
+            PropertyKey::from(SLOT_PARAMETER_MAP),
+            PropertyDescriptor::data_descriptor(Value::Undefined, false, false, false),
+        );
+
+        let mut obj = Object::Ordinary(obj);
+
+        define_property_or_throw(
+            &mut obj,
+            &PropertyKey::from("length"),
+            PropertyDescriptor::data_descriptor(
+                Value::Number(Number(len as f64)),
+                true,
+                false,
+                true,
+            ),
+        )
+        .unwrap();
+
+        let mut index = 0;
+        while index < len {
+            let val = args.get(index).unwrap_or(&Value::Undefined);
+            create_data_property_or_throw(&mut obj, &PropertyKey::from(index.to_string()), val)
+                .unwrap();
+
+            index += 1;
+        }
+
+        define_property_or_throw(
+            &mut obj,
+            &PropertyKey::Symbol(SYMBOL_ITERATOR.clone()),
+            PropertyDescriptor::data_descriptor(
+                Value::InternalFunction(Rc::new(array_prototype_values_internal)),
+                true,
+                false,
+                true,
+            ),
+        )
+        .unwrap();
+
+        // TODO: implement 'callee' prop
+
+        if let Object::Ordinary(obj) = obj {
+            obj
+        } else {
+            unreachable!("Expected ordinary object");
+        }
+    }
+
+    pub fn create_mapped_arguments_object(
+        func: &Object,
+        formals: ParseNode,
+        args_list: Vec<Value>,
+        env: Rc<RefCell<EnvironmentRecord>>,
+    ) -> ArgumentsObject {
+        let len = args_list.len();
+
+        if let Object::Misc(misc) = make_basic_object(vec![
+            String::from(SLOT_PROTOTYPE),
+            String::from(SLOT_EXTENSIBLE),
+            String::from(SLOT_PARAMETER_MAP),
+        ]) {
+            let obj_raw = _ordinary_from_misc(&misc);
+            let mut args = _arguments_from_ordinary(&obj_raw);
+
+            args.parameter_map = ordinary_object_create(
+                Some(Object::Ordinary(OrdinaryObject::prototype())),
+                Vec::new(),
+            );
+
+            let param_names = formals.bound_names();
+            let number_of_params = param_names.len();
+
+            let mut index = 0;
+
+            let mut obj = Object::Arguments(args.clone());
+
+            while index < len {
+                let val = args_list.get(index).unwrap();
+                create_data_property_or_throw(
+                    &mut obj,
+                    &PropertyKey::from(index.to_string()),
+                    &val,
+                )
+                .unwrap();
+
+                index += 1;
+            }
+
+            define_property_or_throw(
+                &mut obj,
+                &PropertyKey::from("length"),
+                PropertyDescriptor::data_descriptor(
+                    Value::Number(Number(len as f64)),
+                    true,
+                    false,
+                    true,
+                ),
+            )
+            .unwrap();
+
+            let mut mapped_names = Vec::new();
+            index = number_of_params - 1;
+
+            loop {
+                let name = &param_names[index];
+                if !mapped_names.contains(name) {
+                    mapped_names.push(name.clone());
+
+                    if index < len {
+                        // TODO: implement environment record bindings and stuff
+                    }
+                }
+
+                if index == 0 {
+                    break;
+                }
+                index -= 1;
+            }
+
+            define_property_or_throw(
+                &mut obj,
+                &PropertyKey::Symbol(SYMBOL_ITERATOR.clone()),
+                PropertyDescriptor::data_descriptor(
+                    Value::InternalFunction(Rc::new(array_prototype_values_internal)),
+                    true,
+                    false,
+                    true,
+                ),
+            )
+            .unwrap();
+
+            define_property_or_throw(
+                &mut obj,
+                &PropertyKey::from("callee"),
+                PropertyDescriptor::data_descriptor(Value::Object(func.clone()), true, false, true),
+            )
+            .unwrap();
+
+            if let Object::Arguments(args) = obj {
+                args
+            } else {
+                unreachable!("Expected arguments object");
+            }
+        } else {
+            unreachable!("Expected misc object");
         }
     }
 }

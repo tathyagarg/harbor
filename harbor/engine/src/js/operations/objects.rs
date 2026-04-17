@@ -102,6 +102,32 @@ pub fn create_data_property(
     ));
 }
 
+pub fn create_data_property_or_throw(
+    obj: &mut Object,
+    key: &PropertyKey,
+    value: &Value,
+) -> Result<CompletionRecord<UNUSED>, CompletionRecord<CompletionRecordError, CRKThrow>> {
+    let success = create_data_property(obj, key, value)?.value;
+    if !success {
+        return Err(CompletionRecordThrow(CompletionRecordError::TypeError));
+    }
+
+    return Ok(CompletionRecordNormal(()));
+}
+
+pub fn define_property_or_throw(
+    obj: &mut Object,
+    key: &PropertyKey,
+    desc: PropertyDescriptor,
+) -> Result<CompletionRecord<UNUSED>, CompletionRecord<CompletionRecordError, CRKThrow>> {
+    let success = obj.define_own_property(key, desc);
+    if !success {
+        return Err(CompletionRecordThrow(CompletionRecordError::TypeError));
+    }
+
+    return Ok(CompletionRecordNormal(()));
+}
+
 pub fn get_method(
     value: &Value,
     key: &PropertyKey,

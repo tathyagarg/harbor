@@ -8,9 +8,10 @@ use crate::js::{
         ordinary_set_prototype_of,
     },
     executable::{
-        agent::SURROUNDING_AGENT,
+        agent::{SURROUNDING_AGENT, running_execution_context},
         context::{
             CodeExecutionContext, ExecutionContext, GenericExecutionContext, ScriptOrModule,
+            pop_execution_context,
         },
         environment::{
             EnvironmentRecord, EnvironmentRecordKind, bind_this_value, new_function_environment,
@@ -623,9 +624,6 @@ pub enum ThisMode {
 pub struct FunctionObject {
     pub object: OrdinaryObject,
 
-    pub call: Rc<dyn Fn(&Value, Vec<Value>) -> Value>,
-    pub construct: Option<Rc<dyn Fn(Vec<Value>, &Object) -> Object>>,
-
     pub extensible: bool,
     pub prototype: Option<Rc<Object>>,
 
@@ -773,19 +771,12 @@ impl ObjectTrait for FunctionObject {
     }
 
     fn call(&self, this: &Value, args: Vec<Value>) -> Value {
-        let callee_context = prepare_for_ordinary_call(self, None);
+        let callee_ctx = prepare_for_ordinary_call(self, None);
 
-        ordinary_call_bind_this(self, callee_context.clone(), this);
-
+        ordinary_call_bind_this(self, callee_ctx, this);
         let result = ordinary_call_evaluate_body(self, args);
 
-        SURROUNDING_AGENT.with(|agent| {
-            if let Some(agent) = agent.borrow().as_ref() {
-                agent.borrow_mut().execution_context_stack.pop();
-            } else {
-                panic!("No surrounding agent found");
-            }
-        });
+        pop_execution_context();
 
         if let Ok(completion) = result {
             return completion.value;
