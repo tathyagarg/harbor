@@ -1,6 +1,6 @@
 use crate::js::{
     collect_seq,
-    semantics::r#static::{ParseNode, bound_names},
+    semantics::r#static::{OwnedParseNode, ParseNode, StaticSemantics, bound_names},
     stmt::{
         BlockStatement, DECLARATION_ASYNC_FUNCTION_DECLARATION,
         DECLARATION_ASYNC_GENERATOR_DECLARATION, DECLARATION_FUNCTION_DECLARATION,
@@ -117,12 +117,12 @@ pub fn top_level_var_declared_names(list: &SeqStatementOrDeclaration) -> Vec<JsS
                         _ => unreachable!(),
                     };
 
-                    names.extend(bound_names(ParseNode::HoistabeDeclaration(&hoistable_decl)));
+                    names.extend(ParseNode::HoistabeDeclaration(&hoistable_decl).bound_names());
                 }
             }
             STATEMENT_OR_DECLARATION_STATEMENT => {
                 let statement = unsafe { *stmt.data.statement };
-                names.extend(var_declared_names(ParseNode::Statement(&statement)));
+                names.extend(ParseNode::Statement(&statement).var_declared_names());
             }
             _ => unreachable!("Unexpected statement or declaration tag: {}", stmt.tag),
         }
@@ -131,7 +131,7 @@ pub fn top_level_var_declared_names(list: &SeqStatementOrDeclaration) -> Vec<JsS
     names
 }
 
-pub fn var_declared_names(target: ParseNode) -> Vec<JsString> {
+pub fn var_declared_names(target: &ParseNode) -> Vec<JsString> {
     match target {
         ParseNode::Script(script) => var_declared_names_script(&script),
         ParseNode::Statement(stmt) => var_declared_names_statement(&stmt),
@@ -142,5 +142,21 @@ pub fn var_declared_names(target: ParseNode) -> Vec<JsString> {
         ParseNode::IfStatement(if_stmt) => var_declared_names_if_statement(&if_stmt),
         ParseNode::WhileStatement(while_stmt) => var_declared_names_while(&while_stmt),
         _ => unimplemented!("var_declared_names for parse node: {:?}", target),
+    }
+}
+
+pub fn var_declared_names_owned(node: &OwnedParseNode) -> Vec<JsString> {
+    match node {
+        OwnedParseNode::Script(script) => var_declared_names_script(&script),
+        OwnedParseNode::Statement(stmt) => var_declared_names_statement(&stmt),
+        OwnedParseNode::StatmentOrDeclaration(stmt_or_decl) => {
+            var_declared_names_statement_or_decl(&stmt_or_decl)
+        }
+        OwnedParseNode::BlockStatement(block_stmt) => {
+            var_declared_names_block_statement(&block_stmt)
+        }
+        OwnedParseNode::IfStatement(if_stmt) => var_declared_names_if_statement(&if_stmt),
+        OwnedParseNode::WhileStatement(while_stmt) => var_declared_names_while(&while_stmt),
+        _ => unimplemented!("var_declared_names_owned for parse node: {:?}", node),
     }
 }

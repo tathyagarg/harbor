@@ -6,9 +6,9 @@ use crate::js::{
         agent::running_execution_context,
         environment::{EnvironmentRecord, new_declarative_environment},
     },
-    semantics::r#static::{ParseNode, bound_names},
+    semantics::r#static::{OwnedParseNode, ParseNode, StaticSemantics},
     stmt::{BlockStatement, SeqStatementOrDeclaration},
-    syntax::{is_constant_decl, lexically_scope_declarations_stmt_lis},
+    syntax::is_constant_decl,
     values::{ReferenceOrValue, Value},
 };
 
@@ -55,11 +55,11 @@ fn block_declaration_instantiation(
     code: &SeqStatementOrDeclaration,
     env: Rc<RefCell<EnvironmentRecord>>,
 ) {
-    let declarations = lexically_scope_declarations_stmt_lis(&code);
+    let declarations = ParseNode::StatementOrDeclList(code).lexically_scoped_declarations();
 
     for decl in declarations {
-        for name in bound_names(ParseNode::Declaration(&decl)) {
-            if is_constant_decl(&decl) {
+        for name in decl.bound_names() {
+            if decl.is_constant_decl() {
                 env.borrow_mut()
                     .create_immutable_binding(name.clone(), true)
                     .unwrap();

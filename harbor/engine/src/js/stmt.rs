@@ -1,6 +1,9 @@
 use std::fmt::{Debug, Display};
 
-use crate::js::expr::{AssignmentExpression, Expression, IdentifierNameTokenData, Seq};
+use crate::js::{
+    expr::{AssignmentExpression, Expression, IdentifierNameTokenData, Seq},
+    semantics::r#static::OwnedParseNode,
+};
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -302,6 +305,29 @@ pub const STATEMENT_OR_DECLARATION_DECLARATION: u8 = 1;
 pub struct Declaration {
     pub tag: u8,
     pub data: DeclarationData,
+}
+
+impl Declaration {
+    pub fn declaration_part(&self) -> OwnedParseNode {
+        match self.tag {
+            DECLARATION_FUNCTION_DECLARATION => {
+                OwnedParseNode::HoistabeDeclaration(unsafe { *self.data.function })
+            }
+            DECLARATION_GENERATOR_DECLARATION => {
+                OwnedParseNode::HoistabeDeclaration(unsafe { *self.data.generator })
+            }
+            DECLARATION_ASYNC_FUNCTION_DECLARATION => {
+                OwnedParseNode::HoistabeDeclaration(unsafe { *self.data.async_function })
+            }
+            DECLARATION_ASYNC_GENERATOR_DECLARATION => {
+                OwnedParseNode::HoistabeDeclaration(unsafe { *self.data.async_generator })
+            }
+            DECLARATION_LEXICAL_DECLARATION => {
+                OwnedParseNode::LexicalDeclaration(unsafe { *self.data.lex_decl })
+            }
+            _ => panic!("Unknown declaration tag: {}", self.tag),
+        }
+    }
 }
 
 impl Display for Declaration {

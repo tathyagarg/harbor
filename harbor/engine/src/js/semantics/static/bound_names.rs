@@ -1,6 +1,6 @@
 use crate::js::{
     collect_seq,
-    semantics::r#static::{ParseNode, string_value::string_value},
+    semantics::r#static::{OwnedParseNode, ParseNode, string_value::string_value},
     stmt::{
         DECLARATION_LEXICAL_DECLARATION, Declaration, FormalParameter, HoistableDeclaration,
         LexicalDeclaration,
@@ -63,12 +63,24 @@ fn bound_names_formal_params(formal_params: &Vec<FormalParameter>) -> Vec<JsStri
     names
 }
 
-pub fn bound_names(target: ParseNode) -> Vec<JsString> {
+pub fn bound_names(target: &ParseNode) -> Vec<JsString> {
     match target {
         ParseNode::Declaration(decl) => bound_names_declaration(decl),
         ParseNode::LexicalDeclaration(lex_decl) => bound_names_lexical_declaration(lex_decl),
         ParseNode::FormalParameters(formal_params) => bound_names_formal_params(formal_params),
         ParseNode::HoistabeDeclaration(decl) => bound_names_hoistable_declaration(decl),
+        _ => unimplemented!("BoundNames not implemented for {:?}", target),
+    }
+}
+
+pub fn bound_names_owned(target: &OwnedParseNode) -> Vec<JsString> {
+    match target {
+        OwnedParseNode::Declaration(decl) => bound_names_declaration(&decl),
+        OwnedParseNode::LexicalDeclaration(lex_decl) => bound_names_lexical_declaration(&lex_decl),
+        OwnedParseNode::FormalParameters(formal_params) => {
+            bound_names_formal_params(&formal_params)
+        }
+        OwnedParseNode::HoistabeDeclaration(decl) => bound_names_hoistable_declaration(&decl),
         _ => unimplemented!("BoundNames not implemented for {:?}", target),
     }
 }

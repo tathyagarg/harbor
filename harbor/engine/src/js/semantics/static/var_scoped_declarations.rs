@@ -1,8 +1,8 @@
 use crate::js::{
     collect_seq,
-    semantics::r#static::ParseNode,
+    semantics::r#static::{OwnedParseNode, ParseNode},
     stmt::{
-        BlockStatement, LexicalBinding, STATEMENT_BLOCK_STATEMENT, STATEMENT_BREAK_STATEMENT,
+        BlockStatement, STATEMENT_BLOCK_STATEMENT, STATEMENT_BREAK_STATEMENT,
         STATEMENT_CONTINUE_STATEMENT, STATEMENT_DEBUGGER_STATEMENT, STATEMENT_DO_WHILE,
         STATEMENT_EMPTY_STATEMENT, STATEMENT_EXPR_STATEMENT, STATEMENT_IF_STATEMENT,
         STATEMENT_OR_DECLARATION_DECLARATION, STATEMENT_OR_DECLARATION_STATEMENT,
@@ -16,7 +16,7 @@ use crate::js::{
 //     BlockStatement(&'a BlockStatement),
 // }
 
-fn var_scoped_declarations_statement(statement: &Statement) -> Vec<LexicalBinding> {
+fn var_scoped_declarations_statement(statement: &Statement) -> Vec<OwnedParseNode> {
     match statement.tag {
         STATEMENT_EMPTY_STATEMENT
         | STATEMENT_EXPR_STATEMENT
@@ -34,6 +34,9 @@ fn var_scoped_declarations_statement(statement: &Statement) -> Vec<LexicalBindin
             let declarations = collect_seq(&var_stmt.bindings);
 
             declarations
+                .into_iter()
+                .map(|decl| OwnedParseNode::LexicalBinding(decl))
+                .collect()
         }
         STATEMENT_IF_STATEMENT => {
             let if_stmt = unsafe { *statement.data.if_stmt };
@@ -64,7 +67,7 @@ fn var_scoped_declarations_statement(statement: &Statement) -> Vec<LexicalBindin
     }
 }
 
-fn var_scoped_declarations_block_statement(block_stmt: &BlockStatement) -> Vec<LexicalBinding> {
+fn var_scoped_declarations_block_statement(block_stmt: &BlockStatement) -> Vec<OwnedParseNode> {
     let mut decls = Vec::new();
     let slice = crate::js::collect_seq(&block_stmt.body);
 
@@ -82,7 +85,7 @@ fn var_scoped_declarations_block_statement(block_stmt: &BlockStatement) -> Vec<L
     decls
 }
 
-pub fn var_scoped_declarations(target: ParseNode) -> Vec<LexicalBinding> {
+pub fn var_scoped_declarations(target: &ParseNode) -> Vec<OwnedParseNode> {
     match target {
         ParseNode::Statement(stmt) => var_scoped_declarations_statement(stmt),
         ParseNode::BlockStatement(block_stmt) => {
@@ -90,6 +93,19 @@ pub fn var_scoped_declarations(target: ParseNode) -> Vec<LexicalBinding> {
         }
         _ => unimplemented!(
             "var_scoped_declarations not implemented for target: {:?}",
+            target
+        ),
+    }
+}
+
+pub fn var_scoped_declarations_owned(target: &OwnedParseNode) -> Vec<OwnedParseNode> {
+    match target {
+        OwnedParseNode::Statement(stmt) => var_scoped_declarations_statement(stmt),
+        OwnedParseNode::BlockStatement(block_stmt) => {
+            var_scoped_declarations_block_statement(block_stmt)
+        }
+        _ => unimplemented!(
+            "var_scoped_declarations_owned not implemented for target: {:?}",
             target
         ),
     }
