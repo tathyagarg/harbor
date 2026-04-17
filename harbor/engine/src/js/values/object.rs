@@ -3,7 +3,9 @@ use std::{cell::RefCell, collections::HashMap, fmt::Debug, ops::Deref, rc::Rc, s
 use crate::js::{
     SLOT_PROTOTYPE,
     behaviours::{
-        ordinary_get, ordinary_get_own_property, ordinary_set, ordinary_set_prototype_of,
+        exotics::arguments::ArgumentsObject, ordinary_define_own_property, ordinary_delete,
+        ordinary_get, ordinary_get_own_property, ordinary_get_prototype_of, ordinary_set,
+        ordinary_set_prototype_of,
     },
     executable::{
         agent::SURROUNDING_AGENT,
@@ -286,6 +288,7 @@ pub trait ObjectTrait {
 
     fn get(&self, key: &PropertyKey, receiver: &Value) -> Option<Value>;
     fn set(&mut self, key: &PropertyKey, value: &Value, receiver: &mut Value) -> bool;
+    fn delete(&mut self, key: &PropertyKey) -> bool;
 
     fn call(&self, this: &Value, args: Vec<Value>) -> Value;
     fn construct(&self, args: Vec<Value>, new_target: &Object) -> Object;
@@ -329,7 +332,8 @@ impl ObjectTrait for OrdinaryObject {
     const CONSTRUCTOR: bool = false;
 
     fn get_prototype_of(&self) -> Rc<RefCell<Option<Object>>> {
-        self.prototype.clone()
+        let object = Object::Ordinary(self.clone());
+        ordinary_get_prototype_of(&object)
     }
 
     fn set_prototype_of(&mut self, prototype: Option<Object>) -> bool {
@@ -347,8 +351,13 @@ impl ObjectTrait for OrdinaryObject {
     }
 
     fn define_own_property(&mut self, key: &PropertyKey, desc: PropertyDescriptor) -> bool {
-        self.properties.insert(key.clone(), desc);
-        true
+        let mut object = Object::Ordinary(self.clone());
+        let res = ordinary_define_own_property(&mut object, key, &desc);
+        if let Object::Ordinary(obj) = object {
+            *self = obj;
+        }
+
+        res.unwrap().value
     }
 
     fn get(&self, key: &PropertyKey, receiver: &Value) -> Option<Value> {
@@ -356,7 +365,7 @@ impl ObjectTrait for OrdinaryObject {
         let res = ordinary_get(&obj, key, receiver);
 
         if let Ok(val) = res {
-            Some(val.unwrapped().clone())
+            Some(val.value)
         } else {
             None
         }
@@ -369,7 +378,17 @@ impl ObjectTrait for OrdinaryObject {
             *self = obj;
         }
 
-        *res.unwrap().unwrapped()
+        res.unwrap().value
+    }
+
+    fn delete(&mut self, key: &PropertyKey) -> bool {
+        let mut obj = Object::Ordinary(self.clone());
+        let res = ordinary_delete(&mut obj, key);
+        if let Object::Ordinary(obj) = obj {
+            *self = obj;
+        }
+
+        res.unwrap().value
     }
 
     fn call(&self, _this: &Value, _args: Vec<Value>) -> Value {
@@ -398,6 +417,7 @@ pub struct EssentialMethodProxy<T> {
 
     pub get: Rc<dyn Fn(&T, &PropertyKey, &Value) -> Option<Value>>,
     pub set: Rc<dyn Fn(&mut T, &PropertyKey, &Value, &mut Value) -> bool>,
+    pub delete: Rc<dyn Fn(&mut T, &PropertyKey) -> bool>,
 }
 
 impl<T> Debug for EssentialMethodProxy<T> {
@@ -422,6 +442,7 @@ impl MiscObject {
         pmdd_get_own_property;
     const _DEFINE_OWN_PROPERTY: fn(&mut MiscObject, &PropertyKey, PropertyDescriptor) -> bool =
         pmdd_define_own_property;
+    const _DELETE: fn(&mut MiscObject, &PropertyKey) -> bool = pmdd_delete;
 
     const _GET: fn(&MiscObject, &PropertyKey, &Value) -> Option<Value> = pmdd_get;
     const _SET: fn(&mut MiscObject, &PropertyKey, &Value, &mut Value) -> bool = pmdd_set;
@@ -477,6 +498,14 @@ impl ObjectTrait for MiscObject {
         }
 
         Self::_SET(self, key, value, receiver)
+    }
+
+    fn delete(&mut self, key: &PropertyKey) -> bool {
+        if let Some(proxy) = &self.method_proxy {
+            return (proxy.delete.clone())(self, key);
+        }
+
+        Self::_DELETE(self, key)
     }
 
     fn call(&self, _this: &Value, _args: Vec<Value>) -> Value {
@@ -573,13 +602,17 @@ fn pmdd_set(obj: &mut MiscObject, key: &PropertyKey, value: &Value, _receiver: &
     return false;
 }
 
+fn pmdd_delete(obj: &mut MiscObject, key: &PropertyKey) -> bool {
+    obj.properties.remove(key).is_some()
+}
+
 #[derive(Debug, Clone)]
 pub enum ConstructorKind {
     Base,
     Derived,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ThisMode {
     Lexical,
     Strict,
@@ -735,6 +768,10 @@ impl ObjectTrait for FunctionObject {
         self.object.set(key, value, receiver)
     }
 
+    fn delete(&mut self, key: &PropertyKey) -> bool {
+        self.object.delete(key)
+    }
+
     fn call(&self, this: &Value, args: Vec<Value>) -> Value {
         let callee_context = prepare_for_ordinary_call(self, None);
 
@@ -768,6 +805,7 @@ pub enum Object {
     Array(ArrayObject),
     Function(FunctionObject),
     Misc(MiscObject),
+    Arguments(ArgumentsObject),
 }
 
 impl Object {
@@ -790,6 +828,7 @@ impl ObjectTrait for Object {
             Object::Array(arr) => arr.object.get_prototype_of(),
             Object::Misc(misc) => misc.get_prototype_of(),
             Object::Function(func) => func.get_prototype_of(),
+            Object::Arguments(args) => args.get_prototype_of(),
         }
     }
 
@@ -799,6 +838,7 @@ impl ObjectTrait for Object {
             Object::Array(arr) => arr.object.set_prototype_of(prototype),
             Object::Misc(misc) => misc.set_prototype_of(prototype),
             Object::Function(func) => func.set_prototype_of(prototype),
+            Object::Arguments(args) => args.set_prototype_of(prototype),
         }
     }
 
@@ -808,6 +848,7 @@ impl ObjectTrait for Object {
             Object::Array(arr) => arr.object.get(key, receiver),
             Object::Misc(misc) => misc.get(key, receiver),
             Object::Function(func) => func.get(key, receiver),
+            Object::Arguments(args) => args.get(key, receiver),
         }
     }
 
@@ -828,6 +869,7 @@ impl ObjectTrait for Object {
             }
             Object::Misc(misc) => misc.get_own_property(key),
             Object::Function(func) => func.get_own_property(key),
+            Object::Arguments(args) => args.get_own_property(key),
         }
     }
 
@@ -837,6 +879,7 @@ impl ObjectTrait for Object {
             Object::Array(arr) => arr.object.define_own_property(key, desc),
             Object::Misc(misc) => misc.define_own_property(key, desc),
             Object::Function(func) => func.define_own_property(key, desc),
+            Object::Arguments(args) => args.define_own_property(key, desc),
         }
     }
 
@@ -855,6 +898,17 @@ impl ObjectTrait for Object {
             }
             Object::Misc(misc) => misc.set(key, value, receiver),
             Object::Function(func) => func.set(key, value, receiver),
+            Object::Arguments(args) => args.set(key, value, receiver),
+        }
+    }
+
+    fn delete(&mut self, key: &PropertyKey) -> bool {
+        match self {
+            Object::Ordinary(obj) => obj.delete(key),
+            Object::Array(arr) => arr.object.delete(key),
+            Object::Misc(misc) => misc.delete(key),
+            Object::Function(func) => func.delete(key),
+            Object::Arguments(args) => args.delete(key),
         }
     }
 
@@ -864,6 +918,7 @@ impl ObjectTrait for Object {
             Object::Array(arr) => arr.object.call(this, args),
             Object::Misc(misc) => misc.call(this, args),
             Object::Function(func) => func.call(this, args),
+            Object::Arguments(args_obj) => args_obj.call(this, args),
         }
     }
 
@@ -873,6 +928,7 @@ impl ObjectTrait for Object {
             Object::Array(arr) => arr.object.construct(args, new_target),
             Object::Misc(misc) => misc.construct(args, new_target),
             Object::Function(func) => func.construct(args, new_target),
+            Object::Arguments(args_obj) => args_obj.construct(args, new_target),
         }
     }
 }

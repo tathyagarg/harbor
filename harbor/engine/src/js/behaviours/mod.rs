@@ -64,18 +64,7 @@ pub fn ordinary_set_prototype_of(object: &mut Object, prototype: Option<Object>)
         return true;
     }
 
-    let extensible = match object {
-        Object::Ordinary(OrdinaryObject { extensible, .. }) => *extensible,
-        Object::Function(FunctionObject { extensible, .. }) => *extensible,
-        Object::Array(ArrayObject { extensible, .. }) => *extensible,
-        Object::Misc(misc) => misc
-            .get_own_property(&PropertyKey::from(SLOT_EXTENSIBLE))
-            .unwrap()
-            .field("value")
-            .unwrap()
-            .unwrap_bool()
-            .unwrap(),
-    };
+    let extensible = ordinary_is_extensible(object);
 
     if !extensible {
         return false;
@@ -122,6 +111,7 @@ pub fn ordinary_is_extensible(object: &Object) -> bool {
             &SlotValue::Value(Value::Boolean(b)) => b,
             _ => panic!(),
         },
+        Object::Arguments(args) => ordinary_is_extensible(&Object::Ordinary(args.ordinary.clone())),
     }
 }
 
@@ -146,6 +136,15 @@ pub fn ordinary_prevent_extensions(object: &mut Object) -> bool {
             );
 
             true
+        }
+        Object::Arguments(args) => {
+            let mut obj = Object::Ordinary(args.ordinary.clone());
+            let res = ordinary_prevent_extensions(&mut obj);
+            if let Object::Ordinary(ordinary) = obj {
+                args.ordinary = ordinary;
+            }
+
+            res
         }
     }
 }

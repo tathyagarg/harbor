@@ -209,3 +209,189 @@ pub mod array {
         return Ok(CompletionRecordNormal(true));
     }
 }
+
+pub mod arguments {
+    use std::{cell::RefCell, rc::Rc};
+
+    use crate::js::{
+        behaviours::{
+            ordinary_define_own_property, ordinary_delete, ordinary_get, ordinary_get_own_property,
+            ordinary_get_prototype_of, ordinary_set, ordinary_set_prototype_of,
+        },
+        operations::{get, has_own_property, same_value, set},
+        values::{
+            Value,
+            object::{
+                MiscObject, Object, ObjectTrait, OrdinaryObject, PropertyDescriptor, PropertyKey,
+            },
+        },
+    };
+
+    #[derive(Clone, Debug)]
+    pub struct ArgumentsObject {
+        pub ordinary: OrdinaryObject,
+        pub parameter_map: MiscObject,
+    }
+
+    impl ObjectTrait for ArgumentsObject {
+        const CALLABLE: bool = false;
+        const CONSTRUCTOR: bool = false;
+
+        fn get_prototype_of(&self) -> Rc<RefCell<Option<Object>>> {
+            ordinary_get_prototype_of(&Object::Arguments(self.clone()))
+        }
+
+        fn set_prototype_of(&mut self, prototype: Option<Object>) -> bool {
+            let mut obj = Object::Arguments(self.clone());
+            let res = ordinary_set_prototype_of(&mut obj, prototype);
+
+            if let Object::Arguments(args) = obj {
+                *self = args;
+            }
+
+            res
+        }
+
+        fn get_own_property(&self, key: &PropertyKey) -> Option<PropertyDescriptor> {
+            let desc = ordinary_get_own_property(&Object::Arguments(self.clone()), key);
+            if desc.is_none() {
+                return None;
+            }
+
+            let mut desc = desc.unwrap();
+
+            let map = &self.parameter_map;
+            let map_object = Object::Misc(map.clone());
+
+            let is_mapped = has_own_property(&map_object, key).unwrap().value;
+
+            if is_mapped {
+                desc.set_field("value", get(&map_object, key).unwrap().value);
+            }
+
+            return Some(desc);
+        }
+
+        fn define_own_property(&mut self, key: &PropertyKey, desc: PropertyDescriptor) -> bool {
+            let mut obj = Object::Arguments(self.clone());
+
+            let map = &self.parameter_map;
+            let mut map_object = Object::Misc(map.clone());
+
+            let is_mapped = has_own_property(&map_object, key).unwrap().value;
+            let new_args_desc = &desc;
+
+            let allowed = ordinary_define_own_property(&mut obj, key, new_args_desc)
+                .unwrap()
+                .value;
+
+            // NOTE: TV Girl reference?
+            if !allowed {
+                return false;
+            }
+
+            if is_mapped {
+                if desc.is_accessor_descriptor() {
+                    map_object.delete(key);
+                } else {
+                    if desc.field("value").is_some() {
+                        set(&mut map_object, key, &desc.field("value").unwrap(), false).unwrap();
+                    }
+
+                    if desc
+                        .field("writable")
+                        .is_some_and(|v| v.unwrap_bool().unwrap() == false)
+                    {
+                        map_object.delete(key);
+                    }
+                }
+            }
+
+            if let Object::Arguments(args) = obj {
+                *self = args;
+            }
+
+            if let Object::Misc(map) = map_object {
+                self.parameter_map = map;
+            }
+
+            true
+        }
+
+        fn get(&self, key: &PropertyKey, receiver: &Value) -> Option<Value> {
+            let map = &self.parameter_map;
+            let map_object = Object::Misc(map.clone());
+
+            let is_mapped = has_own_property(&map_object, key).unwrap().value;
+            if is_mapped {
+                return ordinary_get(&map_object, key, receiver)
+                    .ok()
+                    .map(|v| v.value);
+            }
+
+            get(&map_object, key).ok().map(|v| v.value)
+        }
+
+        fn set(&mut self, key: &PropertyKey, value: &Value, receiver: &mut Value) -> bool {
+            let mut args_object = Object::Arguments(self.clone());
+
+            let map = &self.parameter_map;
+            let mut map_object = Object::Misc(map.clone());
+
+            let is_mapped = if !same_value(&Value::Object(args_object.clone()), receiver) {
+                false
+            } else {
+                has_own_property(&map_object, key).unwrap().value
+            };
+
+            if is_mapped {
+                set(&mut map_object, key, value, false).unwrap();
+                if let Object::Misc(map) = &map_object {
+                    self.parameter_map = map.clone();
+                    args_object = Object::Arguments(self.clone());
+                }
+            }
+
+            let res = ordinary_set(&mut args_object, key, value, receiver);
+
+            if let Object::Arguments(args) = args_object {
+                *self = args;
+            }
+
+            res.unwrap().value
+        }
+
+        fn delete(&mut self, key: &PropertyKey) -> bool {
+            let mut args_object = Object::Arguments(self.clone());
+
+            let map = &self.parameter_map;
+            let mut map_object = Object::Misc(map.clone());
+
+            let is_mapped = has_own_property(&map_object, key).unwrap().value;
+
+            if is_mapped {
+                map_object.delete(key);
+                if let Object::Misc(map) = &map_object {
+                    self.parameter_map = map.clone();
+                    args_object = Object::Arguments(self.clone());
+                }
+            }
+
+            let res = ordinary_delete(&mut args_object, key);
+
+            if let Object::Arguments(args) = args_object {
+                *self = args;
+            }
+
+            res.unwrap().value
+        }
+
+        fn call(&self, _this: &Value, _args: Vec<Value>) -> Value {
+            panic!("Arguments object is not callable");
+        }
+
+        fn construct(&self, _args: Vec<Value>, _new_target: &Object) -> Object {
+            panic!("Arguments object is not a constructor");
+        }
+    }
+}

@@ -1,6 +1,6 @@
 use crate::js::{
     collect_seq,
-    semantics::r#static::{OwnedParseNode, ParseNode, StaticSemantics, bound_names},
+    semantics::r#static::{OwnedParseNode, ParseNode, StaticSemantics},
     stmt::{
         BlockStatement, DECLARATION_ASYNC_FUNCTION_DECLARATION,
         DECLARATION_ASYNC_GENERATOR_DECLARATION, DECLARATION_FUNCTION_DECLARATION,

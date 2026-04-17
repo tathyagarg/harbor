@@ -1,10 +1,4 @@
-use crate::js::{
-    collect_seq,
-    stmt::{
-        DECLARATION_LEXICAL_DECLARATION, Declaration, STATEMENT_OR_DECLARATION_DECLARATION,
-        STATEMENT_OR_DECLARATION_STATEMENT, Script,
-    },
-};
+use crate::js::stmt::{DECLARATION_LEXICAL_DECLARATION, Declaration};
 
 pub fn is_constant_decl(declaration: &Declaration) -> bool {
     match declaration.tag {

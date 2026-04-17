@@ -121,6 +121,18 @@ pub fn get_method(
     Ok(CompletionRecordNormal(func_obj))
 }
 
+pub fn has_own_property(
+    obj: &Object,
+    key: &PropertyKey,
+) -> Result<CompletionRecord<bool>, CompletionRecord<CompletionRecordError, CRKThrow>> {
+    let desc = obj.get_own_property(key);
+    if desc.is_none() {
+        return Ok(CompletionRecordNormal(false));
+    }
+
+    return Ok(CompletionRecordNormal(true));
+}
+
 pub fn call(
     func: &Value,
     target: &Value,

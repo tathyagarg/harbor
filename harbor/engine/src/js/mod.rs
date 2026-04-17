@@ -11,10 +11,7 @@ pub mod values;
 
 use expr::{CodePoint, CodePointAtResult, CodePointSeq, TokenSeq, ZigString};
 
-use crate::{
-    html5::environments::HostDefined,
-    js::{executable::realm::Realm, expr::Seq, script::ScriptRecord, values::string::JsString},
-};
+use crate::js::{expr::Seq, values::string::JsString};
 
 pub fn collect_seq<T: Seq>(seq: &T) -> Vec<T::Item>
 where

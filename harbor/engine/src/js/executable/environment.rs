@@ -75,7 +75,7 @@ pub struct EnvironmentRecord {
 impl EnvironmentRecord {
     pub fn has_binding(
         &self,
-        name: JsString,
+        name: &JsString,
     ) -> Result<CompletionRecord<bool>, CompletionRecord<UNUSED, CRKThrow>> {
         match &self.kind {
             EnvironmentRecordKind::Declarative => {
@@ -303,7 +303,7 @@ pub fn get_identifier_reference(
             this_value: None,
         })),
         Some(env) => {
-            let exists = env.borrow().has_binding(name.clone())?;
+            let exists = env.borrow().has_binding(&name.clone())?;
             if exists.value {
                 Ok(CompletionRecordNormal(Reference {
                     base: ReferenceBase::EnvironmentRecord(env),

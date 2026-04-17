@@ -6,9 +6,8 @@ use crate::js::{
         agent::running_execution_context,
         environment::{EnvironmentRecord, new_declarative_environment},
     },
-    semantics::r#static::{OwnedParseNode, ParseNode, StaticSemantics},
+    semantics::r#static::{ParseNode, StaticSemantics},
     stmt::{BlockStatement, SeqStatementOrDeclaration},
-    syntax::is_constant_decl,
     values::{ReferenceOrValue, Value},
 };
 

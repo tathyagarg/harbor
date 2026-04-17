@@ -14,10 +14,9 @@ use crate::{
         expr::ZigString,
         semantics::{
             evaluate::statements::script_evaluate,
-            r#static::{OwnedParseNode, ParseNode, StaticSemantics},
+            r#static::{ParseNode, StaticSemantics},
         },
         stmt::Script,
-        syntax::is_constant_decl,
         types::completion_record::{CompletionRecord, CompletionRecordNormal},
         values::ReferenceOrValue,
     },
