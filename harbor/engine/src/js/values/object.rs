@@ -16,7 +16,7 @@ use crate::js::{
         realm::Realm,
     },
     operations::to_object,
-    stmt::{FormalParameter, Statement},
+    stmt::{FormalParameter, HoistableDeclaration, Statement},
     types::completion_record::{CRKReturn, CRKThrow, CompletionRecord, UNUSED},
     values::{Value, number::Number, reference::ReferenceName, string::JsString, symbol::Symbol},
 };
@@ -600,7 +600,7 @@ pub struct FunctionObject {
     pub private_env: (), // TODO: Implement private environment
 
     pub formal_parameters: Vec<FormalParameter>,
-    pub ecmascript_code: Vec<Statement>,
+    pub ecmascript_code: HoistableDeclaration,
 
     pub constructor_kind: ConstructorKind,
     pub realm: Rc<RefCell<Realm>>,
@@ -701,8 +701,8 @@ pub fn ordinary_call_bind_this(
 }
 
 pub fn ordinary_call_evaluate_body(
-    _func: &FunctionObject,
-    _args: Vec<Value>,
+    func: &FunctionObject,
+    args: Vec<Value>,
 ) -> Result<CompletionRecord<Value, CRKReturn>, CompletionRecord<(), CRKThrow>> {
     todo!()
 }

@@ -19,6 +19,9 @@ use crate::js::{
 // 10.4
 pub mod exotics;
 
+// 10.2
+pub mod functions;
+
 pub fn ordinary_object_create(
     prototype: Option<Object>,
     additional_internal_slots_list: Vec<String>,

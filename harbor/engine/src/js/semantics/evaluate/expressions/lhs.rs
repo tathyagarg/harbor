@@ -1,20 +1,22 @@
 use crate::js::{
     collect_seq,
     expr::{
-        Arguments, CALL_EXPR_MEMBER, CALL_EXPR_PRIVATE_PROPERTY, CALL_EXPR_PROPERTY,
-        CallExpression, IdentifierNameTokenData, LEFT_HAND_SIDE_EXPR_CALL, LEFT_HAND_SIDE_EXPR_NEW,
-        LeftHandSideExpression, MEMBER_EXPR_MEMBER, MEMBER_EXPR_NEW, MEMBER_EXPR_PRIMARY,
-        MEMBER_EXPR_PRIVATE_PROPERTY, MEMBER_EXPR_PROPERTY, MemberExpression, NEW_EXPR_MEMBER,
-        NEW_EXPR_NEW, NewExpression,
+        Arguments, CALL_EXPR_CALL, CALL_EXPR_COVER, CALL_EXPR_MEMBER, CALL_EXPR_PRIVATE_PROPERTY,
+        CALL_EXPR_PROPERTY, CallExpression, IdentifierNameTokenData, LEFT_HAND_SIDE_EXPR_CALL,
+        LEFT_HAND_SIDE_EXPR_NEW, LeftHandSideExpression, MEMBER_EXPR_MEMBER, MEMBER_EXPR_NEW,
+        MEMBER_EXPR_PRIMARY, MEMBER_EXPR_PRIVATE_PROPERTY, MEMBER_EXPR_PROPERTY, MemberExpression,
+        NEW_EXPR_MEMBER, NEW_EXPR_NEW, NewExpression,
     },
-    operations::{IteratorKind, get_iterator, is_constructor, iterator_step_value},
+    operations::{
+        IteratorKind, call, get_iterator, is_callable, is_constructor, iterator_step_value,
+    },
     semantics::expressions::{EvaluateExpressionTag, expression_evaluate, identifier, primary},
     types::completion_record::{
         CRKAbrupt, CRKNormal, CompletionRecord, CompletionRecordError, CompletionRecordNormal,
     },
     values::{
         ReferenceOrValue, Value,
-        reference::{Reference, ReferenceBase, ReferenceName, get_value},
+        reference::{self, Reference, ReferenceBase, ReferenceName, get_value},
     },
 };
 
@@ -86,11 +88,103 @@ pub fn evaluate_call(call: &CallExpression) -> ReferenceOrValue {
 
             return ReferenceOrValue::Reference(res);
         }
+        CALL_EXPR_COVER => {
+            let expr = unsafe { *call.data.cover.callee };
+            let arguments = unsafe { *call.data.cover.arguments };
+
+            let reference = expression_evaluate(&EvaluateExpressionTag::MemberExpression(expr));
+            let func = reference.get_value().unwrap().value;
+
+            todo!()
+        }
         CALL_EXPR_PRIVATE_PROPERTY => {
             todo!("Private property access evaluation in call expression")
         }
         _ => unreachable!("Unknown call expression tag: {}", call.tag),
     }
+}
+
+fn _evaluate_call(
+    func: Value,
+    reference: &ReferenceOrValue,
+    arguments: Arguments,
+) -> Result<CompletionRecord<Value>, CompletionRecord<CompletionRecordError, CRKAbrupt>> {
+    let this_value = if let ReferenceOrValue::Reference(func_ref) = reference {
+        if func_ref.is_property_reference() {
+            func_ref.get_this_value()
+        } else {
+            let ref_env = &func_ref.base;
+            if let ReferenceBase::EnvironmentRecord(env) = ref_env {
+                Value::Object(env.borrow().with_base_object().unwrap())
+            } else {
+                unreachable!()
+            }
+        }
+    } else {
+        Value::Undefined
+    };
+
+    let arg_list = evaluate_arguments(&arguments);
+
+    if !func.is_object() {
+        return Err(CompletionRecord {
+            kind: CRKAbrupt::Throw,
+            value: CompletionRecordError::TypeError,
+            target: None,
+        });
+    }
+
+    if !is_callable(&func) {
+        return Err(CompletionRecord {
+            kind: CRKAbrupt::Throw,
+            value: CompletionRecordError::TypeError,
+            target: None,
+        });
+    }
+
+    let res = call(&func, &this_value, arg_list);
+
+    res.map_err(|e| CompletionRecord {
+        kind: CRKAbrupt::Throw,
+        value: e.value,
+        target: None,
+    })
+}
+
+pub fn evaluate_arguments(arguments: &Arguments) -> Vec<Value> {
+    let mut args_list = Vec::<Value>::new();
+    let seq = collect_seq(&arguments.arguments);
+    let spread =
+        unsafe { std::slice::from_raw_parts(arguments.is_spread, arguments.arguments.len) }
+            .iter()
+            .copied()
+            .collect::<Vec<bool>>();
+
+    for (is_spread, arg) in spread.iter().zip(seq.iter()) {
+        if *is_spread {
+            let spread_ref =
+                expression_evaluate(&EvaluateExpressionTag::AssignmentExpression(*arg));
+            let spread_obj = get_value(&spread_ref).unwrap().value;
+
+            let mut iterator_rec = get_iterator(&spread_obj, IteratorKind::Sync).unwrap().value;
+
+            loop {
+                let next = iterator_step_value(&mut iterator_rec).unwrap().value;
+                if let Some(value) = next {
+                    args_list.push(value);
+                } else {
+                    break;
+                }
+            }
+        } else {
+            let arg_ref = expression_evaluate(&EvaluateExpressionTag::AssignmentExpression(*arg));
+            let arg_value = get_value(&arg_ref).unwrap().value;
+
+            args_list.push(arg_value);
+        }
+    }
+
+    args_list
 }
 
 pub fn evaluate_member(member: &MemberExpression) -> ReferenceOrValue {

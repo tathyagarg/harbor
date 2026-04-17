@@ -1,8 +1,8 @@
 use crate::js::{
     collect_seq,
-    semantics::expressions::identifier::string_value,
+    semantics::evaluate::expressions::identifier::string_value,
     stmt::{
-        DECLARATION_LEXICAL_DECLARATION, Declaration, LexicalDeclaration,
+        DECLARATION_LEXICAL_DECLARATION, Declaration, FormalParameter, LexicalDeclaration,
         STATEMENT_OR_DECLARATION_DECLARATION, STATEMENT_OR_DECLARATION_STATEMENT, Script,
         SeqStatementOrDeclaration, Statement,
     },
@@ -16,6 +16,19 @@ fn bound_names_lexical_declaration(lex_decl: &LexicalDeclaration) -> Vec<JsStrin
 
     for binding in bindings {
         let identifier = unsafe { *binding.name };
+        let name = string_value(identifier);
+
+        names.push(name);
+    }
+
+    names
+}
+
+pub fn bound_names_formal_params(formal_params: &Vec<FormalParameter>) -> Vec<JsString> {
+    let mut names = Vec::new();
+
+    for param in formal_params {
+        let identifier = unsafe { *param.name };
         let name = string_value(identifier);
 
         names.push(name);

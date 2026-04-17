@@ -42,6 +42,48 @@ pub struct Reference {
     pub this_value: Option<Value>,
 }
 
+impl Reference {
+    pub fn is_property_reference(&self) -> bool {
+        is_property_reference(self)
+    }
+
+    pub fn is_unresolvable_reference(&self) -> bool {
+        is_unresolvable_reference(self)
+    }
+
+    pub fn is_super_reference(&self) -> bool {
+        is_super_reference(self)
+    }
+
+    pub fn is_private_reference(&self) -> bool {
+        is_private_reference(self)
+    }
+
+    pub fn get_value(
+        &self,
+    ) -> Result<CompletionRecord<Value>, CompletionRecord<CompletionRecordError, CRKAbrupt>> {
+        get_value(&ReferenceOrValue::Reference(self.clone()))
+    }
+
+    pub fn put_value(
+        &mut self,
+        value: &Value,
+    ) -> Result<CompletionRecord<UNUSED>, CompletionRecord<CompletionRecordError, CRKAbrupt>> {
+        put_value(&mut ReferenceOrValue::Reference(self.clone()), value)
+    }
+
+    pub fn get_this_value(&self) -> Value {
+        get_this_value(self)
+    }
+
+    pub fn initialize_referenced_binding(
+        &mut self,
+        value: &Value,
+    ) -> Result<CompletionRecord<UNUSED>, CompletionRecord<CompletionRecordError, CRKAbrupt>> {
+        initialize_referenced_binding(self, value)
+    }
+}
+
 pub fn is_property_reference(reference: &Reference) -> bool {
     if let ReferenceBase::Unresolvable = reference.base {
         return false;

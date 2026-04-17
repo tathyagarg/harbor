@@ -1,6 +1,6 @@
 use crate::js::{
     operations::to_boolean,
-    semantics::{expressions::EvaluateExpressionTag, statements::EvaluateStatementTag},
+    semantics::evaluate::{expressions::EvaluateExpressionTag, statements::EvaluateStatementTag},
     stmt::IfStatement,
     values::{ReferenceOrValue, Value},
 };

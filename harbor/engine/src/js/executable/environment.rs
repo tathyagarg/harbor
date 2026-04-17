@@ -271,6 +271,22 @@ impl EnvironmentRecord {
         }
     }
 
+    pub fn with_base_object(&self) -> Option<Object> {
+        match &self.kind {
+            EnvironmentRecordKind::Declarative => None,
+            EnvironmentRecordKind::Object(obj_rec) => {
+                if obj_rec.is_with_environment {
+                    Some(obj_rec.object.borrow().clone())
+                } else {
+                    None
+                }
+            }
+            EnvironmentRecordKind::Function { .. } => None,
+            EnvironmentRecordKind::Module => None,
+            EnvironmentRecordKind::Global { .. } => None,
+        }
+    }
+
     // TODO: Implement other methods (this, super based methods)
 }
 

@@ -1,13 +1,14 @@
 use crate::js::{
     expr::Expression,
-    semantics::expressions::EvaluateExpressionTag,
+    semantics::evaluate::expressions::EvaluateExpressionTag,
     stmt::{
         BlockStatement, DECLARATION_LEXICAL_DECLARATION, IfStatement, LexicalDeclaration,
         STATEMENT_BLOCK_STATEMENT, STATEMENT_EXPR_STATEMENT, STATEMENT_IF_STATEMENT,
         STATEMENT_OR_DECLARATION_DECLARATION, STATEMENT_OR_DECLARATION_STATEMENT, Script,
         Statement, StatementOrDeclaration,
     },
-    values::{ReferenceOrValue, Value},
+    types::completion_record::{CRKReturn, CRKThrow, CompletionRecord},
+    values::{ReferenceOrValue, Value, object::FunctionObject},
 };
 
 pub mod block;
@@ -86,3 +87,9 @@ pub fn statement_evaluate(tag: &EvaluateStatementTag) -> ReferenceOrValue {
         },
     }
 }
+
+// pub fn evaluate_function_body(
+//     function: &FunctionObject,
+//     arguments: Vec<Value>,
+// ) -> Result<CompletionRecord<(), CRKReturn>, CompletionRecord<(), CRKThrow>> {
+// }

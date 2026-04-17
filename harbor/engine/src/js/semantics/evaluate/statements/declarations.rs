@@ -1,7 +1,7 @@
 use crate::js::{
     collect_seq,
     executable::context::resolve_binding,
-    semantics::expressions::identifier::string_value,
+    semantics::evaluate::expressions::identifier::string_value,
     stmt::{LexicalBinding, LexicalDeclaration},
     values::{Value, reference::initialize_referenced_binding},
 };

@@ -12,7 +12,7 @@ use crate::{
             realm::Realm,
         },
         expr::ZigString,
-        semantics::statements::script_evaluate,
+        semantics::evaluate::statements::script_evaluate,
         stmt::Script,
         syntax::{bound_names_declaration, is_constant_decl, lexically_scoped_declarations_script},
         types::completion_record::{CompletionRecord, CompletionRecordNormal},
