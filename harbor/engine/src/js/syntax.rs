@@ -66,10 +66,6 @@ pub fn lexically_scoped_declarations_script(script: &Script) -> Vec<Declaration>
     decls
 }
 
-pub fn var_declared_names_script(script: &Script) -> Vec<JsString> {
-    return top_level_var_declared_names_script(&script.body);
-}
-
 /// TODO: I haven't implemented parsing of var declarations
 pub fn var_declared_names_statement(_stmt: &Statement) -> Vec<JsString> {
     vec![]

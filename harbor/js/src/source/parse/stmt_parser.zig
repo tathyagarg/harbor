@@ -190,7 +190,18 @@ pub fn parse_statement(parser: *Parser) error{ UnexpectedEndOfTokens, OutOfMemor
         }
         // if (is_keyword(name, "break")) return parse_break_statement(parser);
         // if (is_keyword(name, "continue")) return parse_continue_statement(parser);
-        // if (is_keyword(name, "var")) return parse_var_statement(parser);
+        if (is_keyword(data, "var")) {
+            const var_stmt = try parse_var_statement(parser);
+
+            statement.* = stmt.Statement{
+                .tag = stmt.STATEMENT_VAR_STATEMENT,
+                .data = .{
+                    .var_statement = var_stmt,
+                },
+            };
+
+            return statement;
+        }
         // if (is_keyword(name, "try")) return parse_try_statement(parser);
         // if (is_keyword(name, "with")) return parse_with_statement(parser);
     }
@@ -240,6 +251,67 @@ pub fn parse_statement(parser: *Parser) error{ UnexpectedEndOfTokens, OutOfMemor
     };
 
     return statement;
+}
+
+pub fn parse_var_statement(parser: *Parser) error{ UnexpectedEndOfTokens, OutOfMemory }!*stmt.VarStatement {
+    const token = p.peek(parser) orelse return error.UnexpectedEndOfTokens;
+    const data: *CommonTokenData = @ptrFromInt(token.data);
+
+    if (!is_keyword(data, "var")) {
+        return error.UnexpectedEndOfTokens;
+    }
+    _ = p.next(parser);
+
+    var bindings = std.ArrayList(stmt.LexicalBinding).empty;
+    defer bindings.deinit(parser.allocator);
+
+    while (true) {
+        const binding = try parse_lexical_binding(parser);
+        try bindings.append(parser.allocator, binding.*);
+
+        if (!p.match(parser, _text.Token{
+            .kind = .CommonToken,
+            .data = @intFromPtr(&CommonTokenData{
+                .common_token_kind = .Punctuator,
+                .data = @intFromEnum(_text.PunctuatorKind.Comma),
+            }),
+        })) {
+            break;
+        }
+    }
+
+    p.expect_skip_whitespace(parser, _text.Token{
+        .kind = .CommonToken,
+        .data = @intFromPtr(&CommonTokenData{
+            .common_token_kind = .Punctuator,
+            .data = @intFromEnum(_text.PunctuatorKind.Semicolon),
+        }),
+    }) catch return error.UnexpectedEndOfTokens;
+    _ = p.next(parser);
+
+    const var_statement = try parser.allocator.create(stmt.VarStatement);
+    const slice = try bindings.toOwnedSlice(parser.allocator);
+
+    var_statement.* = stmt.VarStatement{
+        .bindings = .{
+            .data = slice.ptr,
+            .len = slice.len,
+        },
+    };
+
+    return var_statement;
+}
+
+test "parse var statement" {
+    const result = try get_parse_result(stmt.Statement, parse_statement, "var a;");
+
+    std.debug.assert(result.tag == stmt.STATEMENT_VAR_STATEMENT);
+    std.debug.assert(result.data.var_statement.bindings.len == 1);
+    std.debug.assert(testing.are_equal_strings(
+        result.data.var_statement.bindings.data[0].name.name,
+        testing.u8_array_to_string(@ptrCast(@constCast("a")), 1),
+    ));
+    std.debug.assert(result.data.var_statement.bindings.data[0].initializer.has_value == false);
 }
 
 test "parse return statement (with value)" {

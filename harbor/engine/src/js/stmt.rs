@@ -483,18 +483,23 @@ impl Seq for SeqLexicalDeclaration {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct VariableStatement {
-    pub declarations: SeqLexicalDeclaration,
+    pub bindings: SeqLexicalBinding,
 }
 
 impl Display for VariableStatement {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let decls =
-            unsafe { std::slice::from_raw_parts(self.declarations.items, self.declarations.len) };
-        write!(f, "VariableStatement {{\n")?;
-        for decl in decls {
-            write!(f, "  {},\n", decl)?;
+        let bindings =
+            unsafe { std::slice::from_raw_parts(self.bindings.items, self.bindings.len) };
+
+        write!(
+            f,
+            "VariableStatement {{ len: {}, bindings: [\n",
+            self.bindings.len
+        )?;
+        for binding in bindings {
+            write!(f, "  {},\n", binding)?;
         }
-        write!(f, "}}")
+        write!(f, "]}}")
     }
 }
 

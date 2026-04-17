@@ -1,7 +1,10 @@
 use crate::js::{
     collect_seq,
     semantics::r#static::string_value::string_value,
-    stmt::{DECLARATION_LEXICAL_DECLARATION, Declaration, FormalParameter, LexicalDeclaration},
+    stmt::{
+        DECLARATION_LEXICAL_DECLARATION, Declaration, FormalParameter, HoistableDeclaration,
+        LexicalDeclaration,
+    },
     values::string::JsString,
 };
 
@@ -9,6 +12,17 @@ pub enum BoundNames<'a> {
     Declaration(&'a Declaration),
     LexicalDeclaration(&'a LexicalDeclaration),
     FormalParameters(&'a Vec<FormalParameter>),
+    HoistabeDeclaration(&'a HoistableDeclaration),
+}
+
+fn bound_names_hoistable_declaration(decl: &HoistableDeclaration) -> Vec<JsString> {
+    let identifier = unsafe { *decl.name };
+    if identifier.has_value {
+        let name = string_value(unsafe { identifier.value.value });
+        vec![name]
+    } else {
+        vec![]
+    }
 }
 
 fn bound_names_lexical_declaration(lex_decl: &LexicalDeclaration) -> Vec<JsString> {
@@ -54,5 +68,6 @@ pub fn bound_names(target: BoundNames) -> Vec<JsString> {
         BoundNames::Declaration(decl) => bound_names_declaration(decl),
         BoundNames::LexicalDeclaration(lex_decl) => bound_names_lexical_declaration(lex_decl),
         BoundNames::FormalParameters(formal_params) => bound_names_formal_params(formal_params),
+        BoundNames::HoistabeDeclaration(decl) => bound_names_hoistable_declaration(decl),
     }
 }
