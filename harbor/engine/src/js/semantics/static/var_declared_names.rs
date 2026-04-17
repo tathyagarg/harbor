@@ -1,6 +1,6 @@
 use crate::js::{
     collect_seq,
-    semantics::r#static::{BoundNames, bound_names},
+    semantics::r#static::{ParseNode, bound_names},
     stmt::{
         BlockStatement, DECLARATION_ASYNC_FUNCTION_DECLARATION,
         DECLARATION_ASYNC_GENERATOR_DECLARATION, DECLARATION_FUNCTION_DECLARATION,
@@ -13,14 +13,14 @@ use crate::js::{
     values::string::JsString,
 };
 
-pub enum VarDeclaredNames<'a> {
-    Script(&'a Script),
-    Statement(&'a Statement),
-    StatmentOrDeclaration(&'a StatementOrDeclaration),
-    BlockStatement(&'a BlockStatement),
-    IfStatement(&'a IfStatement),
-    WhileStatement(&'a WhileStatement),
-}
+// pub enum VarDeclaredNames<'a> {
+//     Script(&'a Script),
+//     Statement(&'a Statement),
+//     StatmentOrDeclaration(&'a StatementOrDeclaration),
+//     BlockStatement(&'a BlockStatement),
+//     IfStatement(&'a IfStatement),
+//     WhileStatement(&'a WhileStatement),
+// }
 
 fn var_declared_names_script(script: &Script) -> Vec<JsString> {
     return top_level_var_declared_names(&script.body);
@@ -117,14 +117,12 @@ pub fn top_level_var_declared_names(list: &SeqStatementOrDeclaration) -> Vec<JsS
                         _ => unreachable!(),
                     };
 
-                    names.extend(bound_names(BoundNames::HoistabeDeclaration(
-                        &hoistable_decl,
-                    )));
+                    names.extend(bound_names(ParseNode::HoistabeDeclaration(&hoistable_decl)));
                 }
             }
             STATEMENT_OR_DECLARATION_STATEMENT => {
                 let statement = unsafe { *stmt.data.statement };
-                names.extend(var_declared_names(VarDeclaredNames::Statement(&statement)));
+                names.extend(var_declared_names(ParseNode::Statement(&statement)));
             }
             _ => unreachable!("Unexpected statement or declaration tag: {}", stmt.tag),
         }
@@ -133,17 +131,16 @@ pub fn top_level_var_declared_names(list: &SeqStatementOrDeclaration) -> Vec<JsS
     names
 }
 
-pub fn var_declared_names(target: VarDeclaredNames) -> Vec<JsString> {
+pub fn var_declared_names(target: ParseNode) -> Vec<JsString> {
     match target {
-        VarDeclaredNames::Script(script) => var_declared_names_script(&script),
-        VarDeclaredNames::Statement(stmt) => var_declared_names_statement(&stmt),
-        VarDeclaredNames::StatmentOrDeclaration(stmt_or_decl) => {
+        ParseNode::Script(script) => var_declared_names_script(&script),
+        ParseNode::Statement(stmt) => var_declared_names_statement(&stmt),
+        ParseNode::StatmentOrDeclaration(stmt_or_decl) => {
             var_declared_names_statement_or_decl(&stmt_or_decl)
         }
-        VarDeclaredNames::BlockStatement(block_stmt) => {
-            var_declared_names_block_statement(&block_stmt)
-        }
-        VarDeclaredNames::IfStatement(if_stmt) => var_declared_names_if_statement(&if_stmt),
-        VarDeclaredNames::WhileStatement(while_stmt) => var_declared_names_while(&while_stmt),
+        ParseNode::BlockStatement(block_stmt) => var_declared_names_block_statement(&block_stmt),
+        ParseNode::IfStatement(if_stmt) => var_declared_names_if_statement(&if_stmt),
+        ParseNode::WhileStatement(while_stmt) => var_declared_names_while(&while_stmt),
+        _ => unimplemented!("var_declared_names for parse node: {:?}", target),
     }
 }

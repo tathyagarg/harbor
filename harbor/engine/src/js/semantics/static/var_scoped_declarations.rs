@@ -1,5 +1,6 @@
 use crate::js::{
     collect_seq,
+    semantics::r#static::ParseNode,
     stmt::{
         BlockStatement, LexicalBinding, STATEMENT_BLOCK_STATEMENT, STATEMENT_BREAK_STATEMENT,
         STATEMENT_CONTINUE_STATEMENT, STATEMENT_DEBUGGER_STATEMENT, STATEMENT_DO_WHILE,
@@ -10,10 +11,10 @@ use crate::js::{
     },
 };
 
-pub enum VarScopedDeclarations<'a> {
-    Statement(&'a Statement),
-    BlockStatement(&'a BlockStatement),
-}
+// pub enum VarScopedDeclarations<'a> {
+//     Statement(&'a Statement),
+//     BlockStatement(&'a BlockStatement),
+// }
 
 fn var_scoped_declarations_statement(statement: &Statement) -> Vec<LexicalBinding> {
     match statement.tag {
@@ -81,11 +82,15 @@ fn var_scoped_declarations_block_statement(block_stmt: &BlockStatement) -> Vec<L
     decls
 }
 
-pub fn var_scoped_declarations(target: VarScopedDeclarations) -> Vec<LexicalBinding> {
+pub fn var_scoped_declarations(target: ParseNode) -> Vec<LexicalBinding> {
     match target {
-        VarScopedDeclarations::Statement(stmt) => var_scoped_declarations_statement(stmt),
-        VarScopedDeclarations::BlockStatement(block_stmt) => {
+        ParseNode::Statement(stmt) => var_scoped_declarations_statement(stmt),
+        ParseNode::BlockStatement(block_stmt) => {
             var_scoped_declarations_block_statement(block_stmt)
         }
+        _ => unimplemented!(
+            "var_scoped_declarations not implemented for target: {:?}",
+            target
+        ),
     }
 }

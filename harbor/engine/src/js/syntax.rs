@@ -1,6 +1,6 @@
 use crate::js::{
     collect_seq,
-    semantics::r#static::{BoundNames, bound_names},
+    semantics::r#static::{ParseNode, bound_names},
     stmt::{
         DECLARATION_LEXICAL_DECLARATION, Declaration, STATEMENT_OR_DECLARATION_DECLARATION,
         STATEMENT_OR_DECLARATION_STATEMENT, Script, SeqStatementOrDeclaration, Statement,
@@ -103,7 +103,7 @@ pub fn top_level_lexically_declared_names_script(
                 let decl = unsafe { stmt.data.declaration };
                 let decl = unsafe { &*decl };
 
-                let decl_names = bound_names(BoundNames::Declaration(decl));
+                let decl_names = bound_names(ParseNode::Declaration(decl));
                 names.extend(decl_names);
             }
             _ => unreachable!(),

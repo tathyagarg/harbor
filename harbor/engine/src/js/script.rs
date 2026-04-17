@@ -14,7 +14,7 @@ use crate::{
         expr::ZigString,
         semantics::{
             evaluate::statements::script_evaluate,
-            r#static::{BoundNames, bound_names},
+            r#static::{ParseNode, bound_names},
         },
         stmt::Script,
         syntax::{is_constant_decl, lexically_scoped_declarations_script},
@@ -91,7 +91,7 @@ pub fn global_declaration_instantiation(script: &Script, env: Rc<RefCell<Environ
     let lex_decls = lexically_scoped_declarations_script(script);
 
     for decl in lex_decls {
-        for name in bound_names(BoundNames::Declaration(&decl)) {
+        for name in bound_names(ParseNode::Declaration(&decl)) {
             if is_constant_decl(&decl) {
                 env.borrow_mut()
                     .create_immutable_binding(name.clone(), true)

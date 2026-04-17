@@ -1,6 +1,6 @@
 use crate::js::{
     collect_seq,
-    semantics::r#static::string_value::string_value,
+    semantics::r#static::{ParseNode, string_value::string_value},
     stmt::{
         DECLARATION_LEXICAL_DECLARATION, Declaration, FormalParameter, HoistableDeclaration,
         LexicalDeclaration,
@@ -8,12 +8,12 @@ use crate::js::{
     values::string::JsString,
 };
 
-pub enum BoundNames<'a> {
-    Declaration(&'a Declaration),
-    LexicalDeclaration(&'a LexicalDeclaration),
-    FormalParameters(&'a Vec<FormalParameter>),
-    HoistabeDeclaration(&'a HoistableDeclaration),
-}
+// pub enum BoundNames<'a> {
+//     Declaration(&'a Declaration),
+//     LexicalDeclaration(&'a LexicalDeclaration),
+//     FormalParameters(&'a Vec<FormalParameter>),
+//     HoistabeDeclaration(&'a HoistableDeclaration),
+// }
 
 fn bound_names_hoistable_declaration(decl: &HoistableDeclaration) -> Vec<JsString> {
     let identifier = unsafe { *decl.name };
@@ -63,11 +63,12 @@ fn bound_names_formal_params(formal_params: &Vec<FormalParameter>) -> Vec<JsStri
     names
 }
 
-pub fn bound_names(target: BoundNames) -> Vec<JsString> {
+pub fn bound_names(target: ParseNode) -> Vec<JsString> {
     match target {
-        BoundNames::Declaration(decl) => bound_names_declaration(decl),
-        BoundNames::LexicalDeclaration(lex_decl) => bound_names_lexical_declaration(lex_decl),
-        BoundNames::FormalParameters(formal_params) => bound_names_formal_params(formal_params),
-        BoundNames::HoistabeDeclaration(decl) => bound_names_hoistable_declaration(decl),
+        ParseNode::Declaration(decl) => bound_names_declaration(decl),
+        ParseNode::LexicalDeclaration(lex_decl) => bound_names_lexical_declaration(lex_decl),
+        ParseNode::FormalParameters(formal_params) => bound_names_formal_params(formal_params),
+        ParseNode::HoistabeDeclaration(decl) => bound_names_hoistable_declaration(decl),
+        _ => unimplemented!("BoundNames not implemented for {:?}", target),
     }
 }
