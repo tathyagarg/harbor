@@ -348,7 +348,7 @@ pub fn new_function_environment(
     new_target: Option<Object>,
 ) -> EnvironmentRecord {
     EnvironmentRecord {
-        outer_env: Some(Rc::new(RefCell::new(func.environment.clone()))),
+        outer_env: Some(func.environment.clone()),
         kind: EnvironmentRecordKind::Function {
             function_object: Rc::new(func.clone()),
             this_binding_status: if matches!(func.this_mode, ThisMode::Lexical) {

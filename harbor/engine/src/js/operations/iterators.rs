@@ -164,3 +164,7 @@ pub fn iterator_step_value(
 
     return value.map(|v| CompletionRecordNormal(Some(v.value)));
 }
+
+pub fn create_list_iterator_record(_list: Vec<Value>) -> Iterator {
+    todo!("No infra to do allat")
+}

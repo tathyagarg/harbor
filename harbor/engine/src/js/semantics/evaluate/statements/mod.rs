@@ -1,13 +1,15 @@
 use crate::js::{
+    behaviours::functions::function_declaration_instantiation,
     expr::Expression,
     semantics::evaluate::expressions::EvaluateExpressionTag,
     stmt::{
-        BlockStatement, DECLARATION_LEXICAL_DECLARATION, IfStatement, LexicalDeclaration,
-        STATEMENT_BLOCK_STATEMENT, STATEMENT_EXPR_STATEMENT, STATEMENT_IF_STATEMENT,
-        STATEMENT_OR_DECLARATION_DECLARATION, STATEMENT_OR_DECLARATION_STATEMENT, Script,
-        Statement, StatementOrDeclaration,
+        BlockStatement, DECLARATION_FUNCTION_DECLARATION, DECLARATION_LEXICAL_DECLARATION,
+        IfStatement, LexicalDeclaration, STATEMENT_BLOCK_STATEMENT, STATEMENT_EXPR_STATEMENT,
+        STATEMENT_IF_STATEMENT, STATEMENT_OR_DECLARATION_DECLARATION,
+        STATEMENT_OR_DECLARATION_STATEMENT, Script, Statement, StatementOrDeclaration,
     },
-    values::{ReferenceOrValue, Value},
+    types::completion_record::{CRKReturn, CRKThrow, CompletionRecord},
+    values::{ReferenceOrValue, Value, object::FunctionObject},
 };
 
 pub mod block;
@@ -33,6 +35,9 @@ pub fn statement_or_declaration_evaluate(val: &StatementOrDeclaration) -> Refere
                 DECLARATION_LEXICAL_DECLARATION => {
                     let lex_decl = unsafe { *decl.data.lex_decl };
                     statement_evaluate(&EvaluateStatementTag::LexicalDeclaration(lex_decl))
+                }
+                DECLARATION_FUNCTION_DECLARATION => {
+                    return ReferenceOrValue::Value(Value::Undefined);
                 }
                 _ => unimplemented!(
                     "Only lexical declarations are implemented in statement_or_declaration_evaluate"
@@ -87,8 +92,22 @@ pub fn statement_evaluate(tag: &EvaluateStatementTag) -> ReferenceOrValue {
     }
 }
 
-// pub fn evaluate_function_body(
-//     function: &FunctionObject,
-//     arguments: Vec<Value>,
-// ) -> Result<CompletionRecord<(), CRKReturn>, CompletionRecord<(), CRKThrow>> {
-// }
+pub fn evaluate_function_body(
+    function: &FunctionObject,
+    arguments: Vec<Value>,
+) -> Result<CompletionRecord<Value, CRKReturn>, CompletionRecord<(), CRKThrow>> {
+    function_declaration_instantiation(function, arguments)?;
+    let res = statement_evaluate(&EvaluateStatementTag::BlockStatement(
+        function.ecmascript_code,
+    ));
+
+    Ok(CompletionRecord {
+        kind: CRKReturn,
+        value: res
+            .get_value()
+            .ok()
+            .map(|v| v.value)
+            .unwrap_or(Value::Undefined),
+        target: None,
+    })
+}

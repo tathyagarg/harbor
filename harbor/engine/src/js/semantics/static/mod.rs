@@ -74,6 +74,7 @@ impl<'a> StaticSemantics for ParseNode<'a> {
     fn is_constant_decl(&self) -> bool {
         match self {
             ParseNode::LexicalDeclaration(decl) => decl.is_const,
+            ParseNode::HoistabeDeclaration(_) => false,
             _ => panic!("is_constant_decl is only applicable to LexicalDeclaration nodes"),
         }
     }
@@ -120,7 +121,11 @@ impl StaticSemantics for OwnedParseNode {
     fn is_constant_decl(&self) -> bool {
         match self {
             OwnedParseNode::LexicalDeclaration(decl) => decl.is_const,
-            _ => panic!("is_constant_decl is only applicable to LexicalDeclaration nodes"),
+            OwnedParseNode::HoistabeDeclaration(_) => false,
+            _ => panic!(
+                "is_constant_decl is only applicable to LexicalDeclaration nodes, got {:?}",
+                self
+            ),
         }
     }
 }
@@ -171,7 +176,7 @@ impl Debug for OwnedParseNode {
     }
 }
 
-pub fn is_simple_parameter_list(formals: Vec<FormalParameter>) -> bool {
+pub fn is_simple_parameter_list(formals: &Vec<FormalParameter>) -> bool {
     if formals.is_empty() {
         return true;
     }
@@ -185,7 +190,7 @@ pub fn is_simple_parameter_list(formals: Vec<FormalParameter>) -> bool {
     true
 }
 
-pub fn contains_expression(formals: Vec<FormalParameter>) -> bool {
+pub fn contains_expression(formals: &Vec<FormalParameter>) -> bool {
     for param in formals {
         if (unsafe { *param.initializer }).has_value {
             return true;

@@ -14,11 +14,11 @@ use crate::{
         expr::ZigString,
         semantics::{
             evaluate::statements::script_evaluate,
-            r#static::{ParseNode, StaticSemantics},
+            r#static::{OwnedParseNode, ParseNode, StaticSemantics},
         },
         stmt::Script,
         types::completion_record::{CompletionRecord, CompletionRecordNormal},
-        values::ReferenceOrValue,
+        values::{ReferenceOrValue, object::ordinary_function_create},
     },
 };
 
@@ -84,10 +84,34 @@ pub fn script_evaluation(script_rec: Rc<ScriptRecord>) -> CompletionRecord<Refer
 }
 
 pub fn global_declaration_instantiation(script: &Script, env: Rc<RefCell<EnvironmentRecord>>) {
-    // let lex_names = lexically_declared_names_script(script);
-    // let var_names = var_declared_names_script(script);
+    let script_node = ParseNode::Script(script);
 
-    let lex_decls = ParseNode::Script(script).lexically_scoped_declarations();
+    let var_decls = script_node.var_scoped_declarations();
+    let mut funcs_to_init = Vec::new();
+    let mut declared_func_names = Vec::new();
+
+    for decl in &var_decls {
+        if matches!(decl, OwnedParseNode::HoistabeDeclaration(_)) {
+            let fn_name = decl.bound_names().first().unwrap().clone();
+            if !declared_func_names.contains(&fn_name) {
+                declared_func_names.push(fn_name.clone());
+                funcs_to_init.push(decl);
+            }
+        }
+    }
+
+    let mut declared_var_names = Vec::new();
+    for decl in &var_decls {
+        if matches!(decl, OwnedParseNode::LexicalDeclaration(_)) {
+            for name in decl.bound_names() {
+                if !declared_func_names.contains(&name) && !declared_var_names.contains(&name) {
+                    declared_var_names.push(name.clone());
+                }
+            }
+        }
+    }
+
+    let lex_decls = script_node.lexically_scoped_declarations();
 
     for decl in lex_decls {
         for name in decl.bound_names() {
@@ -100,6 +124,16 @@ pub fn global_declaration_instantiation(script: &Script, env: Rc<RefCell<Environ
                     .create_mutable_binding(name.clone(), false)
                     .unwrap();
             }
+        }
+    }
+
+    for func in funcs_to_init {
+        if let OwnedParseNode::HoistabeDeclaration(decl) = func {
+            let fn_name = func.bound_names().first().unwrap().clone();
+            // let func_obj = ordinary_function_create();
+            // env.borrow_mut()
+            //     .initialize_binding(fn_name, ReferenceOrValue::Value(func_obj))
+            //     .unwrap();
         }
     }
 }

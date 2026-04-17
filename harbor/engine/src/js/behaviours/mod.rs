@@ -32,6 +32,7 @@ pub fn _ordinary_from_misc(misc: &MiscObject) -> OrdinaryObject {
 
     let ordinary_value = Value::Object(Object::Ordinary(ordinary.clone()));
 
+    println!("Misc: {:#?}", misc);
     ordinary.prototype = Rc::new(RefCell::new(Some(
         misc.get(&PropertyKey::from(SLOT_PROTOTYPE), &ordinary_value)
             .unwrap_or(Value::Null)
@@ -165,7 +166,7 @@ pub fn ordinary_set_prototype_of(object: &mut Object, prototype: Option<Object>)
 pub fn ordinary_is_extensible(object: &Object) -> bool {
     match object {
         Object::Ordinary(OrdinaryObject { extensible, .. }) => *extensible,
-        Object::Function(FunctionObject { extensible, .. }) => *extensible,
+        Object::Function(FunctionObject { object, .. }) => object.extensible,
         Object::Array(ArrayObject { extensible, .. }) => *extensible,
         Object::Misc(misc) => match misc.internal_slots.get(SLOT_EXTENSIBLE).unwrap() {
             &SlotValue::Value(Value::Boolean(b)) => b,
@@ -181,8 +182,8 @@ pub fn ordinary_prevent_extensions(object: &mut Object) -> bool {
             *extensible = false;
             true
         }
-        Object::Function(FunctionObject { extensible, .. }) => {
-            *extensible = false;
+        Object::Function(FunctionObject { object, .. }) => {
+            object.extensible = false;
             true
         }
         Object::Array(ArrayObject { extensible, .. }) => {

@@ -52,6 +52,12 @@ pub mod string {
         }
     }
 
+    impl From<JsString> for String {
+        fn from(js_str: JsString) -> Self {
+            String::from_utf16(&js_str.0).unwrap_or_default()
+        }
+    }
+
     impl FromStr for JsString {
         type Err = ();
 

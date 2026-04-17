@@ -4,8 +4,8 @@ use crate::js::{
     SLOT_PROTOTYPE,
     behaviours::{
         exotics::arguments::ArgumentsObject, ordinary_define_own_property, ordinary_delete,
-        ordinary_get, ordinary_get_own_property, ordinary_get_prototype_of, ordinary_set,
-        ordinary_set_prototype_of,
+        ordinary_get, ordinary_get_own_property, ordinary_get_prototype_of, ordinary_object_create,
+        ordinary_set, ordinary_set_prototype_of,
     },
     executable::{
         agent::{SURROUNDING_AGENT, running_execution_context},
@@ -16,9 +16,10 @@ use crate::js::{
         environment::{
             EnvironmentRecord, EnvironmentRecordKind, bind_this_value, new_function_environment,
         },
-        realm::Realm,
+        realm::{Realm, current_realm},
     },
     operations::to_object,
+    semantics::{evaluate::statements::evaluate_function_body, r#static::ParseNode},
     stmt::{BlockStatement, FormalParameter},
     types::completion_record::{CRKReturn, CRKThrow, CompletionRecord, UNUSED},
     values::{Value, number::Number, reference::ReferenceName, string::JsString, symbol::Symbol},
@@ -582,6 +583,17 @@ fn pmdd_get(obj: &MiscObject, key: &PropertyKey, _receiver: &Value) -> Option<Va
         }
     }
 
+    let key_string = if let PropertyKey::String(s) = key {
+        String::from(s.clone())
+    } else {
+        return None;
+    };
+    if let Some(slot) = obj.internal_slots.get(&key_string) {
+        if let SlotValue::Value(value) = slot {
+            return Some(value.clone());
+        }
+    }
+
     None
 }
 
@@ -624,10 +636,7 @@ pub enum ThisMode {
 pub struct FunctionObject {
     pub object: OrdinaryObject,
 
-    pub extensible: bool,
-    pub prototype: Option<Rc<Object>>,
-
-    pub environment: EnvironmentRecord,
+    pub environment: Rc<RefCell<EnvironmentRecord>>,
     pub private_env: (), // TODO: Implement private environment
 
     pub formal_parameters: Vec<FormalParameter>,
@@ -640,7 +649,7 @@ pub struct FunctionObject {
     pub this_mode: ThisMode,
 
     pub strict: bool,
-    pub home_object: Rc<Object>,
+    pub home_object: Rc<Value>,
 
     pub source_text: JsString,
 
@@ -650,12 +659,16 @@ pub struct FunctionObject {
     pub is_class_constructor: (),
 }
 
+impl FunctionObject {
+    pub fn prototype() -> FunctionObject {
+        todo!()
+    }
+}
+
 impl Debug for FunctionObject {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("FunctionObject")
             .field("object", &self.object)
-            .field("extensible", &self.extensible)
-            .field("prototype", &self.prototype)
             .field("environment", &self.environment)
             .field("constructor_kind", &self.constructor_kind)
             .field("realm", &self.realm)
@@ -665,6 +678,50 @@ impl Debug for FunctionObject {
             .field("home_object", &self.home_object)
             .field("source_text", &self.source_text)
             .finish()
+    }
+}
+
+pub enum FunctionCreateMode {
+    LexicalThis,
+    NonLexicalThis,
+}
+
+// WARN: This is not completely implemented.
+pub fn ordinary_function_create(
+    prototype: Object,
+    source_text: JsString,
+    param_list: Vec<FormalParameter>,
+    body: ParseNode,
+    this_mode: FunctionCreateMode,
+    env: Rc<RefCell<EnvironmentRecord>>,
+) -> FunctionObject {
+    FunctionObject {
+        object: ordinary_object_create(Some(prototype), vec![]),
+        source_text,
+        formal_parameters: param_list,
+        ecmascript_code: match body {
+            ParseNode::BlockStatement(block) => block.clone(),
+            _ => panic!("Function body must be a block statement"),
+        },
+        strict: false,
+        this_mode: match this_mode {
+            FunctionCreateMode::LexicalThis => ThisMode::Lexical,
+            FunctionCreateMode::NonLexicalThis => ThisMode::Global,
+        },
+
+        is_class_constructor: (),
+        home_object: Rc::new(Value::Undefined),
+
+        environment: env,
+        private_env: (),
+        realm: current_realm(),
+        constructor_kind: ConstructorKind::Base,
+
+        script_or_module: ScriptOrModule::Module, // TODO: Handle module code
+
+        fields: (),
+        private_methods: (),
+        class_field_initializer_name: (),
     }
 }
 
@@ -735,7 +792,7 @@ pub fn ordinary_call_evaluate_body(
     func: &FunctionObject,
     args: Vec<Value>,
 ) -> Result<CompletionRecord<Value, CRKReturn>, CompletionRecord<(), CRKThrow>> {
-    todo!()
+    return evaluate_function_body(func, args);
 }
 
 impl ObjectTrait for FunctionObject {

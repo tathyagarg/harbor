@@ -6,6 +6,9 @@ use crate::js::{
 
 pub fn lexically_scoped_declarations(node: &ParseNode) -> Vec<OwnedParseNode> {
     match node {
+        ParseNode::Script(script) => {
+            lexically_scoped_declarations(&ParseNode::StatementOrDeclList(&script.body))
+        }
         ParseNode::Statement(_) => vec![],
         ParseNode::Declaration(decl) => vec![decl.declaration_part()],
         ParseNode::StatementOrDeclList(seq) => {
@@ -37,6 +40,9 @@ pub fn lexically_scoped_declarations(node: &ParseNode) -> Vec<OwnedParseNode> {
 
 pub fn lexically_scoped_declarations_owned(node: &OwnedParseNode) -> Vec<OwnedParseNode> {
     match node {
+        OwnedParseNode::Script(script) => {
+            lexically_scoped_declarations_owned(&OwnedParseNode::StatementOrDeclList(script.body))
+        }
         OwnedParseNode::Statement(_) => vec![],
         OwnedParseNode::Declaration(decl) => vec![OwnedParseNode::Declaration(decl.clone())],
         OwnedParseNode::StatementOrDeclList(seq) => {

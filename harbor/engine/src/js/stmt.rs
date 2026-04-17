@@ -333,7 +333,9 @@ impl Declaration {
 impl Display for Declaration {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.tag {
-            DECLARATION_FUNCTION_DECLARATION => write!(f, "FunctionDeclaration {{ }}"),
+            DECLARATION_FUNCTION_DECLARATION => write!(f, "FunctionDeclaration {{ {} }}", unsafe {
+                self.data.function.as_ref().unwrap()
+            },),
             DECLARATION_GENERATOR_DECLARATION => write!(f, "GeneratorDeclaration {{ }}"),
             DECLARATION_ASYNC_FUNCTION_DECLARATION => {
                 write!(f, "AsyncFunctionDeclaration {{ }}")
@@ -401,6 +403,19 @@ pub struct HoistableDeclaration {
     pub name: *const MaybeIdentifier,
     pub params: SeqFormalParameter,
     pub body: *const BlockStatement,
+}
+
+impl Display for HoistableDeclaration {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let params = unsafe { std::slice::from_raw_parts(self.params.items, self.params.len) };
+        write!(f, "HoistableDeclaration {{ name: {}, params: [\n", unsafe {
+            self.name.as_ref().unwrap()
+        })?;
+        for param in params {
+            write!(f, "  {:?},\n", param)?;
+        }
+        write!(f, "], body: {} }}", unsafe { self.body.as_ref().unwrap() })
+    }
 }
 
 #[repr(C)]

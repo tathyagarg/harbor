@@ -1,14 +1,17 @@
 use std::{cell::RefCell, rc::Rc, str::FromStr};
 
 use crate::js::{
+    behaviours::exotics::arguments::{
+        create_mapped_arguments_object, create_unmapped_arguments_object,
+    },
     executable::{agent::running_execution_context, environment::new_declarative_environment},
     semantics::r#static::{
         OwnedParseNode, ParseNode, StaticSemantics, contains_expression, is_simple_parameter_list,
     },
-    types::completion_record::{CRKThrow, CompletionRecord, UNUSED},
+    types::completion_record::{CRKThrow, CompletionRecord, CompletionRecordNormal, UNUSED},
     values::{
         Value,
-        object::{FunctionObject, ThisMode},
+        object::{FunctionObject, Object, ThisMode},
         string::JsString,
     },
 };
@@ -30,13 +33,13 @@ pub fn function_declaration_instantiation(
     let code_node = ParseNode::BlockStatement(&code);
 
     let strict = func.strict;
-    let formals = &func.formal_parameters;
+    let formals = ParseNode::FormalParameters(&func.formal_parameters);
 
-    let parameter_names = ParseNode::FormalParameters(formals).bound_names();
+    let parameter_names = formals.bound_names();
     let has_duplicates = HAS_DUPLICATES!(parameter_names);
 
-    let simple_param_list = is_simple_parameter_list(formals.clone());
-    let has_parameter_expressions = contains_expression(formals.clone());
+    let simple_param_list = is_simple_parameter_list(&func.formal_parameters);
+    let has_parameter_expressions = contains_expression(&func.formal_parameters);
 
     let var_names = code_node.var_declared_names();
     let var_decls = code_node.var_scoped_declarations();
@@ -84,28 +87,109 @@ pub fn function_declaration_instantiation(
         new_env
     };
 
-    let mut env_borrow = env.borrow_mut();
-    for param_name in parameter_names {
-        let already_declared = env_borrow.has_binding(&param_name).unwrap().value;
+    {
+        let mut env_borrow = env.borrow_mut();
+        for param_name in &parameter_names {
+            let already_declared = env_borrow.has_binding(&param_name).unwrap().value;
 
-        if !already_declared {
-            env_borrow
-                .create_mutable_binding(param_name.clone(), false)
-                .unwrap();
-
-            if has_duplicates {
+            if !already_declared {
                 env_borrow
-                    .initialize_binding(param_name.clone(), &Value::Undefined)
+                    .create_mutable_binding(param_name.clone(), false)
+                    .unwrap();
+
+                if has_duplicates {
+                    env_borrow
+                        .initialize_binding(param_name.clone(), &Value::Undefined)
+                        .unwrap();
+                }
+            }
+        }
+    }
+
+    let param_bindings = if args_object_needed {
+        let ao = if strict || !simple_param_list {
+            Object::Ordinary(create_unmapped_arguments_object(args))
+        } else {
+            Object::Arguments(create_mapped_arguments_object(
+                &Object::Function(func.clone()),
+                formals,
+                args,
+                env.clone(),
+            ))
+        };
+
+        if strict {
+            env.borrow_mut()
+                .create_immutable_binding(JsString::from_str("arguments").unwrap(), false)
+                .unwrap();
+        } else {
+            env.borrow_mut()
+                .create_mutable_binding(JsString::from_str("arguments").unwrap(), false)
+                .unwrap();
+        }
+
+        env.borrow_mut()
+            .initialize_binding(JsString::from_str("arguments").unwrap(), &Value::Object(ao))
+            .unwrap();
+
+        [
+            vec![JsString::from_str("arguments").unwrap()],
+            parameter_names,
+        ]
+        .concat()
+    } else {
+        parameter_names
+    };
+
+    // TODO: iterator record bs
+
+    let var_env = if !has_parameter_expressions {
+        let mut instantiated_var_names = param_bindings.clone();
+        for name in &var_names {
+            if !instantiated_var_names.contains(name) {
+                instantiated_var_names.push(name.clone());
+
+                env.borrow_mut()
+                    .create_mutable_binding(name.clone(), false)
+                    .unwrap();
+
+                env.borrow_mut()
+                    .initialize_binding(name.clone(), &Value::Undefined)
+                    .unwrap();
+            }
+        }
+
+        env.clone()
+    } else {
+        todo!("Handle var declarations when parameter expressions are present")
+    };
+
+    let lex_env = if strict {
+        var_env.clone()
+    } else {
+        Rc::new(RefCell::new(new_declarative_environment(Some(var_env))))
+    };
+
+    callee_context
+        .borrow_mut()
+        .replace_lexical_env(lex_env.clone());
+
+    let lex_decls = code_node.lexically_scoped_declarations();
+    for decl in lex_decls {
+        for name in decl.bound_names() {
+            if decl.is_constant_decl() {
+                lex_env
+                    .borrow_mut()
+                    .create_immutable_binding(name.clone(), true)
+                    .unwrap();
+            } else {
+                lex_env
+                    .borrow_mut()
+                    .create_mutable_binding(name.clone(), false)
                     .unwrap();
             }
         }
     }
 
-    if args_object_needed {
-        let ao = if strict || !simple_param_list {
-        } else {
-        };
-    }
-
-    todo!()
+    return Ok(CompletionRecordNormal(()));
 }
