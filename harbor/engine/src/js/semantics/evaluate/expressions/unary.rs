@@ -1,7 +1,7 @@
 use crate::js::{
     expr::{UNARY_EXPR_OR_LHS_LHS, UNARY_EXPR_OR_LHS_UNARY, UnaryExpression, UnaryOperator},
     operations::to_number,
-    semantics::expressions::{EvaluateExpressionTag, expression_evaluate},
+    semantics::evaluate::expressions::{EvaluateExpressionTag, expression_evaluate},
     values::{
         ReferenceOrValue, Value,
         number::Number,

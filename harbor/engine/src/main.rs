@@ -1,17 +1,8 @@
-use std::str::FromStr;
 use std::{cell::RefCell, rc::Rc};
 
-use crate::js::collect_seq;
-use crate::js::script::global_declaration_instantiation;
-use crate::js::values::string::JsString;
-use crate::js::{executable::realm::current_realm, script::parse_script};
-
-use crate::js::{
-    executable::{
-        agent::{Agent, AgentRecord, SURROUNDING_AGENT},
-        realm::initialize_host_defined_realm,
-    },
-    semantics::statements,
+use crate::js::executable::{
+    agent::{Agent, AgentRecord, SURROUNDING_AGENT},
+    realm::initialize_host_defined_realm,
 };
 
 use crate::{render::App, user_agent::Agent as UAgent};

@@ -12,9 +12,12 @@ use crate::{
             realm::Realm,
         },
         expr::ZigString,
-        semantics::evaluate::statements::script_evaluate,
+        semantics::{
+            evaluate::statements::script_evaluate,
+            r#static::{BoundNames, bound_names},
+        },
         stmt::Script,
-        syntax::{bound_names_declaration, is_constant_decl, lexically_scoped_declarations_script},
+        syntax::{is_constant_decl, lexically_scoped_declarations_script},
         types::completion_record::{CompletionRecord, CompletionRecordNormal},
         values::ReferenceOrValue,
     },
@@ -88,7 +91,7 @@ pub fn global_declaration_instantiation(script: &Script, env: Rc<RefCell<Environ
     let lex_decls = lexically_scoped_declarations_script(script);
 
     for decl in lex_decls {
-        for name in bound_names_declaration(&decl) {
+        for name in bound_names(BoundNames::Declaration(&decl)) {
             if is_constant_decl(&decl) {
                 env.borrow_mut()
                     .create_immutable_binding(name.clone(), true)

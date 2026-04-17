@@ -4,7 +4,6 @@ use std::ops::Deref;
 use std::rc::Weak;
 use std::{cell::RefCell, rc::Rc};
 
-use crate::html5::elements::script::ScriptElement;
 use crate::{
     css::{
         r#box::declarations::handle_declaration,

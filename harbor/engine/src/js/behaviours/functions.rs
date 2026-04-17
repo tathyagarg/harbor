@@ -1,6 +1,6 @@
 use crate::js::{
     executable::agent::running_execution_context,
-    syntax::bound_names_formal_params,
+    semantics::r#static::{BoundNames, bound_names},
     types::completion_record::{CRKThrow, CompletionRecord, UNUSED},
     values::{Value, object::FunctionObject},
 };
@@ -22,7 +22,7 @@ pub fn function_declaration_instantiation(
     let strict = func.strict;
     let formals = &func.formal_parameters;
 
-    let parameter_names = bound_names_formal_params(formals);
+    let parameter_names = bound_names(BoundNames::FormalParameters(formals));
     let has_duplicates = HAS_DUPLICATES!(parameter_names);
 
     todo!()

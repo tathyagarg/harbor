@@ -1,7 +1,7 @@
 use crate::js::{
     collect_seq,
     expr::{
-        Arguments, CALL_EXPR_CALL, CALL_EXPR_COVER, CALL_EXPR_MEMBER, CALL_EXPR_PRIVATE_PROPERTY,
+        Arguments, CALL_EXPR_COVER, CALL_EXPR_MEMBER, CALL_EXPR_PRIVATE_PROPERTY,
         CALL_EXPR_PROPERTY, CallExpression, IdentifierNameTokenData, LEFT_HAND_SIDE_EXPR_CALL,
         LEFT_HAND_SIDE_EXPR_NEW, LeftHandSideExpression, MEMBER_EXPR_MEMBER, MEMBER_EXPR_NEW,
         MEMBER_EXPR_PRIMARY, MEMBER_EXPR_PRIVATE_PROPERTY, MEMBER_EXPR_PROPERTY, MemberExpression,
@@ -10,13 +10,16 @@ use crate::js::{
     operations::{
         IteratorKind, call, get_iterator, is_callable, is_constructor, iterator_step_value,
     },
-    semantics::expressions::{EvaluateExpressionTag, expression_evaluate, identifier, primary},
+    semantics::{
+        evaluate::expressions::{EvaluateExpressionTag, expression_evaluate, primary},
+        r#static::string_value,
+    },
     types::completion_record::{
         CRKAbrupt, CRKNormal, CompletionRecord, CompletionRecordError, CompletionRecordNormal,
     },
     values::{
         ReferenceOrValue, Value,
-        reference::{self, Reference, ReferenceBase, ReferenceName, get_value},
+        reference::{Reference, ReferenceBase, ReferenceName, get_value},
     },
 };
 
@@ -279,7 +282,7 @@ pub fn evaluate_property_access_with_identifier_key(
     identifier_name: IdentifierNameTokenData,
     strict: bool,
 ) -> Reference {
-    let property_name_string = identifier::string_value(identifier_name);
+    let property_name_string = string_value(identifier_name);
 
     Reference {
         base: ReferenceBase::Value(base_value),

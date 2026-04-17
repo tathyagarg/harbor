@@ -7,8 +7,7 @@ use crate::js::{
         STATEMENT_OR_DECLARATION_DECLARATION, STATEMENT_OR_DECLARATION_STATEMENT, Script,
         Statement, StatementOrDeclaration,
     },
-    types::completion_record::{CRKReturn, CRKThrow, CompletionRecord},
-    values::{ReferenceOrValue, Value, object::FunctionObject},
+    values::{ReferenceOrValue, Value},
 };
 
 pub mod block;

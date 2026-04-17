@@ -4,7 +4,7 @@ use crate::js::{
         UNARY_EXPR_OR_NULL_UNARY,
     },
     operations::{is_less_than, is_loosely_equal, is_strictly_equal, to_boolean},
-    semantics::expressions::{
+    semantics::evaluate::expressions::{
         EvaluateExpressionTag, eval_string_or_numeric_bin_expr, expression_evaluate,
     },
     values::{ReferenceOrValue, Value},

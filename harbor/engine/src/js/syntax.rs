@@ -1,51 +1,12 @@
 use crate::js::{
     collect_seq,
-    semantics::evaluate::expressions::identifier::string_value,
+    semantics::r#static::{BoundNames, bound_names},
     stmt::{
-        DECLARATION_LEXICAL_DECLARATION, Declaration, FormalParameter, LexicalDeclaration,
-        STATEMENT_OR_DECLARATION_DECLARATION, STATEMENT_OR_DECLARATION_STATEMENT, Script,
-        SeqStatementOrDeclaration, Statement,
+        DECLARATION_LEXICAL_DECLARATION, Declaration, STATEMENT_OR_DECLARATION_DECLARATION,
+        STATEMENT_OR_DECLARATION_STATEMENT, Script, SeqStatementOrDeclaration, Statement,
     },
     values::string::JsString,
 };
-
-fn bound_names_lexical_declaration(lex_decl: &LexicalDeclaration) -> Vec<JsString> {
-    let bindings = collect_seq(&lex_decl.bindings);
-
-    let mut names = Vec::new();
-
-    for binding in bindings {
-        let identifier = unsafe { *binding.name };
-        let name = string_value(identifier);
-
-        names.push(name);
-    }
-
-    names
-}
-
-pub fn bound_names_formal_params(formal_params: &Vec<FormalParameter>) -> Vec<JsString> {
-    let mut names = Vec::new();
-
-    for param in formal_params {
-        let identifier = unsafe { *param.name };
-        let name = string_value(identifier);
-
-        names.push(name);
-    }
-
-    names
-}
-
-pub fn bound_names_declaration(declaration: &Declaration) -> Vec<JsString> {
-    match declaration.tag {
-        DECLARATION_LEXICAL_DECLARATION => {
-            let lexical_decl = unsafe { *declaration.data.lex_decl };
-            bound_names_lexical_declaration(&lexical_decl)
-        }
-        _ => vec![],
-    }
-}
 
 pub fn is_constant_decl(declaration: &Declaration) -> bool {
     match declaration.tag {
@@ -146,7 +107,7 @@ pub fn top_level_lexically_declared_names_script(
                 let decl = unsafe { stmt.data.declaration };
                 let decl = unsafe { &*decl };
 
-                let decl_names = bound_names_declaration(decl);
+                let decl_names = bound_names(BoundNames::Declaration(decl));
                 names.extend(decl_names);
             }
             _ => unreachable!(),

@@ -5,7 +5,7 @@ use crate::js::{
         AssignmentOperator, BinaryOperator,
     },
     operations::to_boolean,
-    semantics::expressions::apply_string_or_numeric_binary_operator,
+    semantics::evaluate::expressions::apply_string_or_numeric_binary_operator,
     values::{ReferenceOrValue, reference::put_value},
 };
 
