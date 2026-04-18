@@ -147,6 +147,13 @@ pub fn get_method(
     Ok(CompletionRecordNormal(func_obj))
 }
 
+pub fn has_property(
+    obj: &Object,
+    key: &PropertyKey,
+) -> Result<CompletionRecord<bool>, CompletionRecord<CompletionRecordError, CRKThrow>> {
+    Ok(CompletionRecordNormal(obj.has_property(key)))
+}
+
 pub fn has_own_property(
     obj: &Object,
     key: &PropertyKey,

@@ -1,13 +1,14 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::js::{
+    operations::{define_property_or_throw, get, has_own_property, has_property, set},
     types::completion_record::{
         CRKThrow, CompletionRecord, CompletionRecordError, CompletionRecordNormal,
         CompletionRecordThrow, UNUSED,
     },
     values::{
         Value,
-        object::{FunctionObject, Object, ThisMode},
+        object::{FunctionObject, Object, ObjectTrait, PropertyDescriptor, PropertyKey, ThisMode},
         reference::{Reference, ReferenceBase, ReferenceName},
         string::JsString,
     },
@@ -72,6 +73,41 @@ pub struct EnvironmentRecord {
     pub bindings: HashMap<JsString, Binding>,
 }
 
+pub fn object_record_has_binding(
+    obj_rec: &ObjectEnvironmentRecord,
+    name: &JsString,
+) -> Result<CompletionRecord<bool>, CompletionRecord<CompletionRecordError, CRKThrow>> {
+    let binding_obj = obj_rec.object.borrow();
+    let found_binding = has_property(&binding_obj, &PropertyKey::String(name.clone()))?.value;
+    if !found_binding {
+        return Ok(CompletionRecordNormal(false));
+    }
+
+    if !obj_rec.is_with_environment {
+        return Ok(CompletionRecordNormal(true));
+    }
+
+    Ok(CompletionRecordNormal(true))
+}
+
+pub fn object_record_get_binding_value(
+    obj_rec: &ObjectEnvironmentRecord,
+    name: &JsString,
+    strict: bool,
+) -> Result<CompletionRecord<Value>, CompletionRecord<CompletionRecordError, CRKThrow>> {
+    let binding_obj = obj_rec.object.borrow();
+    let found_binding = has_property(&binding_obj, &PropertyKey::String(name.clone()))?.value;
+    if !found_binding {
+        if strict {
+            return Err(CompletionRecordThrow(CompletionRecordError::ReferenceError));
+        } else {
+            return Ok(CompletionRecordNormal(Value::Undefined));
+        }
+    }
+
+    get(&binding_obj, &PropertyKey::String(name.clone()))
+}
+
 impl EnvironmentRecord {
     pub fn has_binding(
         &self,
@@ -84,8 +120,17 @@ impl EnvironmentRecord {
                 Ok(CompletionRecordNormal(has_binding))
             }
             EnvironmentRecordKind::Global {
-                declarative_record, ..
-            } => declarative_record.borrow().has_binding(name),
+                declarative_record,
+                object,
+                ..
+            } => {
+                let res = declarative_record.borrow().has_binding(name)?;
+                if res.value {
+                    return Ok(CompletionRecordNormal(true));
+                }
+
+                object_record_has_binding(object, name).map_err(|_| CompletionRecordThrow(()))
+            }
             _ => todo!(
                 "has_binding is only implemented for declarative environment records, not {:?} (for binding: {:?})",
                 self.kind,
@@ -243,8 +288,22 @@ impl EnvironmentRecord {
                 Ok(CompletionRecordNormal(binding.value.clone()))
             }
             EnvironmentRecordKind::Global {
-                declarative_record, ..
-            } => declarative_record.borrow().get_binding_value(name, strict),
+                declarative_record,
+                object,
+                ..
+            } => {
+                if declarative_record
+                    .borrow()
+                    .has_binding(&name)
+                    .unwrap()
+                    .value
+                {
+                    return declarative_record.borrow().get_binding_value(name, strict);
+                }
+
+                object_record_get_binding_value(object, &name, strict)
+                    .map_err(|_| CompletionRecordThrow(CompletionRecordError::ReferenceError))
+            }
             _ => todo!(),
         }
     }
@@ -348,7 +407,7 @@ pub fn new_function_environment(
     new_target: Option<Object>,
 ) -> EnvironmentRecord {
     EnvironmentRecord {
-        outer_env: Some(func.environment.clone()),
+        outer_env: Some(func.environment.upgrade().unwrap()),
         kind: EnvironmentRecordKind::Function {
             function_object: Rc::new(func.clone()),
             this_binding_status: if matches!(func.this_mode, ThisMode::Lexical) {
@@ -413,5 +472,98 @@ pub fn bind_this_value(
             Ok(CompletionRecordNormal(()))
         }
         _ => panic!("bind_this_value can only be called on function environment records"),
+    }
+}
+
+pub fn create_global_function_binding(
+    env_rec: Rc<RefCell<EnvironmentRecord>>,
+    name: JsString,
+    value: &Value,
+    configurable: bool,
+) -> Result<CompletionRecord<()>, CompletionRecord<CompletionRecordError, CRKThrow>> {
+    let mut env_rec_borrow = env_rec.borrow_mut();
+    match &mut env_rec_borrow.kind {
+        EnvironmentRecordKind::Global {
+            object: obj_rec, ..
+        } => {
+            let global_object = obj_rec.object.clone();
+            let existing_prop = global_object
+                .borrow()
+                .get_own_property(&PropertyKey::String(name.clone()));
+
+            let desc = if existing_prop.is_none() || existing_prop.unwrap().configurable() {
+                PropertyDescriptor::Data {
+                    value: value.clone(),
+                    writable: true,
+                    enumerable: true,
+                    configurable,
+                }
+            } else {
+                let mut fields = HashMap::new();
+                fields.insert(String::from("value"), value.clone());
+
+                PropertyDescriptor::NonGeneric { fields }
+            };
+
+            define_property_or_throw(
+                &mut global_object.borrow_mut(),
+                &PropertyKey::String(name.clone()),
+                desc,
+            )?;
+
+            set(
+                &mut global_object.borrow_mut(),
+                &PropertyKey::String(name),
+                value,
+                false,
+            )?;
+
+            Ok(CompletionRecordNormal(()))
+        }
+        _ => panic!(
+            "create_global_function_binding can only be called on global environment records"
+        ),
+    }
+}
+
+pub fn create_global_var_binding(
+    env_rec: Rc<RefCell<EnvironmentRecord>>,
+    name: JsString,
+    deletable: bool,
+) -> Result<CompletionRecord<()>, CompletionRecord<CompletionRecordError, CRKThrow>> {
+    let mut env_rec_borrow = env_rec.borrow_mut();
+    match &mut env_rec_borrow.kind {
+        EnvironmentRecordKind::Global {
+            object: obj_rec, ..
+        } => {
+            let global_object = obj_rec.object.clone();
+            let has_prop =
+                has_own_property(&global_object.borrow(), &PropertyKey::String(name.clone()))
+                    .unwrap()
+                    .value;
+
+            if !has_prop {
+                define_property_or_throw(
+                    &mut global_object.borrow_mut(),
+                    &PropertyKey::String(name.clone()),
+                    PropertyDescriptor::Data {
+                        value: Value::Undefined,
+                        writable: true,
+                        enumerable: true,
+                        configurable: deletable,
+                    },
+                )?;
+
+                set(
+                    &mut global_object.borrow_mut(),
+                    &PropertyKey::String(name.clone()),
+                    &Value::Undefined,
+                    false,
+                )?;
+            }
+
+            Ok(CompletionRecordNormal(()))
+        }
+        _ => panic!("create_global_var_binding can only be called on global environment records"),
     }
 }

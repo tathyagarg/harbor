@@ -17,11 +17,14 @@ use crate::js::{
     },
 };
 
-// 10.4
-pub mod exotics;
-
 // 10.2
 pub mod functions;
+
+// 10.3
+pub mod builtin_functions;
+
+// 10.4
+pub mod exotics;
 
 pub fn _ordinary_from_misc(misc: &MiscObject) -> OrdinaryObject {
     let mut ordinary = OrdinaryObject {
@@ -173,6 +176,7 @@ pub fn ordinary_is_extensible(object: &Object) -> bool {
             _ => panic!(),
         },
         Object::Arguments(args) => ordinary_is_extensible(&Object::Ordinary(args.ordinary.clone())),
+        Object::BuiltinFunction(_) => true,
     }
 }
 
@@ -206,6 +210,10 @@ pub fn ordinary_prevent_extensions(object: &mut Object) -> bool {
             }
 
             res
+        }
+        Object::BuiltinFunction(_) => {
+            // Builtin functions are always extensible, so this should never be called
+            false
         }
     }
 }
@@ -261,24 +269,16 @@ pub fn ordinary_define_own_property(
     desc: &PropertyDescriptor,
 ) -> Result<CompletionRecord<bool>, CompletionRecord<CompletionRecordError, CRKThrow>> {
     let _current = ordinary_get_own_property(object, key);
-    if let Some(current) = _current {
-        let extensible = ordinary_is_extensible(object);
+    let extensible = ordinary_is_extensible(object);
 
-        Ok(CompletionRecordNormal(
-            validate_and_apply_property_descriptor(
-                Some(object),
-                key,
-                extensible,
-                &desc,
-                Some(&current),
-            ),
-        ))
-    } else {
-        Err(CompletionRecordThrow(CompletionRecordError::Misc(format!(
-            "Property {:?} does not exist on object",
-            key
-        ))))
-    }
+    validate_and_apply_property_descriptor(Some(object), key, extensible, desc, _current.as_ref())
+        .then(|| CompletionRecordNormal(true))
+        .ok_or_else(|| {
+            CompletionRecordThrow(CompletionRecordError::Misc(format!(
+                "Failed to define property {:?} on object",
+                key
+            )))
+        })
 }
 
 pub fn is_compatible_property_descriptor(

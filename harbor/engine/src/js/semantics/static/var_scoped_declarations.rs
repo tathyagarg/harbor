@@ -1,13 +1,13 @@
 use crate::js::{
     collect_seq,
-    semantics::r#static::{OwnedParseNode, ParseNode},
+    semantics::r#static::{OwnedParseNode, ParseNode, StaticSemantics},
     stmt::{
         BlockStatement, STATEMENT_BLOCK_STATEMENT, STATEMENT_BREAK_STATEMENT,
         STATEMENT_CONTINUE_STATEMENT, STATEMENT_DEBUGGER_STATEMENT, STATEMENT_DO_WHILE,
         STATEMENT_EMPTY_STATEMENT, STATEMENT_EXPR_STATEMENT, STATEMENT_IF_STATEMENT,
         STATEMENT_OR_DECLARATION_DECLARATION, STATEMENT_OR_DECLARATION_STATEMENT,
         STATEMENT_RETURN_STATEMENT, STATEMENT_THROW_STATEMENT, STATEMENT_VAR_STATEMENT,
-        STATEMENT_WHILE, Statement,
+        STATEMENT_WHILE, SeqStatementOrDeclaration, Statement,
     },
 };
 
@@ -67,9 +67,11 @@ fn var_scoped_declarations_statement(statement: &Statement) -> Vec<OwnedParseNod
     }
 }
 
-fn var_scoped_declarations_block_statement(block_stmt: &BlockStatement) -> Vec<OwnedParseNode> {
+fn var_scoped_declarations_stmt_decl_list(
+    stmt_decl_list: &SeqStatementOrDeclaration,
+) -> Vec<OwnedParseNode> {
+    let slice = collect_seq(stmt_decl_list);
     let mut decls = Vec::new();
-    let slice = crate::js::collect_seq(&block_stmt.body);
 
     for stmt in slice {
         match stmt.tag {
@@ -85,11 +87,21 @@ fn var_scoped_declarations_block_statement(block_stmt: &BlockStatement) -> Vec<O
     decls
 }
 
+fn var_scoped_declarations_block_statement(block_stmt: &BlockStatement) -> Vec<OwnedParseNode> {
+    var_scoped_declarations_stmt_decl_list(&block_stmt.body)
+}
+
 pub fn var_scoped_declarations(target: &ParseNode) -> Vec<OwnedParseNode> {
     match target {
+        ParseNode::Script(script) => {
+            ParseNode::StatementOrDeclList(&script.body).top_level_var_scoped_decls()
+        }
         ParseNode::Statement(stmt) => var_scoped_declarations_statement(stmt),
         ParseNode::BlockStatement(block_stmt) => {
             var_scoped_declarations_block_statement(block_stmt)
+        }
+        ParseNode::StatementOrDeclList(stmt_decl_list) => {
+            var_scoped_declarations_stmt_decl_list(stmt_decl_list)
         }
         _ => unimplemented!(
             "var_scoped_declarations not implemented for target: {:?}",
@@ -100,9 +112,13 @@ pub fn var_scoped_declarations(target: &ParseNode) -> Vec<OwnedParseNode> {
 
 pub fn var_scoped_declarations_owned(target: &OwnedParseNode) -> Vec<OwnedParseNode> {
     match target {
+        OwnedParseNode::Script(script) => var_scoped_declarations_stmt_decl_list(&script.body),
         OwnedParseNode::Statement(stmt) => var_scoped_declarations_statement(stmt),
         OwnedParseNode::BlockStatement(block_stmt) => {
             var_scoped_declarations_block_statement(block_stmt)
+        }
+        OwnedParseNode::StatementOrDeclList(stmt_decl_list) => {
+            var_scoped_declarations_stmt_decl_list(stmt_decl_list)
         }
         _ => unimplemented!(
             "var_scoped_declarations_owned not implemented for target: {:?}",

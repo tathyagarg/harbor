@@ -1,14 +1,21 @@
-use std::{cell::RefCell, collections::HashMap, fmt::Debug, ops::Deref, rc::Rc, str::FromStr};
+use std::{
+    cell::RefCell,
+    collections::HashMap,
+    fmt::Debug,
+    ops::Deref,
+    rc::{Rc, Weak},
+    str::FromStr,
+};
 
 use crate::js::{
     SLOT_PROTOTYPE,
     behaviours::{
-        exotics::arguments::ArgumentsObject, ordinary_define_own_property, ordinary_delete,
-        ordinary_get, ordinary_get_own_property, ordinary_get_prototype_of, ordinary_object_create,
-        ordinary_set, ordinary_set_prototype_of,
+        builtin_functions::BuiltinFunction, exotics::arguments::ArgumentsObject,
+        ordinary_define_own_property, ordinary_delete, ordinary_get, ordinary_get_own_property,
+        ordinary_get_prototype_of, ordinary_object_create, ordinary_set, ordinary_set_prototype_of,
     },
     executable::{
-        agent::{SURROUNDING_AGENT, running_execution_context},
+        agent::SURROUNDING_AGENT,
         context::{
             CodeExecutionContext, ExecutionContext, GenericExecutionContext, ScriptOrModule,
             pop_execution_context,
@@ -18,7 +25,7 @@ use crate::js::{
         },
         realm::{Realm, current_realm},
     },
-    operations::to_object,
+    operations::{define_property_or_throw, to_object},
     semantics::{evaluate::statements::evaluate_function_body, r#static::ParseNode},
     stmt::{BlockStatement, FormalParameter},
     types::completion_record::{CRKReturn, CRKThrow, CompletionRecord, UNUSED},
@@ -285,6 +292,8 @@ pub trait ObjectTrait {
     fn get_prototype_of(&self) -> Rc<RefCell<Option<Object>>>;
     fn set_prototype_of(&mut self, prototype: Option<Object>) -> bool;
 
+    fn has_property(&self, key: &PropertyKey) -> bool;
+
     fn get_own_property(&self, key: &PropertyKey) -> Option<PropertyDescriptor>;
     fn define_own_property(&mut self, key: &PropertyKey, desc: PropertyDescriptor) -> bool;
 
@@ -352,6 +361,20 @@ impl ObjectTrait for OrdinaryObject {
         ordinary_get_own_property(&Object::Ordinary(self.clone()), key)
     }
 
+    fn has_property(&self, key: &PropertyKey) -> bool {
+        let has_own = self.get_own_property(key);
+        if has_own.is_some() {
+            return true;
+        }
+
+        let parent = self.get_prototype_of();
+        if let Some(parent) = parent.borrow().as_ref() {
+            return parent.has_property(key);
+        }
+
+        false
+    }
+
     fn define_own_property(&mut self, key: &PropertyKey, desc: PropertyDescriptor) -> bool {
         let mut object = Object::Ordinary(self.clone());
         let res = ordinary_define_own_property(&mut object, key, &desc);
@@ -414,6 +437,7 @@ pub struct EssentialMethodProxy<T> {
     pub get_prototype_of: Rc<dyn Fn(&T) -> Rc<RefCell<Option<Object>>>>,
     pub set_prototype_of: Rc<dyn Fn(&mut T, Option<Object>) -> bool>,
 
+    pub has_property: Rc<dyn Fn(&T, &PropertyKey) -> bool>,
     pub get_own_property: Rc<dyn Fn(&T, &PropertyKey) -> Option<PropertyDescriptor>>,
     pub define_own_property: Rc<dyn Fn(&mut T, &PropertyKey, PropertyDescriptor) -> bool>,
 
@@ -440,6 +464,7 @@ impl MiscObject {
     const _GET_PROTOTYPE_OF: fn(&MiscObject) -> Rc<RefCell<Option<Object>>> = pmdd_get_prototype_of;
     const _SET_PROTOTYPE_OF: fn(&mut MiscObject, Option<Object>) -> bool = pmdd_set_prototype_of;
 
+    const _HAS_PROPERTY: fn(&MiscObject, &PropertyKey) -> bool = pmdd_has_property;
     const _GET_OWN_PROPERTY: fn(&MiscObject, &PropertyKey) -> Option<PropertyDescriptor> =
         pmdd_get_own_property;
     const _DEFINE_OWN_PROPERTY: fn(&mut MiscObject, &PropertyKey, PropertyDescriptor) -> bool =
@@ -468,6 +493,14 @@ impl ObjectTrait for MiscObject {
         }
 
         Self::_SET_PROTOTYPE_OF(self, prototype)
+    }
+
+    fn has_property(&self, key: &PropertyKey) -> bool {
+        if let Some(proxy) = &self.method_proxy {
+            return (proxy.has_property.clone())(self, key);
+        }
+
+        Self::_HAS_PROPERTY(self, key)
     }
 
     fn get_own_property(&self, key: &PropertyKey) -> Option<PropertyDescriptor> {
@@ -563,6 +596,28 @@ fn pmdd_set_prototype_of(obj: &mut MiscObject, prototype: Option<Object>) -> boo
     return false;
 }
 
+fn pmdd_has_property(obj: &MiscObject, key: &PropertyKey) -> bool {
+    if obj.properties.contains_key(key) {
+        return true;
+    }
+
+    let key_string = if let PropertyKey::String(s) = key {
+        String::from(s.clone())
+    } else {
+        return false;
+    };
+    if obj.internal_slots.contains_key(&key_string) {
+        return true;
+    }
+
+    let parent = obj.get_prototype_of();
+    if let Some(parent) = parent.borrow().as_ref() {
+        return parent.has_property(key);
+    }
+
+    false
+}
+
 fn pmdd_get_own_property(obj: &MiscObject, key: &PropertyKey) -> Option<PropertyDescriptor> {
     obj.properties.get(key).cloned()
 }
@@ -636,14 +691,14 @@ pub enum ThisMode {
 pub struct FunctionObject {
     pub object: OrdinaryObject,
 
-    pub environment: Rc<RefCell<EnvironmentRecord>>,
+    pub environment: Weak<RefCell<EnvironmentRecord>>,
     pub private_env: (), // TODO: Implement private environment
 
     pub formal_parameters: Vec<FormalParameter>,
     pub ecmascript_code: BlockStatement,
 
     pub constructor_kind: ConstructorKind,
-    pub realm: Rc<RefCell<Realm>>,
+    pub realm: Weak<RefCell<Realm>>,
 
     pub script_or_module: ScriptOrModule,
     pub this_mode: ThisMode,
@@ -712,9 +767,9 @@ pub fn ordinary_function_create(
         is_class_constructor: (),
         home_object: Rc::new(Value::Undefined),
 
-        environment: env,
+        environment: Rc::downgrade(&env),
         private_env: (),
-        realm: current_realm(),
+        realm: Rc::downgrade(&current_realm()),
         constructor_kind: ConstructorKind::Base,
 
         script_or_module: ScriptOrModule::Module, // TODO: Handle module code
@@ -723,6 +778,22 @@ pub fn ordinary_function_create(
         private_methods: (),
         class_field_initializer_name: (),
     }
+}
+
+pub fn set_function_name(func: &mut FunctionObject, name: &PropertyKey) {
+    // WARN: fuck it we ball
+    func.object.properties.insert(
+        PropertyKey::from("name"),
+        PropertyDescriptor::Data {
+            value: Value::String(match name {
+                PropertyKey::String(s) => s.clone(),
+                PropertyKey::Symbol(_) => todo!("Handle symbol function names"),
+            }),
+            writable: false,
+            enumerable: false,
+            configurable: true,
+        },
+    );
 }
 
 pub fn prepare_for_ordinary_call(
@@ -734,7 +805,7 @@ pub fn prepare_for_ordinary_call(
     let callee_context = CodeExecutionContext {
         execution_context: GenericExecutionContext {
             function: Some(func.clone()),
-            realm: func.realm.clone(),
+            realm: func.realm.upgrade().unwrap(),
             script_or_module: Some(func.script_or_module.clone()),
         },
         lexical_env: local_env.clone(),
@@ -771,7 +842,7 @@ pub fn ordinary_call_bind_this(
         this_arg.clone()
     } else {
         if matches!(this_arg, Value::Undefined | Value::Null) {
-            let global_env = callee_realm.borrow().global_env.clone();
+            let global_env = callee_realm.upgrade().unwrap().borrow().global_env.clone();
             if let EnvironmentRecordKind::Global {
                 global_this_value, ..
             } = &global_env.unwrap().borrow().kind
@@ -805,6 +876,10 @@ impl ObjectTrait for FunctionObject {
 
     fn set_prototype_of(&mut self, prototype: Option<Object>) -> bool {
         self.object.set_prototype_of(prototype)
+    }
+
+    fn has_property(&self, key: &PropertyKey) -> bool {
+        self.object.has_property(key)
     }
 
     fn get_own_property(&self, key: &PropertyKey) -> Option<PropertyDescriptor> {
@@ -854,6 +929,7 @@ pub enum Object {
     Function(FunctionObject),
     Misc(MiscObject),
     Arguments(ArgumentsObject),
+    BuiltinFunction(BuiltinFunction),
 }
 
 impl Object {
@@ -877,6 +953,7 @@ impl ObjectTrait for Object {
             Object::Misc(misc) => misc.get_prototype_of(),
             Object::Function(func) => func.get_prototype_of(),
             Object::Arguments(args) => args.get_prototype_of(),
+            Object::BuiltinFunction(func) => func.get_prototype_of(),
         }
     }
 
@@ -887,6 +964,18 @@ impl ObjectTrait for Object {
             Object::Misc(misc) => misc.set_prototype_of(prototype),
             Object::Function(func) => func.set_prototype_of(prototype),
             Object::Arguments(args) => args.set_prototype_of(prototype),
+            Object::BuiltinFunction(func) => func.set_prototype_of(prototype),
+        }
+    }
+
+    fn has_property(&self, key: &PropertyKey) -> bool {
+        match self {
+            Object::Ordinary(obj) => obj.has_property(key),
+            Object::Array(arr) => arr.object.has_property(key),
+            Object::Misc(misc) => misc.has_property(key),
+            Object::Function(func) => func.has_property(key),
+            Object::Arguments(args) => args.has_property(key),
+            Object::BuiltinFunction(func) => func.has_property(key),
         }
     }
 
@@ -897,6 +986,7 @@ impl ObjectTrait for Object {
             Object::Misc(misc) => misc.get(key, receiver),
             Object::Function(func) => func.get(key, receiver),
             Object::Arguments(args) => args.get(key, receiver),
+            Object::BuiltinFunction(func) => func.get(key, receiver),
         }
     }
 
@@ -918,6 +1008,7 @@ impl ObjectTrait for Object {
             Object::Misc(misc) => misc.get_own_property(key),
             Object::Function(func) => func.get_own_property(key),
             Object::Arguments(args) => args.get_own_property(key),
+            Object::BuiltinFunction(func) => func.get_own_property(key),
         }
     }
 
@@ -928,6 +1019,7 @@ impl ObjectTrait for Object {
             Object::Misc(misc) => misc.define_own_property(key, desc),
             Object::Function(func) => func.define_own_property(key, desc),
             Object::Arguments(args) => args.define_own_property(key, desc),
+            Object::BuiltinFunction(func) => func.define_own_property(key, desc),
         }
     }
 
@@ -947,6 +1039,7 @@ impl ObjectTrait for Object {
             Object::Misc(misc) => misc.set(key, value, receiver),
             Object::Function(func) => func.set(key, value, receiver),
             Object::Arguments(args) => args.set(key, value, receiver),
+            Object::BuiltinFunction(func) => func.set(key, value, receiver),
         }
     }
 
@@ -957,6 +1050,7 @@ impl ObjectTrait for Object {
             Object::Misc(misc) => misc.delete(key),
             Object::Function(func) => func.delete(key),
             Object::Arguments(args) => args.delete(key),
+            Object::BuiltinFunction(func) => func.delete(key),
         }
     }
 
@@ -967,6 +1061,7 @@ impl ObjectTrait for Object {
             Object::Misc(misc) => misc.call(this, args),
             Object::Function(func) => func.call(this, args),
             Object::Arguments(args_obj) => args_obj.call(this, args),
+            Object::BuiltinFunction(func) => func.call(this, args),
         }
     }
 
@@ -977,6 +1072,7 @@ impl ObjectTrait for Object {
             Object::Misc(misc) => misc.construct(args, new_target),
             Object::Function(func) => func.construct(args, new_target),
             Object::Arguments(args_obj) => args_obj.construct(args, new_target),
+            Object::BuiltinFunction(func) => func.construct(args, new_target),
         }
     }
 }

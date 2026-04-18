@@ -283,6 +283,20 @@ pub mod arguments {
             res
         }
 
+        fn has_property(&self, key: &PropertyKey) -> bool {
+            let desc = self.get_own_property(key);
+            if desc.is_some() {
+                return true;
+            }
+
+            let proto = self.get_prototype_of();
+            if let Some(proto) = proto.borrow().as_ref() {
+                return proto.has_property(key);
+            }
+
+            false
+        }
+
         fn get_own_property(&self, key: &PropertyKey) -> Option<PropertyDescriptor> {
             let desc = ordinary_get_own_property(&Object::Arguments(self.clone()), key);
             if desc.is_none() {

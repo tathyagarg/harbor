@@ -50,6 +50,10 @@ pub mod string {
         pub fn code_point_at(&self, index: usize) -> Option<u16> {
             self.0.get(index).cloned()
         }
+
+        pub fn empty() -> Self {
+            JsString(Vec::new())
+        }
     }
 
     impl From<JsString> for String {

@@ -8,17 +8,23 @@ use crate::{
                 CodeExecutionContext, ExecutionContext, GenericExecutionContext, ScriptOrModule,
                 pop_execution_context, push_execution_context,
             },
-            environment::EnvironmentRecord,
+            environment::{
+                EnvironmentRecord, create_global_function_binding, create_global_var_binding,
+            },
             realm::Realm,
         },
         expr::ZigString,
         semantics::{
             evaluate::statements::script_evaluate,
+            instantiate_ordinary_function_object,
             r#static::{OwnedParseNode, ParseNode, StaticSemantics},
         },
         stmt::Script,
         types::completion_record::{CompletionRecord, CompletionRecordNormal},
-        values::{ReferenceOrValue, object::ordinary_function_create},
+        values::{
+            ReferenceOrValue, Value,
+            object::{Object, ordinary_function_create},
+        },
     },
 };
 
@@ -47,7 +53,6 @@ pub fn parse_script(
 
     let script = unsafe { crate::js::parse_script(zs) };
     println!("Script: {:?}", script);
-    unsafe { crate::js::free_string(zs) };
 
     ScriptRecord {
         realm,
@@ -84,6 +89,7 @@ pub fn script_evaluation(script_rec: Rc<ScriptRecord>) -> CompletionRecord<Refer
 }
 
 pub fn global_declaration_instantiation(script: &Script, env: Rc<RefCell<EnvironmentRecord>>) {
+    println!("Global declaration instantiation for script");
     let script_node = ParseNode::Script(script);
 
     let var_decls = script_node.var_scoped_declarations();
@@ -91,6 +97,7 @@ pub fn global_declaration_instantiation(script: &Script, env: Rc<RefCell<Environ
     let mut declared_func_names = Vec::new();
 
     for decl in &var_decls {
+        println!("Decl: {:?}", decl);
         if matches!(decl, OwnedParseNode::HoistabeDeclaration(_)) {
             let fn_name = decl.bound_names().first().unwrap().clone();
             if !declared_func_names.contains(&fn_name) {
@@ -130,10 +137,19 @@ pub fn global_declaration_instantiation(script: &Script, env: Rc<RefCell<Environ
     for func in funcs_to_init {
         if let OwnedParseNode::HoistabeDeclaration(decl) = func {
             let fn_name = func.bound_names().first().unwrap().clone();
-            // let func_obj = ordinary_function_create();
-            // env.borrow_mut()
-            //     .initialize_binding(fn_name, ReferenceOrValue::Value(func_obj))
-            //     .unwrap();
+            let func_obj = instantiate_ordinary_function_object(decl, env.clone());
+
+            create_global_function_binding(
+                env.clone(),
+                fn_name,
+                &Value::Object(Object::Function(func_obj)),
+                false,
+            )
+            .unwrap();
         }
+    }
+
+    for var in declared_var_names {
+        create_global_var_binding(env.clone(), var, false).unwrap();
     }
 }

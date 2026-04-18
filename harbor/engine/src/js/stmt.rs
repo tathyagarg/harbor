@@ -397,6 +397,18 @@ pub struct SeqFormalParameter {
     pub len: usize,
 }
 
+impl Seq for SeqFormalParameter {
+    type Item = FormalParameter;
+
+    fn len(&self) -> usize {
+        self.len
+    }
+
+    fn data(&self) -> *const Self::Item {
+        self.items
+    }
+}
+
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct HoistableDeclaration {
