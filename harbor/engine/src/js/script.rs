@@ -21,10 +21,7 @@ use crate::{
         },
         stmt::Script,
         types::completion_record::{CompletionRecord, CompletionRecordNormal},
-        values::{
-            ReferenceOrValue, Value,
-            object::{Object, ordinary_function_create},
-        },
+        values::{ReferenceOrValue, Value, object::Object},
     },
 };
 

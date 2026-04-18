@@ -7,9 +7,7 @@ use crate::js::{
         MEMBER_EXPR_PRIMARY, MEMBER_EXPR_PRIVATE_PROPERTY, MEMBER_EXPR_PROPERTY, MemberExpression,
         NEW_EXPR_MEMBER, NEW_EXPR_NEW, NewExpression,
     },
-    operations::{
-        IteratorKind, call, get_iterator, is_callable, is_constructor, iterator_step_value,
-    },
+    operations::{IteratorKind, call, get_iterator, is_constructor, iterator_step_value},
     semantics::{
         evaluate::expressions::{EvaluateExpressionTag, expression_evaluate, primary},
         r#static::string_value,

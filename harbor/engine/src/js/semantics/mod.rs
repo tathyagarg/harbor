@@ -8,7 +8,7 @@ use crate::js::{
     stmt::HoistableDeclaration,
     values::{
         object::{
-            FunctionCreateMode, FunctionObject, Object, PropertyKey, ordinary_function_create,
+            FunctionCreateMode, FunctionObject, PropertyKey, ordinary_function_create,
             set_function_name,
         },
         string::JsString,

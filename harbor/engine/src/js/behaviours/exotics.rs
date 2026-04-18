@@ -1,7 +1,7 @@
 // pub fn array_create(length: u32, )
 
 pub mod array {
-    use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::LazyLock};
+    use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
     use crate::js::{
         behaviours::{ordinary_define_own_property, ordinary_get_own_property},
@@ -15,10 +15,7 @@ pub mod array {
         values::{
             Value,
             number::Number,
-            object::{
-                ArrayObject, FunctionObject, Object, OrdinaryObject, PropertyDescriptor,
-                PropertyKey,
-            },
+            object::{ArrayObject, Object, OrdinaryObject, PropertyDescriptor, PropertyKey},
         },
     };
 
@@ -250,11 +247,7 @@ pub mod arguments {
         values::{
             Value,
             number::Number,
-            object::{
-                FunctionObject, MiscObject, Object, ObjectTrait, OrdinaryObject,
-                PropertyDescriptor, PropertyKey,
-            },
-            string::JsString,
+            object::{Object, ObjectTrait, OrdinaryObject, PropertyDescriptor, PropertyKey},
             symbol::SYMBOL_ITERATOR,
         },
     };
@@ -501,7 +494,7 @@ pub mod arguments {
         func: &Object,
         formals: ParseNode,
         args_list: Vec<Value>,
-        env: Rc<RefCell<EnvironmentRecord>>,
+        _env: Rc<RefCell<EnvironmentRecord>>,
     ) -> ArgumentsObject {
         let len = args_list.len();
 

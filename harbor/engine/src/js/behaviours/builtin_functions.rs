@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::{cell::RefCell, rc::Rc, sync::LazyLock};
 
 use crate::js::{
@@ -51,7 +53,7 @@ impl ObjectTrait for BuiltinFunction {
         panic!("set_prototype_of not implemented for BuiltinFunction");
     }
 
-    fn has_property(&self, key: &PropertyKey) -> bool {
+    fn has_property(&self, _key: &PropertyKey) -> bool {
         panic!("has_property not implemented for BuiltinFunction");
     }
 

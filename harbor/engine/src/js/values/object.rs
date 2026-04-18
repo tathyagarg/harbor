@@ -25,7 +25,7 @@ use crate::js::{
         },
         realm::{Realm, current_realm},
     },
-    operations::{define_property_or_throw, to_object},
+    operations::to_object,
     semantics::{evaluate::statements::evaluate_function_body, r#static::ParseNode},
     stmt::{BlockStatement, FormalParameter},
     types::completion_record::{CRKReturn, CRKThrow, CompletionRecord, UNUSED},
