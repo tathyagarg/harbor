@@ -31,17 +31,17 @@ pub fn _ordinary_from_misc(misc: &MiscObject) -> OrdinaryObject {
         properties: HashMap::new(),
         prototype: Rc::new(RefCell::new(None)),
         extensible: true,
+        internal_slots: misc.internal_slots.clone(),
     };
 
     let ordinary_value = Value::Object(Object::Ordinary(ordinary.clone()));
 
     println!("Misc: {:#?}", misc);
-    ordinary.prototype = Rc::new(RefCell::new(Some(
+    ordinary.prototype = Rc::new(RefCell::new(
         misc.get(&PropertyKey::from(SLOT_PROTOTYPE), &ordinary_value)
             .unwrap_or(Value::Null)
-            .unwrap_object()
-            .unwrap(),
-    )));
+            .unwrap_object(),
+    ));
 
     ordinary.extensible = misc
         .get(&PropertyKey::from(SLOT_EXTENSIBLE), &ordinary_value)
@@ -62,14 +62,29 @@ pub fn _ordinary_from_misc(misc: &MiscObject) -> OrdinaryObject {
 }
 
 pub fn _arguments_from_ordinary(ordinary: &OrdinaryObject) -> ArgumentsObject {
-    let parameter_map = if let Object::Ordinary(ord) = ordinary
-        .properties
-        .get(&PropertyKey::from(SLOT_PARAMETER_MAP))
-        .unwrap()
-        .field("value")
-        .unwrap()
-        .unwrap_object()
-        .unwrap()
+    //let parameter_map = if let Object::Ordinary(ord) = ordinary
+    //    .internal_slots
+    //    .get(&PropertyKey::from(SLOT_PARAMETER_MAP))
+    //    .unwrap()
+    //    .field("value")
+    //    .unwrap()
+    //    .unwrap_object()
+    //    .unwrap()
+    //{
+    //    ord.clone()
+    //} else {
+    //    unreachable!()
+    //};
+
+    let slot_value = ordinary
+        .internal_slots
+        .get(&String::from(SLOT_PARAMETER_MAP))
+        .unwrap_or(&SlotValue::Undefined);
+
+    let parameter_map = if let SlotValue::Undefined = slot_value {
+        ordinary_object_create(Some(Object::Ordinary(OrdinaryObject::prototype())), vec![])
+    } else if let SlotValue::Value(Value::Object(obj)) = slot_value
+        && let Object::Ordinary(ord) = obj
     {
         ord.clone()
     } else {
@@ -309,6 +324,9 @@ pub fn validate_and_apply_property_descriptor(
         match object {
             Object::Ordinary(ordinary) => {
                 ordinary.properties.insert(key.clone(), desc.clone());
+            }
+            Object::Arguments(args) => {
+                args.ordinary.properties.insert(key.clone(), desc.clone());
             }
             _ => panic!(),
         }

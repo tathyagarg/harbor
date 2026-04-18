@@ -38,6 +38,7 @@ pub mod array {
                     properties,
                     prototype: Rc::new(RefCell::new(Some(Object::prototype()))),
                     extensible: true,
+                    internal_slots: HashMap::new(),
                 },
             })
         }
@@ -549,22 +550,25 @@ pub mod arguments {
             .unwrap();
 
             let mut mapped_names = Vec::new();
-            index = number_of_params - 1;
 
-            loop {
-                let name = &param_names[index];
-                if !mapped_names.contains(name) {
-                    mapped_names.push(name.clone());
+            if number_of_params > 0 {
+                index = number_of_params - 1;
 
-                    if index < len {
-                        // TODO: implement environment record bindings and stuff
+                loop {
+                    let name = &param_names[index];
+                    if !mapped_names.contains(name) {
+                        mapped_names.push(name.clone());
+
+                        if index < len {
+                            // TODO: implement environment record bindings and stuff
+                        }
                     }
-                }
 
-                if index == 0 {
-                    break;
+                    if index == 0 {
+                        break;
+                    }
+                    index -= 1;
                 }
-                index -= 1;
             }
 
             define_property_or_throw(

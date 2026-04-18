@@ -2,6 +2,7 @@ mod bound_names;
 mod lexically_declared_names;
 mod lexically_scoped_declarations;
 mod string_value;
+mod top_level_lexically_scoped_decls;
 mod top_level_var_scoped_decls;
 mod var_declared_names;
 mod var_scoped_declarations;
@@ -31,6 +32,7 @@ pub trait StaticSemantics {
     fn var_declared_names(&self) -> Vec<JsString>;
     fn var_scoped_declarations(&self) -> Vec<OwnedParseNode>;
     fn top_level_var_scoped_decls(&self) -> Vec<OwnedParseNode>;
+    fn top_level_lexically_scoped_decls(&self) -> Vec<OwnedParseNode>;
 
     fn is_constant_decl(&self) -> bool;
 }
@@ -75,6 +77,10 @@ impl<'a> StaticSemantics for ParseNode<'a> {
 
     fn top_level_var_scoped_decls(&self) -> Vec<OwnedParseNode> {
         top_level_var_scoped_decls::top_level_var_scoped_decls(self)
+    }
+
+    fn top_level_lexically_scoped_decls(&self) -> Vec<OwnedParseNode> {
+        top_level_lexically_scoped_decls::top_level_lexically_scoped_decls(self)
     }
 
     fn is_constant_decl(&self) -> bool {
@@ -126,6 +132,10 @@ impl StaticSemantics for OwnedParseNode {
 
     fn top_level_var_scoped_decls(&self) -> Vec<OwnedParseNode> {
         top_level_var_scoped_decls::top_level_var_scoped_decls_owned(self)
+    }
+
+    fn top_level_lexically_scoped_decls(&self) -> Vec<OwnedParseNode> {
+        top_level_lexically_scoped_decls::top_level_lexically_scoped_decls_owned(self)
     }
 
     fn is_constant_decl(&self) -> bool {

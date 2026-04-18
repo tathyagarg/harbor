@@ -97,12 +97,12 @@ pub fn global_declaration_instantiation(script: &Script, env: Rc<RefCell<Environ
     let mut declared_func_names = Vec::new();
 
     for decl in &var_decls {
-        println!("Decl: {:?}", decl);
         if matches!(decl, OwnedParseNode::HoistabeDeclaration(_)) {
             let fn_name = decl.bound_names().first().unwrap().clone();
+            println!("Found function declaration: {:?}", fn_name);
             if !declared_func_names.contains(&fn_name) {
                 declared_func_names.push(fn_name.clone());
-                funcs_to_init.push(decl);
+                funcs_to_init.insert(0, decl);
             }
         }
     }
@@ -122,6 +122,7 @@ pub fn global_declaration_instantiation(script: &Script, env: Rc<RefCell<Environ
 
     for decl in lex_decls {
         for name in decl.bound_names() {
+            println!("Processing lexical declaration: {:?}", name,);
             if decl.is_constant_decl() {
                 env.borrow_mut()
                     .create_immutable_binding(name.clone(), true)

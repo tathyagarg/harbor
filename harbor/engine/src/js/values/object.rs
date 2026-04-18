@@ -324,6 +324,7 @@ pub struct OrdinaryObject {
     pub extensible: bool,
 
     pub properties: HashMap<PropertyKey, PropertyDescriptor>,
+    pub internal_slots: HashMap<String, SlotValue>,
 }
 
 impl OrdinaryObject {
@@ -334,6 +335,7 @@ impl OrdinaryObject {
             prototype: Rc::new(RefCell::new(None)),
             extensible: true,
             properties: HashMap::new(),
+            internal_slots: HashMap::new(),
         }
     }
 }
@@ -725,6 +727,7 @@ impl Debug for FunctionObject {
         f.debug_struct("FunctionObject")
             .field("object", &self.object)
             .field("environment", &self.environment)
+            .field("ecmascript_code", &self.ecmascript_code)
             .field("constructor_kind", &self.constructor_kind)
             .field("realm", &self.realm)
             .field("script_or_module", &self.script_or_module)

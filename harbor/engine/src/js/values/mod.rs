@@ -31,10 +31,17 @@ impl ReferenceOrValue {
 }
 
 pub mod string {
-    use std::{ops::Add, str::FromStr};
+    use std::{fmt::Debug, ops::Add, str::FromStr};
 
-    #[derive(Debug, Clone, Hash, Eq, PartialEq)]
+    #[derive(Clone, Hash, Eq, PartialEq)]
     pub struct JsString(pub Vec<u16>);
+
+    impl Debug for JsString {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            let string = String::from_utf16(&self.0).unwrap_or_default();
+            write!(f, "{string}")
+        }
+    }
 
     impl JsString {
         pub fn concat(&self, other: &JsString) -> JsString {

@@ -7,10 +7,13 @@ use crate::js::{
 pub fn lexically_scoped_declarations(node: &ParseNode) -> Vec<OwnedParseNode> {
     match node {
         ParseNode::Script(script) => {
-            lexically_scoped_declarations(&ParseNode::StatementOrDeclList(&script.body))
+            ParseNode::StatementOrDeclList(&script.body).top_level_lexically_scoped_decls()
         }
         ParseNode::Statement(_) => vec![],
         ParseNode::Declaration(decl) => vec![decl.declaration_part()],
+        ParseNode::BlockStatement(block) => {
+            ParseNode::StatementOrDeclList(&block.body).lexically_scoped_declarations()
+        }
         ParseNode::StatementOrDeclList(seq) => {
             let mut decls = Vec::new();
             let slice = collect_seq(*seq);
@@ -41,10 +44,13 @@ pub fn lexically_scoped_declarations(node: &ParseNode) -> Vec<OwnedParseNode> {
 pub fn lexically_scoped_declarations_owned(node: &OwnedParseNode) -> Vec<OwnedParseNode> {
     match node {
         OwnedParseNode::Script(script) => {
-            lexically_scoped_declarations_owned(&OwnedParseNode::StatementOrDeclList(script.body))
+            OwnedParseNode::StatementOrDeclList(script.body).top_level_lexically_scoped_decls()
         }
         OwnedParseNode::Statement(_) => vec![],
         OwnedParseNode::Declaration(decl) => vec![OwnedParseNode::Declaration(decl.clone())],
+        OwnedParseNode::BlockStatement(block) => {
+            ParseNode::StatementOrDeclList(&block.body).lexically_scoped_declarations()
+        }
         OwnedParseNode::StatementOrDeclList(seq) => {
             let mut decls = Vec::new();
             let slice = collect_seq(seq);

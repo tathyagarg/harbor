@@ -114,7 +114,7 @@ impl EnvironmentRecord {
         name: &JsString,
     ) -> Result<CompletionRecord<bool>, CompletionRecord<UNUSED, CRKThrow>> {
         match &self.kind {
-            EnvironmentRecordKind::Declarative => {
+            EnvironmentRecordKind::Declarative | EnvironmentRecordKind::Function { .. } => {
                 let has_binding = self.bindings.contains_key(&name);
 
                 Ok(CompletionRecordNormal(has_binding))
@@ -145,7 +145,7 @@ impl EnvironmentRecord {
         deletable: bool,
     ) -> Result<CompletionRecord<UNUSED>, CompletionRecord<UNUSED, CRKThrow>> {
         match &self.kind {
-            EnvironmentRecordKind::Declarative => {
+            EnvironmentRecordKind::Declarative | EnvironmentRecordKind::Function { .. } => {
                 if self.bindings.contains_key(&name) && !self.bindings[&name].deletable {
                     return Err(CompletionRecordThrow(()));
                 }
@@ -168,7 +168,11 @@ impl EnvironmentRecord {
             } => declarative_record
                 .borrow_mut()
                 .create_mutable_binding(name, deletable),
-            _ => todo!(),
+            _ => todo!(
+                "create_mutable_binding is only implemented for declarative environment records, not {:?} (for binding: {:?})",
+                self.kind,
+                name
+            ),
         }
     }
 
@@ -178,7 +182,7 @@ impl EnvironmentRecord {
         strict: bool,
     ) -> Result<CompletionRecord<UNUSED>, CompletionRecord<UNUSED, CRKThrow>> {
         match &self.kind {
-            EnvironmentRecordKind::Declarative => {
+            EnvironmentRecordKind::Declarative | EnvironmentRecordKind::Function { .. } => {
                 if self.bindings.contains_key(&name) {
                     return Err(CompletionRecordThrow(()));
                 }
@@ -211,7 +215,7 @@ impl EnvironmentRecord {
         value: &Value,
     ) -> Result<CompletionRecord<UNUSED>, CompletionRecord<UNUSED, CRKThrow>> {
         match &self.kind {
-            EnvironmentRecordKind::Declarative => {
+            EnvironmentRecordKind::Declarative | EnvironmentRecordKind::Function { .. } => {
                 if !self.bindings.contains_key(&name) {
                     return Err(CompletionRecordThrow(()));
                 }
@@ -242,7 +246,7 @@ impl EnvironmentRecord {
         strict: bool,
     ) -> Result<CompletionRecord<UNUSED>, CompletionRecord<UNUSED, CRKThrow>> {
         match &self.kind {
-            EnvironmentRecordKind::Declarative => {
+            EnvironmentRecordKind::Declarative | EnvironmentRecordKind::Function { .. } => {
                 if !self.bindings.contains_key(&name) {
                     return Err(CompletionRecordThrow(()));
                 }
@@ -271,7 +275,7 @@ impl EnvironmentRecord {
         strict: bool,
     ) -> Result<CompletionRecord<Value>, CompletionRecord<CompletionRecordError, CRKThrow>> {
         match &self.kind {
-            EnvironmentRecordKind::Declarative => {
+            EnvironmentRecordKind::Declarative | EnvironmentRecordKind::Function { .. } => {
                 if !self.bindings.contains_key(&name) {
                     if strict {
                         return Err(CompletionRecordThrow(CompletionRecordError::ReferenceError));
@@ -313,7 +317,7 @@ impl EnvironmentRecord {
         name: JsString,
     ) -> Result<CompletionRecord<bool>, CompletionRecord<UNUSED, CRKThrow>> {
         match self.kind {
-            EnvironmentRecordKind::Declarative => {
+            EnvironmentRecordKind::Declarative | EnvironmentRecordKind::Function { .. } => {
                 if !self.bindings.contains_key(&name) {
                     return Ok(CompletionRecordNormal(true));
                 }

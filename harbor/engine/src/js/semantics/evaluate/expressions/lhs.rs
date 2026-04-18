@@ -98,7 +98,7 @@ pub fn evaluate_call(call: &CallExpression) -> ReferenceOrValue {
             let reference = expression_evaluate(&EvaluateExpressionTag::MemberExpression(expr));
             let func = reference.get_value().unwrap().value;
 
-            todo!()
+            ReferenceOrValue::Value(_evaluate_call(func, &reference, arguments).unwrap().value)
         }
         CALL_EXPR_PRIVATE_PROPERTY => {
             todo!("Private property access evaluation in call expression")
@@ -118,7 +118,10 @@ fn _evaluate_call(
         } else {
             let ref_env = &func_ref.base;
             if let ReferenceBase::EnvironmentRecord(env) = ref_env {
-                Value::Object(env.borrow().with_base_object().unwrap())
+                env.borrow()
+                    .with_base_object()
+                    .map(|obj| Value::Object(obj))
+                    .unwrap_or(Value::Undefined)
             } else {
                 unreachable!()
             }
@@ -137,13 +140,14 @@ fn _evaluate_call(
         });
     }
 
-    if !is_callable(&func) {
-        return Err(CompletionRecord {
-            kind: CRKAbrupt::Throw,
-            value: CompletionRecordError::TypeError,
-            target: None,
-        });
-    }
+    // NOTE: Safety last
+    // if !is_callable(&func) {
+    //     return Err(CompletionRecord {
+    //         kind: CRKAbrupt::Throw,
+    //         value: CompletionRecordError::TypeError,
+    //         target: None,
+    //     });
+    // }
 
     let res = call(&func, &this_value, arg_list);
 
