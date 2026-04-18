@@ -4,7 +4,7 @@ use crate::js::{
     collect_seq,
     executable::{
         agent::running_execution_context,
-        environment::{EnvironmentRecord, new_declarative_environment},
+        environment::{EnvRecordTrait, EnvironmentRecord, new_declarative_environment},
     },
     semantics::r#static::{ParseNode, StaticSemantics},
     stmt::{BlockStatement, SeqStatementOrDeclaration},
@@ -59,13 +59,9 @@ fn block_declaration_instantiation(
     for decl in declarations {
         for name in decl.bound_names() {
             if decl.is_constant_decl() {
-                env.borrow_mut()
-                    .create_immutable_binding(name.clone(), true)
-                    .unwrap();
+                env.borrow_mut().create_immutable_binding(&name, true);
             } else {
-                env.borrow_mut()
-                    .create_mutable_binding(name.clone(), false)
-                    .unwrap();
+                env.borrow_mut().create_mutable_binding(&name, false);
             }
         }
     }

@@ -4,7 +4,10 @@ use crate::js::{
     behaviours::exotics::arguments::{
         create_mapped_arguments_object, create_unmapped_arguments_object,
     },
-    executable::{agent::running_execution_context, environment::new_declarative_environment},
+    executable::{
+        agent::running_execution_context,
+        environment::{EnvRecordTrait, new_declarative_environment},
+    },
     semantics::r#static::{
         OwnedParseNode, ParseNode, StaticSemantics, contains_expression, is_simple_parameter_list,
     },
@@ -90,17 +93,13 @@ pub fn function_declaration_instantiation(
     {
         let mut env_borrow = env.borrow_mut();
         for param_name in &parameter_names {
-            let already_declared = env_borrow.has_binding(&param_name).unwrap().value;
+            let already_declared = env_borrow.has_binding(&param_name);
 
             if !already_declared {
-                env_borrow
-                    .create_mutable_binding(param_name.clone(), false)
-                    .unwrap();
+                env_borrow.create_mutable_binding(&param_name, false);
 
                 if has_duplicates {
-                    env_borrow
-                        .initialize_binding(param_name.clone(), &Value::Undefined)
-                        .unwrap();
+                    env_borrow.initialize_binding(&param_name, &Value::Undefined);
                 }
             }
         }
@@ -120,17 +119,16 @@ pub fn function_declaration_instantiation(
 
         if strict {
             env.borrow_mut()
-                .create_immutable_binding(JsString::from_str("arguments").unwrap(), false)
-                .unwrap();
+                .create_immutable_binding(&JsString::from_str("arguments").unwrap(), false);
         } else {
             env.borrow_mut()
-                .create_mutable_binding(JsString::from_str("arguments").unwrap(), false)
-                .unwrap();
+                .create_mutable_binding(&JsString::from_str("arguments").unwrap(), false);
         }
 
-        env.borrow_mut()
-            .initialize_binding(JsString::from_str("arguments").unwrap(), &Value::Object(ao))
-            .unwrap();
+        env.borrow_mut().initialize_binding(
+            &JsString::from_str("arguments").unwrap(),
+            &Value::Object(ao),
+        );
 
         [
             vec![JsString::from_str("arguments").unwrap()],
@@ -149,13 +147,10 @@ pub fn function_declaration_instantiation(
             if !instantiated_var_names.contains(name) {
                 instantiated_var_names.push(name.clone());
 
-                env.borrow_mut()
-                    .create_mutable_binding(name.clone(), false)
-                    .unwrap();
+                env.borrow_mut().create_mutable_binding(&name, false);
 
                 env.borrow_mut()
-                    .initialize_binding(name.clone(), &Value::Undefined)
-                    .unwrap();
+                    .initialize_binding(&name, &Value::Undefined);
             }
         }
 
@@ -178,15 +173,9 @@ pub fn function_declaration_instantiation(
     for decl in lex_decls {
         for name in decl.bound_names() {
             if decl.is_constant_decl() {
-                lex_env
-                    .borrow_mut()
-                    .create_immutable_binding(name.clone(), true)
-                    .unwrap();
+                lex_env.borrow_mut().create_immutable_binding(&name, true);
             } else {
-                lex_env
-                    .borrow_mut()
-                    .create_mutable_binding(name.clone(), false)
-                    .unwrap();
+                lex_env.borrow_mut().create_mutable_binding(&name, false);
             }
         }
     }

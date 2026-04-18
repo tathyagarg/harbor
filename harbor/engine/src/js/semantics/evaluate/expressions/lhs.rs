@@ -1,5 +1,6 @@
 use crate::js::{
     collect_seq,
+    executable::environment::EnvRecordTrait,
     expr::{
         Arguments, CALL_EXPR_COVER, CALL_EXPR_MEMBER, CALL_EXPR_PRIVATE_PROPERTY,
         CALL_EXPR_PROPERTY, CallExpression, IdentifierNameTokenData, LEFT_HAND_SIDE_EXPR_CALL,

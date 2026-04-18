@@ -1,7 +1,7 @@
 use std::{cell::RefCell, rc::Rc};
 
 use crate::js::{
-    executable::environment::EnvironmentRecord,
+    executable::environment::{EnvRecordTrait, EnvironmentRecord},
     operations::to_object,
     types::completion_record::{
         CRKAbrupt, CompletionRecord, CompletionRecordError, CompletionRecordNormal, UNUSED,
@@ -182,7 +182,7 @@ pub fn get_value(
         _ => unreachable!(),
     };
 
-    let res = base_env.borrow().get_binding_value(name, reference.strict);
+    let res = base_env.borrow().get_binding_value(&name, reference.strict);
 
     match res {
         Ok(rec) => return Ok(rec),
@@ -260,17 +260,15 @@ pub fn put_value(
         _ => unreachable!(),
     };
 
-    env.borrow_mut()
-        .set_mutable_binding(
-            reference
-                .referenced_name
-                .unwrap_value()
-                .unwrap_string()
-                .unwrap(),
-            value.clone(),
-            reference.strict,
-        )
-        .unwrap();
+    env.borrow_mut().set_mutable_binding(
+        &reference
+            .referenced_name
+            .unwrap_value()
+            .unwrap_string()
+            .unwrap(),
+        value.clone(),
+        reference.strict,
+    );
 
     return Ok(CompletionRecordNormal(()));
 }
@@ -302,22 +300,14 @@ pub fn initialize_referenced_binding(
         _ => unreachable!(),
     };
 
-    return env
-        .borrow_mut()
-        .initialize_binding(
-            reference
-                .referenced_name
-                .unwrap_value()
-                .unwrap_string()
-                .unwrap(),
-            value,
-        )
-        .map_err(|_| CompletionRecord {
-            kind: CRKAbrupt::Throw,
-            value: CompletionRecordError::Misc(format!(
-                "Failed to initialize binding: {:?}",
-                reference
-            )),
-            target: None,
-        });
+    env.borrow_mut().initialize_binding(
+        &reference
+            .referenced_name
+            .unwrap_value()
+            .unwrap_string()
+            .unwrap(),
+        value,
+    );
+
+    return Ok(CompletionRecordNormal(()));
 }

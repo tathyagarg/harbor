@@ -9,7 +9,8 @@ use crate::{
                 pop_execution_context, push_execution_context,
             },
             environment::{
-                EnvironmentRecord, create_global_function_binding, create_global_var_binding,
+                EnvRecordTrait, EnvironmentRecord, create_global_function_binding,
+                create_global_var_binding,
             },
             realm::Realm,
         },
@@ -121,13 +122,9 @@ pub fn global_declaration_instantiation(script: &Script, env: Rc<RefCell<Environ
         for name in decl.bound_names() {
             println!("Processing lexical declaration: {:?}", name,);
             if decl.is_constant_decl() {
-                env.borrow_mut()
-                    .create_immutable_binding(name.clone(), true)
-                    .unwrap();
+                env.borrow_mut().create_immutable_binding(&name, true);
             } else {
-                env.borrow_mut()
-                    .create_mutable_binding(name.clone(), false)
-                    .unwrap();
+                env.borrow_mut().create_mutable_binding(&name, false);
             }
         }
     }

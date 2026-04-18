@@ -108,28 +108,44 @@ pub fn object_record_get_binding_value(
     get(&binding_obj, &PropertyKey::String(name.clone()))
 }
 
-impl EnvironmentRecord {
-    pub fn has_binding(
+pub trait EnvRecordTrait {
+    fn has_binding(&self, name: &JsString) -> bool;
+    fn create_mutable_binding(&mut self, name: &JsString, deletable: bool);
+    fn create_immutable_binding(&mut self, name: &JsString, strict: bool);
+    fn initialize_binding(&mut self, name: &JsString, value: &Value);
+    fn set_mutable_binding(&mut self, name: &JsString, value: Value, strict: bool);
+    fn get_binding_value(
         &self,
         name: &JsString,
-    ) -> Result<CompletionRecord<bool>, CompletionRecord<UNUSED, CRKThrow>> {
+        strict: bool,
+    ) -> Result<CompletionRecord<Value>, CompletionRecord<CompletionRecordError, CRKThrow>>;
+    fn delete_binding(&mut self, name: &JsString) -> bool;
+    fn has_this_binding(&self) -> bool;
+    fn get_this_binding(&self) -> Value;
+    fn has_super_binding(&self) -> bool;
+    fn with_base_object(&self) -> Option<Object>;
+}
+
+impl EnvRecordTrait for EnvironmentRecord {
+    fn has_binding(&self, name: &JsString) -> bool {
         match &self.kind {
             EnvironmentRecordKind::Declarative | EnvironmentRecordKind::Function { .. } => {
                 let has_binding = self.bindings.contains_key(&name);
 
-                Ok(CompletionRecordNormal(has_binding))
+                has_binding
             }
             EnvironmentRecordKind::Global {
                 declarative_record,
                 object,
                 ..
             } => {
-                let res = declarative_record.borrow().has_binding(name)?;
-                if res.value {
-                    return Ok(CompletionRecordNormal(true));
+                let res = declarative_record.borrow().has_binding(name);
+                if res {
+                    return true;
                 }
 
-                object_record_has_binding(object, name).map_err(|_| CompletionRecordThrow(()))
+                todo!()
+                // object_record_has_binding(object, name).map_err(|_| CompletionRecordThrow(()))
             }
             _ => todo!(
                 "has_binding is only implemented for declarative environment records, not {:?} (for binding: {:?})",
@@ -139,19 +155,15 @@ impl EnvironmentRecord {
         }
     }
 
-    pub fn create_mutable_binding(
-        &mut self,
-        name: JsString,
-        deletable: bool,
-    ) -> Result<CompletionRecord<UNUSED>, CompletionRecord<UNUSED, CRKThrow>> {
+    fn create_mutable_binding(&mut self, name: &JsString, deletable: bool) {
         match &self.kind {
             EnvironmentRecordKind::Declarative | EnvironmentRecordKind::Function { .. } => {
                 if self.bindings.contains_key(&name) && !self.bindings[&name].deletable {
-                    return Err(CompletionRecordThrow(()));
+                    return;
                 }
 
                 self.bindings.insert(
-                    name,
+                    name.clone(),
                     Binding {
                         value: Value::empty(),
                         deletable,
@@ -161,7 +173,7 @@ impl EnvironmentRecord {
                     },
                 );
 
-                Ok(CompletionRecordNormal(()))
+                return;
             }
             EnvironmentRecordKind::Global {
                 declarative_record, ..
@@ -176,19 +188,15 @@ impl EnvironmentRecord {
         }
     }
 
-    pub fn create_immutable_binding(
-        &mut self,
-        name: JsString,
-        strict: bool,
-    ) -> Result<CompletionRecord<UNUSED>, CompletionRecord<UNUSED, CRKThrow>> {
+    fn create_immutable_binding(&mut self, name: &JsString, strict: bool) {
         match &self.kind {
             EnvironmentRecordKind::Declarative | EnvironmentRecordKind::Function { .. } => {
                 if self.bindings.contains_key(&name) {
-                    return Err(CompletionRecordThrow(()));
+                    return;
                 }
 
                 self.bindings.insert(
-                    name,
+                    name.clone(),
                     Binding {
                         value: Value::empty(),
                         deletable: false,
@@ -197,8 +205,6 @@ impl EnvironmentRecord {
                         initialized: false,
                     },
                 );
-
-                Ok(CompletionRecordNormal(()))
             }
             EnvironmentRecordKind::Global {
                 declarative_record, ..
@@ -209,26 +215,22 @@ impl EnvironmentRecord {
         }
     }
 
-    pub fn initialize_binding(
-        &mut self,
-        name: JsString,
-        value: &Value,
-    ) -> Result<CompletionRecord<UNUSED>, CompletionRecord<UNUSED, CRKThrow>> {
+    fn initialize_binding(&mut self, name: &JsString, value: &Value) {
         match &self.kind {
             EnvironmentRecordKind::Declarative | EnvironmentRecordKind::Function { .. } => {
                 if !self.bindings.contains_key(&name) {
-                    return Err(CompletionRecordThrow(()));
+                    return;
                 }
 
                 let binding = self.bindings.get_mut(&name).unwrap();
                 if binding.initialized {
-                    return Err(CompletionRecordThrow(()));
+                    return;
                 }
 
                 binding.value = value.clone();
                 binding.initialized = true;
 
-                Ok(CompletionRecordNormal(()))
+                return;
             }
             EnvironmentRecordKind::Global {
                 declarative_record, ..
@@ -239,26 +241,21 @@ impl EnvironmentRecord {
         }
     }
 
-    pub fn set_mutable_binding(
-        &mut self,
-        name: JsString,
-        value: Value,
-        strict: bool,
-    ) -> Result<CompletionRecord<UNUSED>, CompletionRecord<UNUSED, CRKThrow>> {
+    fn set_mutable_binding(&mut self, name: &JsString, value: Value, strict: bool) {
         match &self.kind {
             EnvironmentRecordKind::Declarative | EnvironmentRecordKind::Function { .. } => {
                 if !self.bindings.contains_key(&name) {
-                    return Err(CompletionRecordThrow(()));
+                    return;
                 }
 
                 let binding = self.bindings.get_mut(&name).unwrap();
                 if !binding.initialized {
-                    return Err(CompletionRecordThrow(()));
+                    return;
                 }
 
                 binding.value = value;
 
-                Ok(CompletionRecordNormal(()))
+                return;
             }
             EnvironmentRecordKind::Global {
                 declarative_record, ..
@@ -269,9 +266,9 @@ impl EnvironmentRecord {
         }
     }
 
-    pub fn get_binding_value(
+    fn get_binding_value(
         &self,
-        name: JsString,
+        name: &JsString,
         strict: bool,
     ) -> Result<CompletionRecord<Value>, CompletionRecord<CompletionRecordError, CRKThrow>> {
         match &self.kind {
@@ -296,12 +293,7 @@ impl EnvironmentRecord {
                 object,
                 ..
             } => {
-                if declarative_record
-                    .borrow()
-                    .has_binding(&name)
-                    .unwrap()
-                    .value
-                {
+                if declarative_record.borrow().has_binding(&name) {
                     return declarative_record.borrow().get_binding_value(name, strict);
                 }
 
@@ -312,29 +304,26 @@ impl EnvironmentRecord {
         }
     }
 
-    pub fn delete_binding(
-        &mut self,
-        name: JsString,
-    ) -> Result<CompletionRecord<bool>, CompletionRecord<UNUSED, CRKThrow>> {
+    fn delete_binding(&mut self, name: &JsString) -> bool {
         match self.kind {
             EnvironmentRecordKind::Declarative | EnvironmentRecordKind::Function { .. } => {
                 if !self.bindings.contains_key(&name) {
-                    return Ok(CompletionRecordNormal(true));
+                    return true;
                 }
 
                 let binding = self.bindings.get(&name).unwrap();
                 if !binding.deletable {
-                    return Ok(CompletionRecordNormal(false));
+                    return false;
                 }
 
                 self.bindings.remove(&name);
-                Ok(CompletionRecordNormal(true))
+                true
             }
             _ => todo!(),
         }
     }
 
-    pub fn with_base_object(&self) -> Option<Object> {
+    fn with_base_object(&self) -> Option<Object> {
         match &self.kind {
             EnvironmentRecordKind::Declarative => None,
             EnvironmentRecordKind::Object(obj_rec) => {
@@ -348,6 +337,18 @@ impl EnvironmentRecord {
             EnvironmentRecordKind::Module => None,
             EnvironmentRecordKind::Global { .. } => None,
         }
+    }
+
+    fn has_this_binding(&self) -> bool {
+        todo!()
+    }
+
+    fn get_this_binding(&self) -> Value {
+        todo!()
+    }
+
+    fn has_super_binding(&self) -> bool {
+        todo!()
     }
 
     // TODO: Implement other methods (this, super based methods)
@@ -366,8 +367,8 @@ pub fn get_identifier_reference(
             this_value: None,
         })),
         Some(env) => {
-            let exists = env.borrow().has_binding(&name.clone())?;
-            if exists.value {
+            let exists = env.borrow().has_binding(&name.clone());
+            if exists {
                 Ok(CompletionRecordNormal(Reference {
                     base: ReferenceBase::EnvironmentRecord(env),
                     referenced_name: ReferenceName::Value(Value::String(name)),
