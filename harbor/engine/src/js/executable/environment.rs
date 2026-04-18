@@ -4,7 +4,7 @@ use crate::js::{
     operations::{define_property_or_throw, get, has_own_property, has_property, set},
     types::completion_record::{
         CRKThrow, CompletionRecord, CompletionRecordError, CompletionRecordNormal,
-        CompletionRecordThrow, UNUSED,
+        CompletionRecordThrow,
     },
     values::{
         Value,
@@ -73,47 +73,12 @@ pub struct EnvironmentRecord {
     pub bindings: HashMap<JsString, Binding>,
 }
 
-pub fn object_record_has_binding(
-    obj_rec: &ObjectEnvironmentRecord,
-    name: &JsString,
-) -> Result<CompletionRecord<bool>, CompletionRecord<CompletionRecordError, CRKThrow>> {
-    let binding_obj = obj_rec.object.borrow();
-    let found_binding = has_property(&binding_obj, &PropertyKey::String(name.clone()))?.value;
-    if !found_binding {
-        return Ok(CompletionRecordNormal(false));
-    }
-
-    if !obj_rec.is_with_environment {
-        return Ok(CompletionRecordNormal(true));
-    }
-
-    Ok(CompletionRecordNormal(true))
-}
-
-pub fn object_record_get_binding_value(
-    obj_rec: &ObjectEnvironmentRecord,
-    name: &JsString,
-    strict: bool,
-) -> Result<CompletionRecord<Value>, CompletionRecord<CompletionRecordError, CRKThrow>> {
-    let binding_obj = obj_rec.object.borrow();
-    let found_binding = has_property(&binding_obj, &PropertyKey::String(name.clone()))?.value;
-    if !found_binding {
-        if strict {
-            return Err(CompletionRecordThrow(CompletionRecordError::ReferenceError));
-        } else {
-            return Ok(CompletionRecordNormal(Value::Undefined));
-        }
-    }
-
-    get(&binding_obj, &PropertyKey::String(name.clone()))
-}
-
 pub trait EnvRecordTrait {
     fn has_binding(&self, name: &JsString) -> bool;
     fn create_mutable_binding(&mut self, name: &JsString, deletable: bool);
     fn create_immutable_binding(&mut self, name: &JsString, strict: bool);
     fn initialize_binding(&mut self, name: &JsString, value: &Value);
-    fn set_mutable_binding(&mut self, name: &JsString, value: Value, strict: bool);
+    fn set_mutable_binding(&mut self, name: &JsString, value: &Value, strict: bool);
     fn get_binding_value(
         &self,
         name: &JsString,
@@ -124,6 +89,119 @@ pub trait EnvRecordTrait {
     fn get_this_binding(&self) -> Value;
     fn has_super_binding(&self) -> bool;
     fn with_base_object(&self) -> Option<Object>;
+}
+
+impl EnvRecordTrait for ObjectEnvironmentRecord {
+    fn has_binding(&self, name: &JsString) -> bool {
+        let binding_obj = self.object.borrow();
+        let found_binding = has_property(&binding_obj, &PropertyKey::String(name.clone()))
+            .unwrap()
+            .value;
+
+        if !found_binding {
+            return false;
+        }
+
+        if !self.is_with_environment {
+            return true;
+        }
+
+        // TODO: unscopables
+
+        true
+    }
+
+    fn create_mutable_binding(&mut self, name: &JsString, deletable: bool) {
+        let mut binding_obj = self.object.borrow_mut();
+        define_property_or_throw(
+            &mut binding_obj,
+            &PropertyKey::String(name.clone()),
+            PropertyDescriptor::Data {
+                value: Value::Undefined,
+                writable: true,
+                enumerable: true,
+                configurable: deletable,
+            },
+        )
+        .unwrap();
+    }
+
+    /// WARN: This function is never used:
+    /// https://tc39.es/ecma262/#sec-object-environment-records-createimmutablebinding-n-s
+    fn create_immutable_binding(&mut self, _name: &JsString, _strict: bool) {
+        panic!("This is never used");
+    }
+
+    fn initialize_binding(&mut self, name: &JsString, value: &Value) {
+        self.set_mutable_binding(name, value, false);
+    }
+
+    fn set_mutable_binding(&mut self, name: &JsString, value: &Value, strict: bool) {
+        let binding_obj = self.object.borrow();
+        let still_exists = has_property(&binding_obj, &PropertyKey::String(name.clone()))
+            .unwrap()
+            .value;
+
+        if !still_exists && strict {
+            panic!("Cannot set value of non-existent binding in strict mode");
+        }
+
+        set(
+            &mut self.object.borrow_mut(),
+            &PropertyKey::String(name.clone()),
+            value,
+            strict,
+        )
+        .unwrap();
+    }
+
+    fn get_binding_value(
+        &self,
+        name: &JsString,
+        strict: bool,
+    ) -> Result<CompletionRecord<Value>, CompletionRecord<CompletionRecordError, CRKThrow>> {
+        let binding_obj = self.object.borrow();
+        let value = has_property(&binding_obj, &PropertyKey::String(name.clone()))
+            .unwrap()
+            .value;
+
+        if !value {
+            if strict {
+                return Err(CompletionRecordThrow(CompletionRecordError::ReferenceError));
+            } else {
+                return Ok(CompletionRecordNormal(Value::Undefined));
+            }
+        }
+
+        get(&binding_obj, &PropertyKey::String(name.clone()))
+    }
+
+    fn delete_binding(&mut self, name: &JsString) -> bool {
+        let mut binding_obj = self.object.borrow_mut();
+        binding_obj.delete(&PropertyKey::String(name.clone()))
+    }
+
+    fn has_this_binding(&self) -> bool {
+        false
+    }
+
+    /// WARN: This function is never used:
+    /// https://tc39.es/ecma262/#sec-object-environment-records-getthisbinding
+    fn get_this_binding(&self) -> Value {
+        panic!("Object environment records do not have a this binding");
+    }
+
+    fn has_super_binding(&self) -> bool {
+        false
+    }
+
+    fn with_base_object(&self) -> Option<Object> {
+        if self.is_with_environment {
+            Some(self.object.borrow().clone())
+        } else {
+            None
+        }
+    }
 }
 
 impl EnvRecordTrait for EnvironmentRecord {
@@ -144,9 +222,9 @@ impl EnvRecordTrait for EnvironmentRecord {
                     return true;
                 }
 
-                todo!()
-                // object_record_has_binding(object, name).map_err(|_| CompletionRecordThrow(()))
+                object.has_binding(name)
             }
+            EnvironmentRecordKind::Object(obj_rec) => obj_rec.has_binding(name),
             _ => todo!(
                 "has_binding is only implemented for declarative environment records, not {:?} (for binding: {:?})",
                 self.kind,
@@ -156,7 +234,7 @@ impl EnvRecordTrait for EnvironmentRecord {
     }
 
     fn create_mutable_binding(&mut self, name: &JsString, deletable: bool) {
-        match &self.kind {
+        match &mut self.kind {
             EnvironmentRecordKind::Declarative | EnvironmentRecordKind::Function { .. } => {
                 if self.bindings.contains_key(&name) && !self.bindings[&name].deletable {
                     return;
@@ -180,6 +258,9 @@ impl EnvRecordTrait for EnvironmentRecord {
             } => declarative_record
                 .borrow_mut()
                 .create_mutable_binding(name, deletable),
+            EnvironmentRecordKind::Object(obj_rec) => {
+                obj_rec.create_mutable_binding(name, deletable)
+            }
             _ => todo!(
                 "create_mutable_binding is only implemented for declarative environment records, not {:?} (for binding: {:?})",
                 self.kind,
@@ -189,7 +270,7 @@ impl EnvRecordTrait for EnvironmentRecord {
     }
 
     fn create_immutable_binding(&mut self, name: &JsString, strict: bool) {
-        match &self.kind {
+        match &mut self.kind {
             EnvironmentRecordKind::Declarative | EnvironmentRecordKind::Function { .. } => {
                 if self.bindings.contains_key(&name) {
                     return;
@@ -211,12 +292,15 @@ impl EnvRecordTrait for EnvironmentRecord {
             } => declarative_record
                 .borrow_mut()
                 .create_immutable_binding(name, strict),
+            EnvironmentRecordKind::Object(obj_rec) => {
+                obj_rec.create_immutable_binding(name, strict)
+            }
             _ => todo!(),
         }
     }
 
     fn initialize_binding(&mut self, name: &JsString, value: &Value) {
-        match &self.kind {
+        match &mut self.kind {
             EnvironmentRecordKind::Declarative | EnvironmentRecordKind::Function { .. } => {
                 if !self.bindings.contains_key(&name) {
                     return;
@@ -233,16 +317,25 @@ impl EnvRecordTrait for EnvironmentRecord {
                 return;
             }
             EnvironmentRecordKind::Global {
-                declarative_record, ..
-            } => declarative_record
-                .borrow_mut()
-                .initialize_binding(name, value),
+                declarative_record,
+                object,
+                ..
+            } => {
+                let has_binding = declarative_record.borrow().has_binding(name);
+                if has_binding {
+                    declarative_record
+                        .borrow_mut()
+                        .initialize_binding(name, value);
+                }
+
+                object.initialize_binding(name, value)
+            }
             _ => todo!(),
         }
     }
 
-    fn set_mutable_binding(&mut self, name: &JsString, value: Value, strict: bool) {
-        match &self.kind {
+    fn set_mutable_binding(&mut self, name: &JsString, value: &Value, strict: bool) {
+        match &mut self.kind {
             EnvironmentRecordKind::Declarative | EnvironmentRecordKind::Function { .. } => {
                 if !self.bindings.contains_key(&name) {
                     return;
@@ -253,15 +346,27 @@ impl EnvRecordTrait for EnvironmentRecord {
                     return;
                 }
 
-                binding.value = value;
+                binding.value = value.clone();
 
                 return;
             }
             EnvironmentRecordKind::Global {
-                declarative_record, ..
-            } => declarative_record
-                .borrow_mut()
-                .set_mutable_binding(name, value, strict),
+                declarative_record,
+                object,
+                ..
+            } => {
+                let has_binding = declarative_record.borrow().has_binding(name);
+                if has_binding {
+                    declarative_record
+                        .borrow_mut()
+                        .set_mutable_binding(name, value, strict);
+                }
+
+                object.set_mutable_binding(name, value, strict);
+            }
+            EnvironmentRecordKind::Object(obj_rec) => {
+                obj_rec.set_mutable_binding(name, value, strict);
+            }
             _ => todo!(),
         }
     }
@@ -297,15 +402,15 @@ impl EnvRecordTrait for EnvironmentRecord {
                     return declarative_record.borrow().get_binding_value(name, strict);
                 }
 
-                object_record_get_binding_value(object, &name, strict)
-                    .map_err(|_| CompletionRecordThrow(CompletionRecordError::ReferenceError))
+                object.get_binding_value(name, strict)
             }
+            EnvironmentRecordKind::Object(obj_rec) => obj_rec.get_binding_value(name, strict),
             _ => todo!(),
         }
     }
 
     fn delete_binding(&mut self, name: &JsString) -> bool {
-        match self.kind {
+        match &mut self.kind {
             EnvironmentRecordKind::Declarative | EnvironmentRecordKind::Function { .. } => {
                 if !self.bindings.contains_key(&name) {
                     return true;
@@ -319,6 +424,28 @@ impl EnvRecordTrait for EnvironmentRecord {
                 self.bindings.remove(&name);
                 true
             }
+            EnvironmentRecordKind::Global {
+                declarative_record,
+                object,
+                ..
+            } => {
+                if declarative_record.borrow().has_binding(&name) {
+                    return declarative_record.borrow_mut().delete_binding(name);
+                }
+
+                let global_obj = &object.object;
+                let existing_prop =
+                    has_own_property(&global_obj.borrow(), &PropertyKey::String(name.clone()))
+                        .unwrap()
+                        .value;
+
+                if existing_prop {
+                    return object.delete_binding(name);
+                }
+
+                true
+            }
+            EnvironmentRecordKind::Object(obj_rec) => obj_rec.delete_binding(name),
             _ => todo!(),
         }
     }
@@ -326,13 +453,7 @@ impl EnvRecordTrait for EnvironmentRecord {
     fn with_base_object(&self) -> Option<Object> {
         match &self.kind {
             EnvironmentRecordKind::Declarative => None,
-            EnvironmentRecordKind::Object(obj_rec) => {
-                if obj_rec.is_with_environment {
-                    Some(obj_rec.object.borrow().clone())
-                } else {
-                    None
-                }
-            }
+            EnvironmentRecordKind::Object(obj_rec) => obj_rec.with_base_object(),
             EnvironmentRecordKind::Function { .. } => None,
             EnvironmentRecordKind::Module => None,
             EnvironmentRecordKind::Global { .. } => None,
@@ -350,8 +471,6 @@ impl EnvRecordTrait for EnvironmentRecord {
     fn has_super_binding(&self) -> bool {
         todo!()
     }
-
-    // TODO: Implement other methods (this, super based methods)
 }
 
 pub fn get_identifier_reference(

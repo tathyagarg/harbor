@@ -266,7 +266,7 @@ pub fn put_value(
             .unwrap_value()
             .unwrap_string()
             .unwrap(),
-        value.clone(),
+        value,
         reference.strict,
     );
 
