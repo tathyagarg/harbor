@@ -90,6 +90,7 @@ pub fn builtin_call_or_construct(func: &BuiltinFunction, this: &Value, args: Vec
     let callee_ctx = Rc::new(RefCell::new(ExecutionContext::Generic(
         GenericExecutionContext {
             function: None,
+            generator: None,
             realm: func.realm.as_ref().unwrap().clone(),
             script_or_module: None,
         },

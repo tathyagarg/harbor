@@ -434,7 +434,7 @@ pub mod arguments {
         }
     }
 
-    pub fn create_unmapped_arguments_object(args: Vec<Value>) -> OrdinaryObject {
+    pub fn create_unmapped_arguments_object(args: &Vec<Value>) -> OrdinaryObject {
         let len = args.len();
         let mut obj = ordinary_object_create(
             Some(Object::Ordinary(OrdinaryObject::prototype())),
@@ -493,7 +493,7 @@ pub mod arguments {
     pub fn create_mapped_arguments_object(
         func: &Object,
         formals: ParseNode,
-        args_list: Vec<Value>,
+        args_list: &Vec<Value>,
         _env: Rc<RefCell<EnvironmentRecord>>,
     ) -> ArgumentsObject {
         let len = args_list.len();

@@ -1,15 +1,18 @@
 use crate::js::{
     behaviours::functions::function_declaration_instantiation,
+    collect_seq,
+    executable::context::resolve_binding,
     expr::Expression,
-    semantics::evaluate::expressions::EvaluateExpressionTag,
+    semantics::{evaluate::expressions::EvaluateExpressionTag, r#static::string_value},
     stmt::{
         BlockStatement, DECLARATION_FUNCTION_DECLARATION, DECLARATION_LEXICAL_DECLARATION,
         IfStatement, LexicalDeclaration, STATEMENT_BLOCK_STATEMENT, STATEMENT_EXPR_STATEMENT,
         STATEMENT_IF_STATEMENT, STATEMENT_OR_DECLARATION_DECLARATION,
-        STATEMENT_OR_DECLARATION_STATEMENT, Script, Statement, StatementOrDeclaration,
+        STATEMENT_OR_DECLARATION_STATEMENT, STATEMENT_VAR_STATEMENT, Script, Statement,
+        StatementOrDeclaration,
     },
     types::completion_record::{CRKReturn, CRKThrow, CompletionRecord},
-    values::{ReferenceOrValue, Value, object::FunctionObject},
+    values::{ReferenceOrValue, Value, object::FunctionObject, reference::put_value},
 };
 
 pub mod block;
@@ -83,6 +86,32 @@ pub fn statement_evaluate(tag: &EvaluateStatementTag) -> ReferenceOrValue {
             STATEMENT_BLOCK_STATEMENT => {
                 let block_stmt = unsafe { *stmt.data.block };
                 statement_evaluate(&EvaluateStatementTag::BlockStatement(block_stmt))
+            }
+            STATEMENT_VAR_STATEMENT => {
+                let statement = unsafe { *stmt.data.var };
+                let raw_decls = statement.bindings;
+                let decls = collect_seq(&raw_decls);
+
+                for decl in decls {
+                    let raw_right = unsafe { *decl.initializer };
+                    if !raw_right.has_value {
+                        continue;
+                    }
+
+                    let right = unsafe { raw_right.value.value };
+
+                    let binding_id = string_value(unsafe { *decl.name });
+                    let lhs = resolve_binding(binding_id, None).unwrap().value;
+
+                    let rhs = super::expressions::expression_evaluate(
+                        &EvaluateExpressionTag::AssignmentExpression(right),
+                    );
+                    let value = rhs.get_value().unwrap().value;
+
+                    put_value(&mut ReferenceOrValue::Reference(lhs), &value).unwrap();
+                }
+
+                return ReferenceOrValue::Value(Value::Undefined);
             }
             _ => unimplemented!(
                 "Only expression statements are implemented in statement_evaluate, not {:?}",

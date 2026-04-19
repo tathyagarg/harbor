@@ -137,8 +137,7 @@ impl EnvRecordTrait for ObjectEnvironmentRecord {
     }
 
     fn set_mutable_binding(&mut self, name: &JsString, value: &Value, strict: bool) {
-        let binding_obj = self.object.borrow();
-        let still_exists = has_property(&binding_obj, &PropertyKey::String(name.clone()))
+        let still_exists = has_property(&self.object.borrow(), &PropertyKey::String(name.clone()))
             .unwrap()
             .value;
 
@@ -240,6 +239,10 @@ impl EnvRecordTrait for EnvironmentRecord {
                     return;
                 }
 
+                println!(
+                    "Binding {:?} created in environment record with kind {:?}",
+                    name, self.kind
+                );
                 self.bindings.insert(
                     name.clone(),
                     Binding {
@@ -314,6 +317,11 @@ impl EnvRecordTrait for EnvironmentRecord {
                 binding.value = value.clone();
                 binding.initialized = true;
 
+                println!(
+                    "Initialized binding {:?} in environment record with kind {:?}",
+                    name, self.kind
+                );
+
                 return;
             }
             EnvironmentRecordKind::Global {
@@ -322,8 +330,12 @@ impl EnvRecordTrait for EnvironmentRecord {
                 ..
             } => {
                 let has_binding = declarative_record.borrow().has_binding(name);
+                println!(
+                    "Initializing binding {:?} in global environment record. Has binding in declarative record? {}",
+                    name, has_binding
+                );
                 if has_binding {
-                    declarative_record
+                    return declarative_record
                         .borrow_mut()
                         .initialize_binding(name, value);
                 }
@@ -357,7 +369,7 @@ impl EnvRecordTrait for EnvironmentRecord {
             } => {
                 let has_binding = declarative_record.borrow().has_binding(name);
                 if has_binding {
-                    declarative_record
+                    return declarative_record
                         .borrow_mut()
                         .set_mutable_binding(name, value, strict);
                 }

@@ -18,9 +18,9 @@ pub use string_value::string_value;
 
 use crate::js::{
     stmt::{
-        BlockStatement, Declaration, FormalParameter, HoistableDeclaration, IfStatement,
-        LexicalBinding, LexicalDeclaration, Script, SeqStatementOrDeclaration, Statement,
-        StatementOrDeclaration, WhileStatement,
+        BlockStatement, DECLARATION_LEXICAL_DECLARATION, Declaration, FormalParameter,
+        HoistableDeclaration, IfStatement, LexicalBinding, LexicalDeclaration, Script,
+        SeqStatementOrDeclaration, Statement, StatementOrDeclaration, WhileStatement,
     },
     values::string::JsString,
 };
@@ -87,6 +87,13 @@ impl<'a> StaticSemantics for ParseNode<'a> {
         match self {
             ParseNode::LexicalDeclaration(decl) => decl.is_const,
             ParseNode::HoistabeDeclaration(_) => false,
+            ParseNode::Declaration(decl) => match decl.tag {
+                DECLARATION_LEXICAL_DECLARATION => {
+                    let lex_decl = unsafe { *decl.data.lex_decl };
+                    lex_decl.is_const
+                }
+                _ => false,
+            },
             _ => panic!("is_constant_decl is only applicable to LexicalDeclaration nodes"),
         }
     }
@@ -142,6 +149,13 @@ impl StaticSemantics for OwnedParseNode {
         match self {
             OwnedParseNode::LexicalDeclaration(decl) => decl.is_const,
             OwnedParseNode::HoistabeDeclaration(_) => false,
+            OwnedParseNode::Declaration(decl) => match decl.tag {
+                DECLARATION_LEXICAL_DECLARATION => {
+                    let lex_decl = unsafe { *decl.data.lex_decl };
+                    lex_decl.is_const
+                }
+                _ => false,
+            },
             _ => panic!(
                 "is_constant_decl is only applicable to LexicalDeclaration nodes, got {:?}",
                 self

@@ -65,6 +65,7 @@ pub fn script_evaluation(script_rec: Rc<ScriptRecord>) -> CompletionRecord<Refer
     let script_context = Rc::new(RefCell::new(ExecutionContext::Code(CodeExecutionContext {
         execution_context: GenericExecutionContext {
             function: None,
+            generator: None,
             realm: script_rec.realm.clone(),
             script_or_module: Some(ScriptOrModule::Script(script_rec.clone())),
         },
@@ -117,6 +118,7 @@ pub fn global_declaration_instantiation(script: &Script, env: Rc<RefCell<Environ
     }
 
     let lex_decls = script_node.lexically_scoped_declarations();
+    println!("Lexically scoped declarations: {:?}", lex_decls);
 
     for decl in lex_decls {
         for name in decl.bound_names() {

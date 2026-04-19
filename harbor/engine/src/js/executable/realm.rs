@@ -85,6 +85,7 @@ pub fn initialize_host_defined_realm()
     let ec = Rc::new(RefCell::new(ExecutionContext::Code(CodeExecutionContext {
         execution_context: GenericExecutionContext {
             function: None,
+            generator: None,
             realm: realm.clone(),
             script_or_module: None,
         },

@@ -1,3 +1,4 @@
+pub mod r#abstract;
 pub mod behaviours;
 pub mod executable;
 pub mod expr;
@@ -5,7 +6,6 @@ pub mod operations;
 pub mod script;
 pub mod semantics;
 pub mod stmt;
-pub mod syntax;
 pub mod types;
 pub mod values;
 

@@ -1,11 +1,15 @@
+use std::{cell::RefCell, fmt::Debug, ops::Deref, rc::Rc};
+
 use crate::js::{
-    operations::{call, get, get_method, to_boolean},
+    r#abstract::{Generator, ITEREATOR_PROTOTYPE, create_iterator_from_closure},
+    behaviours::ordinary_object_create,
+    operations::{call, create_data_property_or_throw, get, get_method, to_boolean},
     types::completion_record::{
         CRKThrow, CompletionRecord, CompletionRecordError, CompletionRecordNormal,
     },
     values::{
         Value,
-        object::{Object, PropertyKey},
+        object::{Object, ObjectTrait, OrdinaryObject, PropertyKey},
         symbol::SYMBOL_ITERATOR,
     },
 };
@@ -16,15 +20,15 @@ pub enum IteratorKind {
 }
 
 #[derive(Debug, Clone)]
-pub struct Iterator {
-    pub iterator: Object,
+pub struct Iterator<T: ObjectTrait + Clone + Debug> {
+    pub iterator: T,
     pub next_method: Value,
     pub done: bool,
 }
 
 pub fn get_iterator_direct(
     obj: &Object,
-) -> Result<CompletionRecord<Iterator>, CompletionRecord<CompletionRecordError, CRKThrow>> {
+) -> Result<CompletionRecord<Iterator<Object>>, CompletionRecord<CompletionRecordError, CRKThrow>> {
     let next_method = get(obj, &PropertyKey::from("next"))?.value;
     let iterator_record = Iterator {
         iterator: obj.clone(),
@@ -38,7 +42,7 @@ pub fn get_iterator_direct(
 pub fn get_iterator_from_method(
     obj: &Value,
     method: &Object,
-) -> Result<CompletionRecord<Iterator>, CompletionRecord<CompletionRecordError, CRKThrow>> {
+) -> Result<CompletionRecord<Iterator<Object>>, CompletionRecord<CompletionRecordError, CRKThrow>> {
     let iterator = call(&Value::Object(method.clone()), obj, Vec::new())?.value;
 
     if let Value::Object(iterator_obj) = iterator {
@@ -55,7 +59,7 @@ pub fn get_iterator_from_method(
 pub fn get_iterator(
     obj: &Value,
     kind: IteratorKind,
-) -> Result<CompletionRecord<Iterator>, CompletionRecord<CompletionRecordError, CRKThrow>> {
+) -> Result<CompletionRecord<Iterator<Object>>, CompletionRecord<CompletionRecordError, CRKThrow>> {
     let method = match kind {
         IteratorKind::Sync => get_method(obj, &PropertyKey::Symbol(SYMBOL_ITERATOR.clone())),
         IteratorKind::Async => {
@@ -76,7 +80,7 @@ pub fn get_iterator(
 }
 
 pub fn iterator_next(
-    iterator: &mut Iterator,
+    iterator: &mut Iterator<Object>,
     value: Option<Value>,
 ) -> Result<CompletionRecord<Object>, CompletionRecord<CompletionRecordError, CRKThrow>> {
     let result = if value.is_none() {
@@ -129,7 +133,7 @@ pub fn iterator_value(
 }
 
 pub fn iterator_step(
-    iterator: &mut Iterator,
+    iterator: &mut Iterator<Object>,
 ) -> Result<CompletionRecord<Option<Object>>, CompletionRecord<CompletionRecordError, CRKThrow>> {
     let result = iterator_next(iterator, None)?.value;
     let done = iterator_complete(&result);
@@ -149,7 +153,7 @@ pub fn iterator_step(
 }
 
 pub fn iterator_step_value(
-    iterator: &mut Iterator,
+    iterator: &mut Iterator<Object>,
 ) -> Result<CompletionRecord<Option<Value>>, CompletionRecord<CompletionRecordError, CRKThrow>> {
     let result = iterator_step(iterator)?.value;
 
@@ -165,6 +169,33 @@ pub fn iterator_step_value(
     return value.map(|v| CompletionRecordNormal(Some(v.value)));
 }
 
-pub fn create_list_iterator_record(_list: Vec<Value>) -> Iterator {
-    todo!("No infra to do allat")
+pub fn create_iterator_result_object(value: Value, done: bool) -> Object {
+    let mut obj = Object::Ordinary(ordinary_object_create(
+        Some(Object::Ordinary(OrdinaryObject::prototype())),
+        vec![],
+    ));
+
+    create_data_property_or_throw(&mut obj, &PropertyKey::from("value"), &value).unwrap();
+    create_data_property_or_throw(&mut obj, &PropertyKey::from("done"), &Value::Boolean(done))
+        .unwrap();
+
+    return obj;
+}
+
+pub fn create_list_iterator_record(list: Vec<Value>) -> Iterator<Rc<RefCell<Generator>>> {
+    let closure: Box<(dyn Fn() -> Option<Value>)> = Box::new(move || -> Option<Value> {
+        for item in &list {
+            todo!("GeneratorYield(CreateIteratorResultObject(E, false))");
+        }
+
+        return None;
+    });
+
+    let iterator = create_iterator_from_closure(closure, None, ITEREATOR_PROTOTYPE.clone());
+
+    return Iterator {
+        iterator,
+        next_method: Value::Undefined,
+        done: false,
+    };
 }

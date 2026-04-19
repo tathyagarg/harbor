@@ -808,6 +808,7 @@ pub fn prepare_for_ordinary_call(
     let callee_context = CodeExecutionContext {
         execution_context: GenericExecutionContext {
             function: Some(func.clone()),
+            generator: None,
             realm: func.realm.upgrade().unwrap(),
             script_or_module: Some(func.script_or_module.clone()),
         },
@@ -933,6 +934,101 @@ pub enum Object {
     Misc(MiscObject),
     Arguments(ArgumentsObject),
     BuiltinFunction(BuiltinFunction),
+}
+
+pub trait OrdinaryWrapper {
+    fn ordinary(&self) -> &OrdinaryObject;
+    fn ordinary_mut(&mut self) -> &mut OrdinaryObject;
+}
+
+impl<T: OrdinaryWrapper> ObjectTrait for T {
+    const CALLABLE: bool = false;
+    const CONSTRUCTOR: bool = false;
+
+    fn get_prototype_of(&self) -> Rc<RefCell<Option<Object>>> {
+        self.ordinary().get_prototype_of()
+    }
+
+    fn set_prototype_of(&mut self, prototype: Option<Object>) -> bool {
+        self.ordinary_mut().set_prototype_of(prototype)
+    }
+
+    fn has_property(&self, key: &PropertyKey) -> bool {
+        self.ordinary().has_property(key)
+    }
+
+    fn get_own_property(&self, key: &PropertyKey) -> Option<PropertyDescriptor> {
+        self.ordinary().get_own_property(key)
+    }
+
+    fn define_own_property(&mut self, key: &PropertyKey, desc: PropertyDescriptor) -> bool {
+        self.ordinary_mut().define_own_property(key, desc)
+    }
+
+    fn get(&self, key: &PropertyKey, receiver: &Value) -> Option<Value> {
+        self.ordinary().get(key, receiver)
+    }
+
+    fn set(&mut self, key: &PropertyKey, value: &Value, receiver: &mut Value) -> bool {
+        self.ordinary_mut().set(key, value, receiver)
+    }
+
+    fn delete(&mut self, key: &PropertyKey) -> bool {
+        self.ordinary_mut().delete(key)
+    }
+
+    fn call(&self, _this: &Value, _args: Vec<Value>) -> Value {
+        panic!("Object is not callable")
+    }
+
+    fn construct(&self, _args: Vec<Value>, _new_target: &Object) -> Object {
+        panic!("Object is not a constructor")
+    }
+}
+
+impl<T: OrdinaryWrapper> ObjectTrait for Rc<RefCell<T>> {
+    const CALLABLE: bool = false;
+    const CONSTRUCTOR: bool = false;
+
+    fn get_prototype_of(&self) -> Rc<RefCell<Option<Object>>> {
+        self.borrow().get_prototype_of()
+    }
+
+    fn set_prototype_of(&mut self, prototype: Option<Object>) -> bool {
+        self.borrow_mut().set_prototype_of(prototype)
+    }
+
+    fn has_property(&self, key: &PropertyKey) -> bool {
+        self.borrow().has_property(key)
+    }
+
+    fn get_own_property(&self, key: &PropertyKey) -> Option<PropertyDescriptor> {
+        self.borrow().get_own_property(key)
+    }
+
+    fn define_own_property(&mut self, key: &PropertyKey, desc: PropertyDescriptor) -> bool {
+        self.borrow_mut().define_own_property(key, desc)
+    }
+
+    fn get(&self, key: &PropertyKey, receiver: &Value) -> Option<Value> {
+        self.borrow().get(key, receiver)
+    }
+
+    fn set(&mut self, key: &PropertyKey, value: &Value, receiver: &mut Value) -> bool {
+        self.borrow_mut().set(key, value, receiver)
+    }
+
+    fn delete(&mut self, key: &PropertyKey) -> bool {
+        self.borrow_mut().delete(key)
+    }
+
+    fn call(&self, _this: &Value, _args: Vec<Value>) -> Value {
+        panic!("Object is not callable")
+    }
+
+    fn construct(&self, _args: Vec<Value>, _new_target: &Object) -> Object {
+        panic!("Object is not a constructor")
+    }
 }
 
 impl Object {
