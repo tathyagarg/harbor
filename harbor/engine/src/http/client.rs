@@ -121,7 +121,7 @@ impl Header {
 
 impl ReqEncodable for Header {
     fn encode(&self) -> String {
-        format!("{}: {}\n", self.name, self.value)
+        format!("{}: {}\r\n", self.name, self.value)
     }
 }
 
@@ -166,6 +166,11 @@ impl ReqEncodable for Request {
                 if request.ends_with("\r\n") {
                     request = request.strip_suffix("\r\n").unwrap().to_string();
                 }
+
+                if request.ends_with("\n") {
+                    request = request.strip_suffix("\n").unwrap().to_string();
+                }
+
                 request.push_str("\r\n\r\n");
 
                 request
@@ -219,6 +224,8 @@ impl Request {
         if integrity.is_err() {
             return Err(integrity.unwrap_err());
         }
+
+        println!("Sending request:\n{:?}", self.encode());
 
         match self.protocol {
             Protocol::HTTP0_9 => {
@@ -279,6 +286,13 @@ impl Request {
                                 },
                             ));
 
+                        println!(
+                            "Bytes: {}",
+                            resp[..respected_bytes]
+                                .iter()
+                                .map(|b| *b as char)
+                                .collect::<String>()
+                        );
                         response_decoder.decode(&resp[..respected_bytes]);
 
                         if response_decoder.is_complete {

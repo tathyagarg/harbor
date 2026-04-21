@@ -195,10 +195,13 @@ impl ApplicationHandler<AppEvent> for App {
                 let tab_data = state.tab_datas.get(state.active_tab).unwrap();
 
                 if let Some(root) = layout.root_box.as_ref() {
+                    let toolbar =
+                        TOOLBAR_OFFSET(state.config.width as f64, state.config.height as f64);
+
                     let elems = CssBox::get_elements_under(
                         root,
-                        position.x,
-                        position.y,
+                        position.x - toolbar.0,
+                        position.y - toolbar.1,
                         -tab_data.scroll_x,
                         -tab_data.scroll_y,
                     );
@@ -221,6 +224,10 @@ impl ApplicationHandler<AppEvent> for App {
                         if !elems.contains(prev) {
                             prev.borrow_mut()
                                 .leave_hover(&state.prev_hovered_elements[..i], viewport_size);
+
+                            state
+                                .window
+                                .set_cursor(prev.borrow().style().cursor.resolved());
                         }
                     }
 
