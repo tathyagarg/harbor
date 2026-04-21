@@ -1305,16 +1305,6 @@ impl InsertMode {
         return true;
     }
 
-    fn handle_in_template(_parser: &mut Parser, _token: Token) -> bool {
-        todo!("Implement in template insertion mode");
-
-        // match token {
-        //     _ => {}
-        // }
-
-        // return true;
-    }
-
     /// Let subject be token's tag name.
     /// If the current node is an HTML element whose tag name is subject, and the current node is
     /// not in the list of active formatting elements, then pop the current node off the stack of

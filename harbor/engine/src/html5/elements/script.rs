@@ -256,7 +256,7 @@ impl ScriptElement {
         self.internal_state.already_started = true;
 
         let classic_script_cors = self.cross_origin.as_ref().map(|c| c.to_lowercase());
-        let cors_settings_attr = CORSSettingsAttr::from(classic_script_cors);
+        let _cors_settings_attr = CORSSettingsAttr::from(classic_script_cors);
         // let credentials_mode = cors_settings_attr.credentials_mode();
 
         let node_document = self.raw.borrow().node_document().unwrap();

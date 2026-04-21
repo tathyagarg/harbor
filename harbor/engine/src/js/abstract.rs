@@ -1,6 +1,6 @@
 use std::{
     cell::RefCell,
-    ops::{Deref, DerefMut},
+    ops::DerefMut,
     rc::{Rc, Weak},
     sync::LazyLock,
 };
@@ -10,8 +10,8 @@ use crate::js::{
     executable::{
         agent::running_execution_context,
         context::{
-            CodeExecutionContext, ExecutionContext, GenericExecutionContext, ScriptOrModule,
-            pop_execution_context, push_execution_context,
+            CodeExecutionContext, ExecutionContext, GenericExecutionContext, pop_execution_context,
+            push_execution_context,
         },
         realm::current_realm,
     },
@@ -50,7 +50,7 @@ pub struct Generator {
 
     generator_state: GeneratorState,
     generator_context: Weak<RefCell<ExecutionContext>>,
-    generator_brand: Option<String>,
+    _generator_brand: Option<String>,
 }
 
 impl OrdinaryWrapper for Generator {
@@ -67,7 +67,7 @@ impl OrdinaryWrapper for Generator {
 //     return
 // }
 
-pub fn generator_resume(generator: &mut Generator, value: Option<Value>) -> Value {
+pub fn generator_resume(generator: &mut Generator, _value: Option<Value>) -> Value {
     if generator.generator_state == GeneratorState::Completed {
         return Value::Object(create_iterator_result_object(Value::Undefined, true));
     }
@@ -100,7 +100,7 @@ pub fn generator_start(generator: &mut Generator, genbody: Box<dyn Fn() -> Optio
         }
     }
 
-    let closure = || {
+    let _closure = || {
         let ac_gen_ctx = running_execution_context().unwrap();
 
         let result = genbody();
@@ -140,7 +140,7 @@ pub fn create_iterator_from_closure(
         parent: ordinary_object_create(Some(prototype), vec![]),
         generator_state: GeneratorState::SuspendedStart,
         generator_context: Weak::new(),
-        generator_brand: brand,
+        _generator_brand: brand,
     };
 
     let callee_ctx = Rc::new(RefCell::new(ExecutionContext::Generic(

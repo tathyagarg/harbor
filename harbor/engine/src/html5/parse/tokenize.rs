@@ -179,7 +179,7 @@ impl<'a> Parser<'a> {
             flag_frameset_ok: true,
 
             script_nesting_level: 0,
-            parser_pause_flag: false,
+            _parser_pause_flag: false,
 
             insertion_point: None,
         }

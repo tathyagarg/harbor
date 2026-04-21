@@ -2380,7 +2380,7 @@ pub struct Parser<'a> {
     flag_frameset_ok: bool,
 
     script_nesting_level: usize,
-    parser_pause_flag: bool,
+    _parser_pause_flag: bool,
 
     insertion_point: Option<usize>,
 }

@@ -1,7 +1,7 @@
-use std::{cell::RefCell, fmt::Debug, os::unix::thread, rc::Rc, sync::LazyLock};
+use std::{cell::RefCell, fmt::Debug, rc::Rc, sync::LazyLock};
 
 use crate::js::{
-    r#abstract::{Generator, ITEREATOR_PROTOTYPE, create_iterator_from_closure},
+    r#abstract::{ITEREATOR_PROTOTYPE, create_iterator_from_closure},
     behaviours::{builtin_functions::BuiltinFunction, ordinary_object_create},
     executable::{context::resolve_binding, environment::EnvironmentRecord},
     operations::{call, create_data_property_or_throw, get, get_method, to_boolean},
@@ -201,7 +201,7 @@ pub const GENERATOR_NEXT: LazyLock<BuiltinFunction> = LazyLock::new(|| BuiltinFu
 
 pub fn create_list_iterator_record(list: Vec<Value>) -> Iterator<Object> {
     let closure: Box<(dyn Fn() -> Option<Value>)> = Box::new(move || -> Option<Value> {
-        for item in &list {
+        for _item in &list {
             todo!("GeneratorYield(CreateIteratorResultObject(E, false))");
         }
 

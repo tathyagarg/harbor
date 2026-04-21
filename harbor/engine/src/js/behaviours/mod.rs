@@ -230,7 +230,7 @@ pub fn ordinary_prevent_extensions(object: &mut Object) -> bool {
             // Builtin functions are always extensible, so this should never be called
             false
         }
-        Object::Generator(gener) => {
+        Object::Generator(_) => {
             panic!("Idk how to implement this");
         }
     }
