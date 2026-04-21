@@ -225,8 +225,6 @@ impl Request {
             return Err(integrity.unwrap_err());
         }
 
-        println!("Sending request:\n{:?}", self.encode());
-
         match self.protocol {
             Protocol::HTTP0_9 => {
                 if let Some(stream) = client.connection.as_mut() {
@@ -286,13 +284,6 @@ impl Request {
                                 },
                             ));
 
-                        println!(
-                            "Bytes: {}",
-                            resp[..respected_bytes]
-                                .iter()
-                                .map(|b| *b as char)
-                                .collect::<String>()
-                        );
                         response_decoder.decode(&resp[..respected_bytes]);
 
                         if response_decoder.is_complete {
