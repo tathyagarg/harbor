@@ -92,9 +92,7 @@ pub export fn parse_script(text: source_text.String) stmt.Script {
     };
     parser.allocator = parser.arena.allocator();
 
-    std.debug.print("Starting to parse script\n", .{});
-
-    const result = stmt_parser.parse_script(&parser) catch {
+    const result = stmt_parser.parse_text(&parser) catch {
         const script = parser.allocator.create(stmt.Script) catch {
             std.debug.print("Failed to allocate script\n", .{});
             return stmt.Script{
@@ -125,8 +123,6 @@ pub export fn parse_script(text: source_text.String) stmt.Script {
 
         return script.*;
     };
-
-    std.debug.print("Parsed script successfully: {d} statements\n", .{result.body.len});
 
     return result.*;
 }

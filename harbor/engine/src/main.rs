@@ -1,6 +1,14 @@
-use std::rc::Rc;
+use std::{cell::RefCell, rc::Rc};
 
-use crate::{render::App, user_agent::Agent};
+use crate::{
+    globals::ENABLE_JS,
+    js::executable::{
+        agent::{Agent, AgentRecord, SURROUNDING_AGENT},
+        realm::initialize_host_defined_realm,
+    },
+};
+
+use crate::{render::App, user_agent::Agent as UAgent};
 
 pub mod css;
 pub mod font;
@@ -15,32 +23,31 @@ pub mod user_agent;
 fn main() {
     env_logger::init();
 
-    // let text = r#"if (x > 0) {
-    // console.log("x is positive");
-    // } else {
-    // console.log("x is non-positive");
-    // }
-    // const y = 2;
-    // "#;
-    // let text_utf16: Vec<u16> = text.encode_utf16().collect();
+    unsafe {
+        ENABLE_JS = std::env::args().any(|arg| arg == "--enable-js");
+    }
 
-    // let zig_string = js::expr::ZigString {
-    //     data: text_utf16.as_ptr(),
-    //     len: text.len(),
-    // };
+    SURROUNDING_AGENT.with(|cell| {
+        *cell.borrow_mut() = Some(Rc::new(RefCell::new(Agent {
+            execution_context_stack: Vec::new(),
+            record: AgentRecord {
+                little_endian: cfg!(target_endian = "little"),
+                can_block: true,
+                signifier: 0, // TODO: generate unique signifiers
+                is_lock_free_1: true,
+                is_lock_free_2: true,
+                is_lock_free_8: true,
+                candidate_execution: (),
+                kept_alive: Vec::new(),
+                module_async_evaluation_count: 0,
+            },
+            executing_thread: (),
+        })));
 
-    // unsafe {
-    //     let script = js::parse_script(zig_string);
+        initialize_host_defined_realm().unwrap();
+    });
 
-    //     let slice = std::slice::from_raw_parts(script.body.items, script.body.len);
-    //     for statement in slice {
-    //         println!("{}", statement);
-    //     }
-
-    //     js::free_string(zig_string);
-    // }
-
-    let ua = Agent::new();
+    let ua = UAgent::new();
     let mut app = App::new(
         render::WindowOptions {
             use_transparent: true,

@@ -1,5 +1,14 @@
-use crate::js::values::{
-    number::Number, object::Object, reference::Reference, string::JsString, symbol::Symbol,
+use std::rc::Rc;
+
+use crate::js::{
+    types::completion_record::{CRKAbrupt, CompletionRecord, CompletionRecordError},
+    values::{
+        number::Number,
+        object::Object,
+        reference::{Reference, get_value},
+        string::JsString,
+        symbol::Symbol,
+    },
 };
 
 pub mod number;
@@ -7,16 +16,58 @@ pub mod object;
 
 pub mod reference;
 
+#[derive(Clone, Debug)]
 pub enum ReferenceOrValue {
     Reference(Reference),
     Value(Value),
 }
 
-pub mod string {
-    use std::{ops::Add, str::FromStr};
+impl ReferenceOrValue {
+    pub fn get_value(
+        &self,
+    ) -> Result<CompletionRecord<Value>, CompletionRecord<CompletionRecordError, CRKAbrupt>> {
+        get_value(self)
+    }
+}
 
-    #[derive(Debug, Clone, Hash, Eq, PartialEq)]
+pub mod string {
+    use std::{fmt::Debug, ops::Add, str::FromStr};
+
+    #[derive(Clone, Hash, Eq, PartialEq)]
     pub struct JsString(pub Vec<u16>);
+
+    impl Debug for JsString {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            let string = String::from_utf16(&self.0).unwrap_or_default();
+            write!(f, "{string}")
+        }
+    }
+
+    impl JsString {
+        pub fn concat(&self, other: &JsString) -> JsString {
+            let mut combined = self.0.clone();
+            combined.extend(other.0.iter());
+            JsString(combined)
+        }
+
+        pub fn len(&self) -> usize {
+            self.0.len()
+        }
+
+        pub fn code_point_at(&self, index: usize) -> Option<u16> {
+            self.0.get(index).cloned()
+        }
+
+        pub fn empty() -> Self {
+            JsString(Vec::new())
+        }
+    }
+
+    impl From<JsString> for String {
+        fn from(js_str: JsString) -> Self {
+            String::from_utf16(&js_str.0).unwrap_or_default()
+        }
+    }
 
     impl FromStr for JsString {
         type Err = ();
@@ -104,6 +155,8 @@ pub mod symbol {
 
     pub type SymbolId = u64;
 
+    pub const SYMBOL_TO_PRIMITIVE: SymbolId = 0;
+
     #[derive(Debug, Clone, Hash, Eq, PartialEq)]
     pub struct Symbol {
         pub id: SymbolId,
@@ -126,6 +179,8 @@ pub enum Value {
     Number(Number),
     BigInt(()),
     Object(Object),
+
+    InternalFunction(Rc<fn(Vec<Value>) -> Value>),
 }
 
 impl Value {
@@ -175,5 +230,33 @@ impl Value {
 
     pub fn is_property_key(&self) -> bool {
         matches!(self, Value::String(_) | Value::Symbol(_))
+    }
+
+    pub fn is_string(&self) -> bool {
+        matches!(self, Value::String(_))
+    }
+
+    pub fn is_null(&self) -> bool {
+        matches!(self, Value::Null)
+    }
+
+    pub fn is_undefined(&self) -> bool {
+        matches!(self, Value::Undefined)
+    }
+
+    pub fn is_number(&self) -> bool {
+        matches!(self, Value::Number(_))
+    }
+
+    pub fn is_boolean(&self) -> bool {
+        matches!(self, Value::Boolean(_))
+    }
+
+    pub fn is_symbol(&self) -> bool {
+        matches!(self, Value::Symbol(_))
+    }
+
+    pub fn is_object(&self) -> bool {
+        matches!(self, Value::Object(_))
     }
 }

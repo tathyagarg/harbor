@@ -92,7 +92,7 @@ pub fn char_is_non_printable(ch: char) -> bool {
 #[derive(Clone)]
 pub struct InputStream<T> {
     input: Vec<T>,
-    pos: usize,
+    pub pos: usize,
     is_reconsume: bool,
 
     pub is_eof: bool,

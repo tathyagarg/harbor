@@ -12,3 +12,5 @@ flamegraph.svg
 libjs.a
 
 .env
+
+*.tar.gz

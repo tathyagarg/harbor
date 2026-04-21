@@ -225,6 +225,18 @@ pub struct Expression {
     pub len: usize,
 }
 
+impl Seq for Expression {
+    type Item = AssignmentExpression;
+
+    fn data(&self) -> *const Self::Item {
+        self.data
+    }
+
+    fn len(&self) -> usize {
+        self.len
+    }
+}
+
 impl Debug for Expression {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let slice = unsafe { std::slice::from_raw_parts(self.data, self.len) };
@@ -544,9 +556,9 @@ pub struct IdentifierReference {
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub union IdentifierReferenceData {
-    identifier: *const IdentifierNameTokenData,
-    _yield: (),
-    _await: (),
+    pub identifier: *const IdentifierNameTokenData,
+    pub _yield: (),
+    pub _await: (),
 }
 
 pub const IDENTIFIER_REF_IDENTIFIER: u8 = 0;
@@ -1074,9 +1086,9 @@ impl Debug for BinaryOrUnaryExpression {
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub union BinaryOrUnaryExpressionData {
-    binary: *const BinaryExpression,
-    unary: *const UnaryExpression,
-    none: (),
+    pub binary: *const BinaryExpression,
+    pub unary: *const UnaryExpression,
+    pub none: (),
 }
 
 pub const BINARY_OR_UNARY_EXPR_BINARY: u8 = 0;
@@ -1106,8 +1118,8 @@ impl Debug for UnaryExpressionOrNull {
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub union UnaryExpressionOrNullData {
-    unary: *const UnaryExpression,
-    none: (),
+    pub unary: *const UnaryExpression,
+    pub none: (),
 }
 
 pub const UNARY_EXPR_OR_NULL_UNARY: u8 = 0;
@@ -1550,8 +1562,8 @@ pub struct UnaryExpressionOrLHS {
     pub data: UnaryExpressionOrLHSData,
 }
 
-const UNARY_EXPR_OR_LHS_UNARY: u8 = 0;
-const UNARY_EXPR_OR_LHS_LHS: u8 = 1;
+pub const UNARY_EXPR_OR_LHS_UNARY: u8 = 0;
+pub const UNARY_EXPR_OR_LHS_LHS: u8 = 1;
 
 impl Debug for UnaryExpressionOrLHS {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1626,14 +1638,14 @@ pub struct AssignmentExpression {
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub union AssignmentExpressionData {
-    _yield: *const YieldExpression,
-    raw_assignment: RawAssignmentData,
-    operator_assignment: OperatorAssignmentExpressionData,
-    ternary: *const TernaryExpression,
-    binary: *const BinaryExpression,
-    unary: *const UnaryExpression,
-    primary: *const PrimaryExpression,
-    lhs: *const LeftHandSideExpression,
+    pub _yield: *const YieldExpression,
+    pub raw_assignment: RawAssignmentData,
+    pub operator_assignment: OperatorAssignmentExpressionData,
+    pub ternary: *const TernaryExpression,
+    pub binary: *const BinaryExpression,
+    pub unary: *const UnaryExpression,
+    pub primary: *const PrimaryExpression,
+    pub lhs: *const LeftHandSideExpression,
 }
 
 pub const ASSIGNMENT_EXPR_CONDITIONAL: u8 = 0;

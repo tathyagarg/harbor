@@ -4,18 +4,21 @@ use std::ops::Deref;
 use std::rc::Weak;
 use std::{cell::RefCell, rc::Rc};
 
-use crate::css::r#box::declarations::handle_declaration;
-use crate::css::cssom::{
-    CSSDeclaration, CSSRuleNode, CSSRuleType, CSSStyleRuleData, CSSStyleSheet, CSSStyleSheetExt,
-    ComputedStyle, DocumentOrShadowRootStyle, StyleSheetList,
-};
-use crate::css::selectors::{ComplexSelector, MatchesElement, Specificity};
-use crate::html5::elements::link::LinkElement;
-use crate::http::url::URL;
-use crate::infra::Serializable;
 use crate::{
-    html5::{parse::Token, tag_groups::*},
-    http::{self},
+    css::{
+        r#box::declarations::handle_declaration,
+        cssom::{
+            CSSDeclaration, CSSRuleNode, CSSRuleType, CSSStyleRuleData, CSSStyleSheet,
+            CSSStyleSheetExt, ComputedStyle, DocumentOrShadowRootStyle, StyleSheetList,
+        },
+        selectors::{ComplexSelector, MatchesElement, Specificity},
+    },
+    html5::{
+        elements::link::LinkElement, environments::EnvironmentSettings, parse::Token, tag_groups::*,
+    },
+    http::url::{Domain, Host, URL},
+    infra::Serializable,
+    js::executable::realm::current_realm,
 };
 
 type DOMString = String;
@@ -1176,6 +1179,12 @@ impl Element {
         self.attribute_list.push(attr);
     }
 
+    pub fn has_attribute(&self, name: &str) -> bool {
+        self.attribute_list
+            .iter()
+            .any(|attr| attr.local_name() == name)
+    }
+
     pub fn get_attribute(&self, name: &str) -> Option<&str> {
         for attr in &self.attribute_list {
             if attr.local_name() == name {
@@ -1191,6 +1200,14 @@ impl Element {
 
     pub fn namespace_uri(&self) -> Option<&str> {
         self.namespace.as_deref()
+    }
+
+    pub fn node_document(&self) -> Option<Rc<RefCell<Document>>> {
+        self._node
+            .borrow()
+            .node_document
+            .as_ref()
+            .and_then(|weak_doc| weak_doc.upgrade())
     }
 }
 
@@ -1366,12 +1383,7 @@ impl IElement for Element {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Origin {
     Opaque,
-    Tuple(
-        String,
-        http::url::Host,
-        Option<u16>,
-        Option<http::url::Domain>,
-    ),
+    Tuple(String, Host, Option<u16>, Option<Domain>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1382,11 +1394,12 @@ pub struct DOMImplementation {
 #[derive(Clone, PartialEq, Eq)]
 pub struct Document {
     pub _node: Rc<RefCell<Node>>,
+    pub settings: EnvironmentSettings,
 
     _encoding: &'static encoding_rs::Encoding,
 
     _content_type: &'static str,
-    _url: http::url::URL,
+    _url: URL,
     _origin: Origin,
 
     _type: &'static str,
@@ -1431,10 +1444,12 @@ impl Default for Document {
                 _parent_node: None,
                 _child_nodes: NodeList::new(),
             })),
+            settings: current_realm().borrow().host_defined.settings.clone(),
+
             _encoding: encoding_rs::Encoding::for_label(b"utf-8").unwrap(),
 
             _content_type: "application/xml",
-            _url: http::url::URL::pure_parse(String::from("about:blank")).unwrap(),
+            _url: URL::pure_parse(String::from("about:blank")).unwrap(),
             _origin: Origin::Opaque,
 
             _type: "xml",
@@ -1515,11 +1530,11 @@ impl Document {
         &self._implementation
     }
 
-    pub fn url(&self) -> &http::url::URL {
+    pub fn url(&self) -> &URL {
         &self._url
     }
 
-    pub fn document_uri(&self) -> &http::url::URL {
+    pub fn document_uri(&self) -> &URL {
         &self._url
     }
 
@@ -1553,7 +1568,7 @@ impl Document {
     /// 2. Otherwise, return the frozen base URL of the first base element in document that has an href attribute, in tree order.
     ///
     /// NOTE: For simplicity, this implementation always returns the document's URL.
-    pub fn document_base_url(&self) -> &http::url::URL {
+    pub fn document_base_url(&self) -> &URL {
         &self._url
     }
 

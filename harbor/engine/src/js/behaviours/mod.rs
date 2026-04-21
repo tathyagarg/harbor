@@ -1,7 +1,8 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::js::{
-    SLOT_EXTENSIBLE, SLOT_PROTOTYPE,
+    SLOT_EXTENSIBLE, SLOT_PARAMETER_MAP, SLOT_PROTOTYPE,
+    behaviours::exotics::arguments::ArgumentsObject,
     operations::{create_data_property, make_basic_object, same_value},
     types::completion_record::{
         CRKThrow, CompletionRecord, CompletionRecordError, CompletionRecordNormal,
@@ -10,19 +11,95 @@ use crate::js::{
     values::{
         Value,
         object::{
-            ArrayObject, FunctionObject, Object, ObjectTrait, OrdinaryObject, PropertyDescriptor,
-            PropertyKey, SlotValue,
+            ArrayObject, FunctionObject, MiscObject, Object, ObjectTrait, OrdinaryObject,
+            OrdinaryWrapper, PropertyDescriptor, PropertyKey, SlotValue,
         },
     },
 };
 
+// 10.2
+pub mod functions;
+
+// 10.3
+pub mod builtin_functions;
+
 // 10.4
 pub mod exotics;
+
+pub fn _ordinary_from_misc(misc: &MiscObject) -> OrdinaryObject {
+    let mut ordinary = OrdinaryObject {
+        properties: HashMap::new(),
+        prototype: Rc::new(RefCell::new(None)),
+        extensible: true,
+        internal_slots: misc.internal_slots.clone(),
+    };
+
+    let ordinary_value = Value::Object(Object::Ordinary(ordinary.clone()));
+
+    ordinary.prototype = Rc::new(RefCell::new(
+        misc.get(&PropertyKey::from(SLOT_PROTOTYPE), &ordinary_value)
+            .unwrap_or(Value::Null)
+            .unwrap_object(),
+    ));
+
+    ordinary.extensible = misc
+        .get(&PropertyKey::from(SLOT_EXTENSIBLE), &ordinary_value)
+        .unwrap_or(Value::Boolean(true))
+        .unwrap_bool()
+        .unwrap();
+
+    ordinary.properties = misc
+        .properties
+        .clone()
+        .into_iter()
+        .filter(|(k, _)| {
+            k != &PropertyKey::from(SLOT_PROTOTYPE) && k != &PropertyKey::from(SLOT_EXTENSIBLE)
+        })
+        .collect();
+
+    ordinary
+}
+
+pub fn _arguments_from_ordinary(ordinary: &OrdinaryObject) -> ArgumentsObject {
+    //let parameter_map = if let Object::Ordinary(ord) = ordinary
+    //    .internal_slots
+    //    .get(&PropertyKey::from(SLOT_PARAMETER_MAP))
+    //    .unwrap()
+    //    .field("value")
+    //    .unwrap()
+    //    .unwrap_object()
+    //    .unwrap()
+    //{
+    //    ord.clone()
+    //} else {
+    //    unreachable!()
+    //};
+
+    let slot_value = ordinary
+        .internal_slots
+        .get(&String::from(SLOT_PARAMETER_MAP))
+        .unwrap_or(&SlotValue::Undefined);
+
+    let parameter_map = if let SlotValue::Undefined = slot_value {
+        ordinary_object_create(Some(Object::Ordinary(OrdinaryObject::prototype())), vec![])
+    } else if let SlotValue::Value(Value::Object(obj)) = slot_value
+        && let Object::Ordinary(ord) = obj
+    {
+        ord.clone()
+    } else {
+        unreachable!()
+    };
+
+    ArgumentsObject {
+        ordinary: ordinary.clone(),
+        parameter_map,
+    }
+}
 
 pub fn ordinary_object_create(
     prototype: Option<Object>,
     additional_internal_slots_list: Vec<String>,
-) -> Object {
+) -> OrdinaryObject {
     let mut internal_slots_list = vec![SLOT_PROTOTYPE.to_string(), SLOT_EXTENSIBLE.to_string()];
     internal_slots_list.extend(additional_internal_slots_list);
 
@@ -34,7 +111,11 @@ pub fn ordinary_object_create(
     // be fine
     obj.set_prototype_of(prototype);
 
-    obj
+    if let Object::Misc(misc) = &mut obj {
+        _ordinary_from_misc(misc)
+    } else {
+        unreachable!()
+    }
 }
 
 pub fn ordinary_get_prototype_of(object: &Object) -> Rc<RefCell<Option<Object>>> {
@@ -61,18 +142,7 @@ pub fn ordinary_set_prototype_of(object: &mut Object, prototype: Option<Object>)
         return true;
     }
 
-    let extensible = match object {
-        Object::Ordinary(OrdinaryObject { extensible, .. }) => *extensible,
-        Object::Function(FunctionObject { extensible, .. }) => *extensible,
-        Object::Array(ArrayObject { extensible, .. }) => *extensible,
-        Object::Misc(misc) => misc
-            .get_own_property(&PropertyKey::from(SLOT_EXTENSIBLE))
-            .unwrap()
-            .field("value")
-            .unwrap()
-            .unwrap_bool()
-            .unwrap(),
-    };
+    let extensible = ordinary_is_extensible(object);
 
     if !extensible {
         return false;
@@ -113,12 +183,15 @@ pub fn ordinary_set_prototype_of(object: &mut Object, prototype: Option<Object>)
 pub fn ordinary_is_extensible(object: &Object) -> bool {
     match object {
         Object::Ordinary(OrdinaryObject { extensible, .. }) => *extensible,
-        Object::Function(FunctionObject { extensible, .. }) => *extensible,
+        Object::Function(FunctionObject { object, .. }) => object.extensible,
         Object::Array(ArrayObject { extensible, .. }) => *extensible,
         Object::Misc(misc) => match misc.internal_slots.get(SLOT_EXTENSIBLE).unwrap() {
             &SlotValue::Value(Value::Boolean(b)) => b,
             _ => panic!(),
         },
+        Object::Arguments(args) => ordinary_is_extensible(&Object::Ordinary(args.ordinary.clone())),
+        Object::BuiltinFunction(_) => true,
+        Object::Generator(gener) => gener.ordinary().extensible,
     }
 }
 
@@ -128,8 +201,8 @@ pub fn ordinary_prevent_extensions(object: &mut Object) -> bool {
             *extensible = false;
             true
         }
-        Object::Function(FunctionObject { extensible, .. }) => {
-            *extensible = false;
+        Object::Function(FunctionObject { object, .. }) => {
+            object.extensible = false;
             true
         }
         Object::Array(ArrayObject { extensible, .. }) => {
@@ -143,6 +216,22 @@ pub fn ordinary_prevent_extensions(object: &mut Object) -> bool {
             );
 
             true
+        }
+        Object::Arguments(args) => {
+            let mut obj = Object::Ordinary(args.ordinary.clone());
+            let res = ordinary_prevent_extensions(&mut obj);
+            if let Object::Ordinary(ordinary) = obj {
+                args.ordinary = ordinary;
+            }
+
+            res
+        }
+        Object::BuiltinFunction(_) => {
+            // Builtin functions are always extensible, so this should never be called
+            false
+        }
+        Object::Generator(_) => {
+            panic!("Idk how to implement this");
         }
     }
 }
@@ -198,24 +287,16 @@ pub fn ordinary_define_own_property(
     desc: &PropertyDescriptor,
 ) -> Result<CompletionRecord<bool>, CompletionRecord<CompletionRecordError, CRKThrow>> {
     let _current = ordinary_get_own_property(object, key);
-    if let Some(current) = _current {
-        let extensible = ordinary_is_extensible(object);
+    let extensible = ordinary_is_extensible(object);
 
-        Ok(CompletionRecordNormal(
-            validate_and_apply_property_descriptor(
-                Some(object),
-                key,
-                extensible,
-                &desc,
-                Some(&current),
-            ),
-        ))
-    } else {
-        Err(CompletionRecordThrow(CompletionRecordError::Misc(format!(
-            "Property {:?} does not exist on object",
-            key
-        ))))
-    }
+    validate_and_apply_property_descriptor(Some(object), key, extensible, desc, _current.as_ref())
+        .then(|| CompletionRecordNormal(true))
+        .ok_or_else(|| {
+            CompletionRecordThrow(CompletionRecordError::Misc(format!(
+                "Failed to define property {:?} on object",
+                key
+            )))
+        })
 }
 
 pub fn is_compatible_property_descriptor(
@@ -246,6 +327,9 @@ pub fn validate_and_apply_property_descriptor(
         match object {
             Object::Ordinary(ordinary) => {
                 ordinary.properties.insert(key.clone(), desc.clone());
+            }
+            Object::Arguments(args) => {
+                args.ordinary.properties.insert(key.clone(), desc.clone());
             }
             _ => panic!(),
         }

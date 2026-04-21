@@ -1,5 +1,6 @@
 pub mod dom;
 pub mod elements;
+pub mod environments;
 /// Custom implementation of the HTML5 spec:
 /// https://html.spec.whatwg.org/
 pub mod parse;
@@ -26,6 +27,56 @@ macro_rules! concat_arrays {
 }
 
 pub const HTML_NAMESPACE: &str = "http://www.w3.org/1999/xhtml";
+
+pub mod cors {
+    pub enum CORSSettingsAttr {
+        NoCors,
+        Anonymous,
+        UseCredentials,
+    }
+
+    impl CORSSettingsAttr {
+        pub fn from(value: Option<String>) -> Self {
+            match value.as_deref() {
+                None => CORSSettingsAttr::NoCors,
+                Some("anonymous") => CORSSettingsAttr::Anonymous,
+                Some("use-credentials") => CORSSettingsAttr::UseCredentials,
+                _ => CORSSettingsAttr::NoCors,
+            }
+        }
+
+        pub fn credentials_mode(&self) -> &'static str {
+            match self {
+                CORSSettingsAttr::NoCors | CORSSettingsAttr::Anonymous => "same-origin",
+                CORSSettingsAttr::UseCredentials => "include",
+            }
+        }
+    }
+}
+
+pub mod mime_types {
+    pub const JS_MIMES: [&str; 16] = [
+        "application/ecmascript",
+        "application/javascript",
+        "application/x-ecmascript",
+        "application/x-javascript",
+        "text/ecmascript",
+        "text/javascript",
+        "text/javascript1.0",
+        "text/javascript1.1",
+        "text/javascript1.2",
+        "text/javascript1.3",
+        "text/javascript1.4",
+        "text/javascript1.5",
+        "text/jscript",
+        "text/livescript",
+        "text/x-ecmascript",
+        "text/x-javascript ",
+    ];
+
+    pub const IS_JS_MIME: fn(&str) -> bool =
+        |mime| JS_MIMES.contains(&mime.to_lowercase().as_str());
+}
 
 pub mod tag_groups {
     pub const DEFAULT_SCOPE_NAMES: [&str; 14] = [

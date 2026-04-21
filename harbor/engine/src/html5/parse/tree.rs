@@ -3,9 +3,11 @@ use crate::{
         parser::{parse_stylesheet, preprocess},
         tokenize::tokenize,
     },
+    globals::ENABLE_JS,
     html5::{
         self,
         dom::*,
+        elements::script::ScriptElement,
         parse::{ElementOrMarker, ParseError, Parser, ParserState},
         tag_groups::*,
     },
@@ -1244,10 +1246,22 @@ impl InsertMode {
                 return false;
             }
             Token::EndTag(ref tag) if tag.name.as_str() == "script" => {
-                parser.open_elements_stack.pop();
+                let script_raw = parser.open_elements_stack.pop().unwrap();
+
                 parser.insertion_mode = parser.original_insertion_mode.clone().unwrap();
 
-                // todo!("Handle script end tag correctly");
+                let old_insertion_point = parser.insertion_point;
+                parser.insertion_point = Some(parser.stream.pos);
+
+                parser.script_nesting_level += 1;
+
+                if unsafe { ENABLE_JS } {
+                    ScriptElement::new(script_raw, Some(parser.document.document.clone()))
+                        .prepare();
+                }
+
+                parser.script_nesting_level -= 1;
+                parser.insertion_point = old_insertion_point;
             }
             Token::EndTag(ref tag) => {
                 let popped_elem = parser.open_elements_stack.pop().unwrap();
@@ -1289,16 +1303,6 @@ impl InsertMode {
         }
 
         return true;
-    }
-
-    fn handle_in_template(_parser: &mut Parser, _token: Token) -> bool {
-        todo!("Implement in template insertion mode");
-
-        // match token {
-        //     _ => {}
-        // }
-
-        // return true;
     }
 
     /// Let subject be token's tag name.

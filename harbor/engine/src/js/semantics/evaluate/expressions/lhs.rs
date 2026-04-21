@@ -1,14 +1,18 @@
 use crate::js::{
     collect_seq,
+    executable::environment::EnvRecordTrait,
     expr::{
-        Arguments, CALL_EXPR_MEMBER, CALL_EXPR_PRIVATE_PROPERTY, CALL_EXPR_PROPERTY,
-        CallExpression, IdentifierNameTokenData, LEFT_HAND_SIDE_EXPR_CALL, LEFT_HAND_SIDE_EXPR_NEW,
-        LeftHandSideExpression, MEMBER_EXPR_MEMBER, MEMBER_EXPR_NEW, MEMBER_EXPR_PRIMARY,
-        MEMBER_EXPR_PRIVATE_PROPERTY, MEMBER_EXPR_PROPERTY, MemberExpression, NEW_EXPR_MEMBER,
-        NEW_EXPR_NEW, NewExpression,
+        Arguments, CALL_EXPR_COVER, CALL_EXPR_MEMBER, CALL_EXPR_PRIVATE_PROPERTY,
+        CALL_EXPR_PROPERTY, CallExpression, IdentifierNameTokenData, LEFT_HAND_SIDE_EXPR_CALL,
+        LEFT_HAND_SIDE_EXPR_NEW, LeftHandSideExpression, MEMBER_EXPR_MEMBER, MEMBER_EXPR_NEW,
+        MEMBER_EXPR_PRIMARY, MEMBER_EXPR_PRIVATE_PROPERTY, MEMBER_EXPR_PROPERTY, MemberExpression,
+        NEW_EXPR_MEMBER, NEW_EXPR_NEW, NewExpression,
     },
-    operations::{IteratorKind, get_iterator, is_constructor, iterator_step_value},
-    semantics::{EvaluateExpressionTag, general_evaluate, identifier, primary},
+    operations::{IteratorKind, call, get_iterator, is_constructor, iterator_step_value},
+    semantics::{
+        evaluate::expressions::{EvaluateExpressionTag, expression_evaluate, primary},
+        r#static::string_value,
+    },
     types::completion_record::{
         CRKAbrupt, CRKNormal, CompletionRecord, CompletionRecordError, CompletionRecordNormal,
     },
@@ -18,7 +22,7 @@ use crate::js::{
     },
 };
 
-pub fn evaluate(lhs: LeftHandSideExpression) -> ReferenceOrValue {
+pub fn evaluate(lhs: &LeftHandSideExpression) -> ReferenceOrValue {
     match lhs.tag {
         LEFT_HAND_SIDE_EXPR_NEW => {
             let new_data = unsafe { *lhs.data.new };
@@ -86,6 +90,15 @@ pub fn evaluate_call(call: &CallExpression) -> ReferenceOrValue {
 
             return ReferenceOrValue::Reference(res);
         }
+        CALL_EXPR_COVER => {
+            let expr = unsafe { *call.data.cover.callee };
+            let arguments = unsafe { *call.data.cover.arguments };
+
+            let reference = expression_evaluate(&EvaluateExpressionTag::MemberExpression(expr));
+            let func = reference.get_value().unwrap().value;
+
+            ReferenceOrValue::Value(_evaluate_call(func, &reference, arguments).unwrap().value)
+        }
         CALL_EXPR_PRIVATE_PROPERTY => {
             todo!("Private property access evaluation in call expression")
         }
@@ -93,11 +106,98 @@ pub fn evaluate_call(call: &CallExpression) -> ReferenceOrValue {
     }
 }
 
+fn _evaluate_call(
+    func: Value,
+    reference: &ReferenceOrValue,
+    arguments: Arguments,
+) -> Result<CompletionRecord<Value>, CompletionRecord<CompletionRecordError, CRKAbrupt>> {
+    let this_value = if let ReferenceOrValue::Reference(func_ref) = reference {
+        if func_ref.is_property_reference() {
+            func_ref.get_this_value()
+        } else {
+            let ref_env = &func_ref.base;
+            if let ReferenceBase::EnvironmentRecord(env) = ref_env {
+                env.borrow()
+                    .with_base_object()
+                    .map(|obj| Value::Object(obj))
+                    .unwrap_or(Value::Undefined)
+            } else {
+                unreachable!()
+            }
+        }
+    } else {
+        Value::Undefined
+    };
+
+    let arg_list = evaluate_arguments(&arguments);
+
+    if !func.is_object() {
+        return Err(CompletionRecord {
+            kind: CRKAbrupt::Throw,
+            value: CompletionRecordError::TypeError,
+            target: None,
+        });
+    }
+
+    // NOTE: Safety last
+    // if !is_callable(&func) {
+    //     return Err(CompletionRecord {
+    //         kind: CRKAbrupt::Throw,
+    //         value: CompletionRecordError::TypeError,
+    //         target: None,
+    //     });
+    // }
+
+    let res = call(&func, &this_value, arg_list);
+
+    res.map_err(|e| CompletionRecord {
+        kind: CRKAbrupt::Throw,
+        value: e.value,
+        target: None,
+    })
+}
+
+pub fn evaluate_arguments(arguments: &Arguments) -> Vec<Value> {
+    let mut args_list = Vec::<Value>::new();
+    let seq = collect_seq(&arguments.arguments);
+    let spread =
+        unsafe { std::slice::from_raw_parts(arguments.is_spread, arguments.arguments.len) }
+            .iter()
+            .copied()
+            .collect::<Vec<bool>>();
+
+    for (is_spread, arg) in spread.iter().zip(seq.iter()) {
+        if *is_spread {
+            let spread_ref =
+                expression_evaluate(&EvaluateExpressionTag::AssignmentExpression(*arg));
+            let spread_obj = get_value(&spread_ref).unwrap().value;
+
+            let mut iterator_rec = get_iterator(&spread_obj, IteratorKind::Sync).unwrap().value;
+
+            loop {
+                let next = iterator_step_value(&mut iterator_rec).unwrap().value;
+                if let Some(value) = next {
+                    args_list.push(value);
+                } else {
+                    break;
+                }
+            }
+        } else {
+            let arg_ref = expression_evaluate(&EvaluateExpressionTag::AssignmentExpression(*arg));
+            let arg_value = get_value(&arg_ref).unwrap().value;
+
+            args_list.push(arg_value);
+        }
+    }
+
+    args_list
+}
+
 pub fn evaluate_member(member: &MemberExpression) -> ReferenceOrValue {
     match member.tag {
         MEMBER_EXPR_PRIMARY => {
             let primary_data = unsafe { *member.data.primary };
-            return primary::evaluate(primary_data);
+            return primary::evaluate(&primary_data);
         }
         MEMBER_EXPR_MEMBER => {
             let object_data = unsafe { *member.data.member.object };
@@ -155,7 +255,7 @@ pub fn evaluate_property_access_with_expression_key(
     expression: EvaluateExpressionTag,
     strict: bool,
 ) -> Result<CompletionRecord<Reference>, CompletionRecord<CompletionRecordError, CRKAbrupt>> {
-    let property_name_reference = general_evaluate(expression);
+    let property_name_reference = expression_evaluate(&expression);
     let maybe_property_name_value = get_value(&property_name_reference);
 
     if let Err(e) = maybe_property_name_value {
@@ -185,7 +285,7 @@ pub fn evaluate_property_access_with_identifier_key(
     identifier_name: IdentifierNameTokenData,
     strict: bool,
 ) -> Reference {
-    let property_name_string = identifier::string_value(identifier_name);
+    let property_name_string = string_value(identifier_name);
 
     Reference {
         base: ReferenceBase::Value(base_value),
@@ -207,11 +307,11 @@ pub fn evaluate_new(
     let reference = match construct_expr {
         NewOrMember::New(new) => {
             let eval_expr = EvaluateExpressionTag::NewExpression(new);
-            general_evaluate(eval_expr)
+            expression_evaluate(&eval_expr)
         }
         NewOrMember::Member(member) => {
             let eval_expr = EvaluateExpressionTag::MemberExpression(member);
-            general_evaluate(eval_expr)
+            expression_evaluate(&eval_expr)
         }
     };
 
@@ -238,7 +338,7 @@ pub fn argument_list_evaluation(
     arguments: Arguments,
 ) -> Result<CompletionRecord<Vec<Value>>, CompletionRecord<CompletionRecordError, CRKAbrupt>> {
     let mut args_list = Vec::<Value>::new();
-    let seq = collect_seq(arguments.arguments);
+    let seq = collect_seq(&arguments.arguments);
 
     let is_spread_elems =
         unsafe { std::slice::from_raw_parts(arguments.is_spread, arguments.arguments.len) }
@@ -248,7 +348,8 @@ pub fn argument_list_evaluation(
 
     for (i, arg) in seq.iter().enumerate() {
         if is_spread_elems[i] {
-            let spread_ref = general_evaluate(EvaluateExpressionTag::AssignmentExpression(*arg));
+            let spread_ref =
+                expression_evaluate(&EvaluateExpressionTag::AssignmentExpression(*arg));
             let spread_obj = get_value(&spread_ref)?.value;
 
             let mut iterator_rec = get_iterator(&spread_obj, IteratorKind::Sync).unwrap().value;
@@ -262,7 +363,7 @@ pub fn argument_list_evaluation(
                 }
             }
         } else {
-            let arg_ref = general_evaluate(EvaluateExpressionTag::AssignmentExpression(*arg));
+            let arg_ref = expression_evaluate(&EvaluateExpressionTag::AssignmentExpression(*arg));
             let arg_value = get_value(&arg_ref)?.value;
 
             args_list.push(arg_value);

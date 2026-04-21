@@ -807,9 +807,7 @@ impl Box {
 
                             false
                         })
-                        .map(|idx| parents.len() - 1 - idx);
-
-                    println!("Position: {:?}, {:?}", self._position_x, self._position_y);
+                        .map(|idx| parents.len() - idx);
 
                     return (0.0, 0.0, false);
                 }

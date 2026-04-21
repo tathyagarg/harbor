@@ -67,14 +67,11 @@
         },
         "start",
       )
-      .add(
-        ".anim-2",
-        {
-          opacity: [0, 1],
-          translateY: [50, 0],
-        },
-        "start+=500",
-      )
+      .add(".anim-2", {
+        opacity: [0, 1],
+        translateY: [50, 0],
+        delay: stagger(100, { start: 500 }),
+      })
       .add(
         ".anim-3",
         {
@@ -230,7 +227,7 @@
 <div
   class="overflow-hidden transition-all duration-300 fixed top-1/2 left-4 -translate-y-1/2
   flex flex-col items-start gap-1 z-10 border-1 border-emphasis-1/25 rounded-lg px-2 py-4 font-body
-  cursor-pointer text-sm"
+  cursor-pointer text-sm backdrop-blur-sm shadow-2xl shadow-black"
   onmouseenter={expand}
   onmouseleave={collapse}
   role="navigation"
@@ -261,7 +258,29 @@
   {/each}
 </div>
 
+<div class="w-[90%] mx-auto h-screen z-2 p-12">
+  <h1 class="text-[15rem]/[15rem] text-emphasis-2">HARBOR BROWSER</h1>
+
+  <p class="text-subtext anim w-[70%]">
+    Harbor Browser is a custom web browser engine built from scratch with Rust
+    and Zig. <span class="text-text"
+      >Every core system - from networking to parsing to layouts to rendering,
+      and more - was implemented manually without relying on existing browser
+      engines or frameworks</span
+    >
+  </p>
+
+  <div class="grid grid-cols-4 gap-12 mt-12">
+    {#each stats as stat}
+      <div class="anim-2">
+        <Stat {...stat} />
+      </div>
+    {/each}
+  </div>
+</div>
+
 <div class="w-[50%] mx-auto" id="page">
+  <!--
   <div class="h-screen flex items-center justify-center flex-col">
     <h1 class="text-8xl anim">Welcome to</h1>
     <h1 class="text-8xl text-emphasis-2 anim">Harbor Browser</h1>
@@ -296,6 +315,7 @@
       {/each}
     </div>
   </div>
+  -->
 
   <div class="h-screen" id="pipeline">
     <div class="h-full py-[5%] flex flex-col">
@@ -464,6 +484,61 @@
       </div>
       <h1 class="text-emphasis-2 text-6xl my-4">Architecture</h1>
       <p class="text-subtext">Explore what's inside Harbor Browser.</p>
+    </div>
+  </div>
+</div>
+
+<div class="h-[40vh] w-full bg-emphasis-1 text-text-dark relative">
+  <div
+    class="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none"
+  >
+    <img
+      src="/circuit.png"
+      alt="Circuit"
+      class="object-contain opacity-10 -rotate-45 absolute left-0"
+    />
+
+    <img
+      src="/circuit.png"
+      alt="Circuit"
+      class="object-contain opacity-10 rotate-45 absolute right-0 top-1/2"
+    />
+  </div>
+
+  <div class="w-1/2 mx-auto h-full flex justify-between py-16">
+    <div class="flex flex-col gap-4">
+      <h2 class="text-2xl">Project</h2>
+      <a
+        href="https://github.com/tathyagarg/harbor"
+        class="underline hover:decoration-wavy">GitHub</a
+      >
+      <a
+        href="https://github.com/tathyagarg/harbor/issues"
+        class="underline hover:decoration-wavy">Issues</a
+      >
+    </div>
+    <div>
+      Under the <a
+        href="https://github.com/tathyagarg/harbor/blob/main/LICENSE"
+        class="underline hover:decoration-wavy">MIT License</a
+      >.
+    </div>
+
+    <div class="flex flex-col gap-4">
+      <h2 class="text-2xl">Making</h2>
+      <p>
+        Made with <span class="text-red-500">❤</span> by
+        <a href="https://arson.dev" class="underline hover:decoration-wavy"
+          >Tathya</a
+        >.
+      </p>
+
+      <p>
+        Built for <a
+          href="https://flavortown.hackclub.com/"
+          class="underline hover:decoration-wavy">Hack Club's Flavortown</a
+        >.
+      </p>
     </div>
   </div>
 </div>

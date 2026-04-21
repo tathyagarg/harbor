@@ -1,0 +1,66 @@
+use std::{cell::RefCell, rc::Rc};
+
+use crate::js::{
+    collect_seq,
+    executable::{
+        agent::running_execution_context,
+        environment::{EnvRecordTrait, EnvironmentRecord, new_declarative_environment},
+    },
+    semantics::r#static::{ParseNode, StaticSemantics},
+    stmt::{BlockStatement, SeqStatementOrDeclaration},
+    values::{ReferenceOrValue, Value},
+};
+
+pub fn statement_list_evaluate(stmt_list: &SeqStatementOrDeclaration) -> ReferenceOrValue {
+    let mut res: Option<ReferenceOrValue> = None;
+
+    for stmt_or_decl in collect_seq(stmt_list) {
+        res = Some(super::statement_or_declaration_evaluate(&stmt_or_decl));
+    }
+
+    res.unwrap_or(ReferenceOrValue::Value(Value::Undefined))
+}
+
+pub fn evaluate(stmt: &BlockStatement) -> ReferenceOrValue {
+    let old_env = running_execution_context()
+        .unwrap()
+        .borrow()
+        .lexical_env()
+        .unwrap();
+    let block_env = Rc::new(RefCell::new(new_declarative_environment(Some(
+        old_env.clone(),
+    ))));
+
+    block_declaration_instantiation(&stmt.body, block_env.clone());
+
+    running_execution_context()
+        .unwrap()
+        .borrow_mut()
+        .replace_lexical_env(block_env);
+
+    let result = statement_list_evaluate(&stmt.body);
+
+    running_execution_context()
+        .unwrap()
+        .borrow_mut()
+        .replace_lexical_env(old_env);
+
+    result
+}
+
+fn block_declaration_instantiation(
+    code: &SeqStatementOrDeclaration,
+    env: Rc<RefCell<EnvironmentRecord>>,
+) {
+    let declarations = ParseNode::StatementOrDeclList(code).lexically_scoped_declarations();
+
+    for decl in declarations {
+        for name in decl.bound_names() {
+            if decl.is_constant_decl() {
+                env.borrow_mut().create_immutable_binding(&name, true);
+            } else {
+                env.borrow_mut().create_mutable_binding(&name, false);
+            }
+        }
+    }
+}

@@ -121,7 +121,7 @@ impl Header {
 
 impl ReqEncodable for Header {
     fn encode(&self) -> String {
-        format!("{}: {}\n", self.name, self.value)
+        format!("{}: {}\r\n", self.name, self.value)
     }
 }
 
@@ -166,6 +166,11 @@ impl ReqEncodable for Request {
                 if request.ends_with("\r\n") {
                     request = request.strip_suffix("\r\n").unwrap().to_string();
                 }
+
+                if request.ends_with("\n") {
+                    request = request.strip_suffix("\n").unwrap().to_string();
+                }
+
                 request.push_str("\r\n\r\n");
 
                 request

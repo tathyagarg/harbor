@@ -1,5 +1,7 @@
+use std::{cell::RefCell, rc::Rc};
+
 use crate::js::{
-    executable::environment::EnvironmentRecord,
+    executable::environment::{EnvRecordTrait, EnvironmentRecord},
     operations::to_object,
     types::completion_record::{
         CRKAbrupt, CompletionRecord, CompletionRecordError, CompletionRecordNormal, UNUSED,
@@ -14,7 +16,7 @@ use crate::js::{
 pub enum ReferenceBase {
     Unresolvable,
     Value(Value),
-    EnvironmentRecord(EnvironmentRecord),
+    EnvironmentRecord(Rc<RefCell<EnvironmentRecord>>),
 }
 
 #[derive(Debug, Clone)]
@@ -23,12 +25,63 @@ pub enum ReferenceName {
     Private(()),
 }
 
+impl ReferenceName {
+    pub fn unwrap_value(&self) -> Value {
+        match self {
+            ReferenceName::Value(val) => val.clone(),
+            _ => panic!("unwrap_value called on a non-value reference name"),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Reference {
     pub base: ReferenceBase,
     pub referenced_name: ReferenceName,
     pub strict: bool,
     pub this_value: Option<Value>,
+}
+
+impl Reference {
+    pub fn is_property_reference(&self) -> bool {
+        is_property_reference(self)
+    }
+
+    pub fn is_unresolvable_reference(&self) -> bool {
+        is_unresolvable_reference(self)
+    }
+
+    pub fn is_super_reference(&self) -> bool {
+        is_super_reference(self)
+    }
+
+    pub fn is_private_reference(&self) -> bool {
+        is_private_reference(self)
+    }
+
+    pub fn get_value(
+        &self,
+    ) -> Result<CompletionRecord<Value>, CompletionRecord<CompletionRecordError, CRKAbrupt>> {
+        get_value(&ReferenceOrValue::Reference(self.clone()))
+    }
+
+    pub fn put_value(
+        &mut self,
+        value: &Value,
+    ) -> Result<CompletionRecord<UNUSED>, CompletionRecord<CompletionRecordError, CRKAbrupt>> {
+        put_value(&mut ReferenceOrValue::Reference(self.clone()), value)
+    }
+
+    pub fn get_this_value(&self) -> Value {
+        get_this_value(self)
+    }
+
+    pub fn initialize_referenced_binding(
+        &mut self,
+        value: &Value,
+    ) -> Result<CompletionRecord<UNUSED>, CompletionRecord<CompletionRecordError, CRKAbrupt>> {
+        initialize_referenced_binding(self, value)
+    }
 }
 
 pub fn is_property_reference(reference: &Reference) -> bool {
@@ -129,7 +182,7 @@ pub fn get_value(
         _ => unreachable!(),
     };
 
-    let res = base_env.get_binding_value(name, reference.strict);
+    let res = base_env.borrow().get_binding_value(&name, reference.strict);
 
     match res {
         Ok(rec) => return Ok(rec),
@@ -145,7 +198,7 @@ pub fn get_value(
 
 pub fn put_value(
     reference: &mut ReferenceOrValue,
-    value: Value,
+    value: &Value,
 ) -> Result<CompletionRecord<UNUSED>, CompletionRecord<CompletionRecordError, CRKAbrupt>> {
     if let ReferenceOrValue::Value(_) = reference {
         panic!("put_value called on a value");
@@ -201,7 +254,23 @@ pub fn put_value(
         return Ok(CompletionRecordNormal(()));
     }
 
-    todo!("set mutable binding for environment record reference")
+    let base = &mut reference.base;
+    let env = match base {
+        ReferenceBase::EnvironmentRecord(env) => env,
+        _ => unreachable!(),
+    };
+
+    env.borrow_mut().set_mutable_binding(
+        &reference
+            .referenced_name
+            .unwrap_value()
+            .unwrap_string()
+            .unwrap(),
+        value,
+        reference.strict,
+    );
+
+    return Ok(CompletionRecordNormal(()));
 }
 
 pub fn get_this_value(reference: &Reference) -> Value {
@@ -213,4 +282,32 @@ pub fn get_this_value(reference: &Reference) -> Value {
         ReferenceBase::Value(val) => val.clone(),
         _ => Value::Undefined,
     };
+}
+
+pub fn initialize_referenced_binding(
+    reference: &mut Reference,
+    value: &Value,
+) -> Result<CompletionRecord<UNUSED>, CompletionRecord<CompletionRecordError, CRKAbrupt>> {
+    let base = &reference.base;
+    assert!(
+        matches!(base, ReferenceBase::EnvironmentRecord(_)),
+        "initialize_referenced_binding called on a non-environment record reference: {:?}",
+        reference
+    );
+
+    let env = match base {
+        ReferenceBase::EnvironmentRecord(env) => env,
+        _ => unreachable!(),
+    };
+
+    env.borrow_mut().initialize_binding(
+        &reference
+            .referenced_name
+            .unwrap_value()
+            .unwrap_string()
+            .unwrap(),
+        value,
+    );
+
+    return Ok(CompletionRecordNormal(()));
 }

@@ -14,6 +14,7 @@ use wgpu::{self};
 use crate::css::r#box::Box as CssBox;
 use crate::css::colors::UsedColor;
 use crate::css::layout::Layout;
+use crate::css::properties::Resolvable;
 use crate::globals::{
     ADDRESS_BAR_ADDRESS_OFFSET, ADDRESS_BAR_OFFSET, INITIAL_WINDOW_HEIGHT, INITIAL_WINDOW_WIDTH,
     MINIMUM_WINDOW_HEIGHT, MINIMUM_WINDOW_WIDTH, NEW_TAB_URL, TAB_WIDTH, TABS_BAR_OFFSET,
@@ -194,10 +195,13 @@ impl ApplicationHandler<AppEvent> for App {
                 let tab_data = state.tab_datas.get(state.active_tab).unwrap();
 
                 if let Some(root) = layout.root_box.as_ref() {
+                    let toolbar =
+                        TOOLBAR_OFFSET(state.config.width as f64, state.config.height as f64);
+
                     let elems = CssBox::get_elements_under(
                         root,
-                        position.x,
-                        position.y,
+                        position.x - toolbar.0,
+                        position.y - toolbar.1,
                         -tab_data.scroll_x,
                         -tab_data.scroll_y,
                     );
@@ -209,6 +213,10 @@ impl ApplicationHandler<AppEvent> for App {
                         let mut child_borrow = child.borrow_mut();
                         if !child_borrow._element_state.is_hovered {
                             child_borrow.trigger_hover(&elems[..i], viewport_size);
+
+                            state
+                                .window
+                                .set_cursor(child_borrow.style().cursor.resolved());
                         }
                     }
 
@@ -216,6 +224,10 @@ impl ApplicationHandler<AppEvent> for App {
                         if !elems.contains(prev) {
                             prev.borrow_mut()
                                 .leave_hover(&state.prev_hovered_elements[..i], viewport_size);
+
+                            state
+                                .window
+                                .set_cursor(prev.borrow().style().cursor.resolved());
                         }
                     }
 

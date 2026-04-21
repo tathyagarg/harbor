@@ -1,7 +1,9 @@
+pub mod r#abstract;
 pub mod behaviours;
 pub mod executable;
 pub mod expr;
 pub mod operations;
+pub mod script;
 pub mod semantics;
 pub mod stmt;
 pub mod types;
@@ -11,7 +13,7 @@ use expr::{CodePoint, CodePointAtResult, CodePointSeq, TokenSeq, ZigString};
 
 use crate::js::{expr::Seq, values::string::JsString};
 
-pub fn collect_seq<T: Seq>(seq: T) -> Vec<T::Item>
+pub fn collect_seq<T: Seq>(seq: &T) -> Vec<T::Item>
 where
     T::Item: Copy,
 {
@@ -22,6 +24,7 @@ where
 pub const SLOT_PROTOTYPE: &str = "Prototype";
 pub const SLOT_EXTENSIBLE: &str = "Extensible";
 pub const SLOT_PRIVATE_ELEMENTS: &str = "PrivateElements";
+pub const SLOT_PARAMETER_MAP: &str = "ParameterMap";
 
 // pub fn zs_to_str(zs: ZigString) -> &'static str {
 //     unsafe {
@@ -61,13 +64,13 @@ unsafe extern "C" {
 
 pub fn utf16_encode_cp_rs(cp: CodePoint) -> String {
     let zs = unsafe { utf16_encode_cp(cp) };
-    let s = String::from_utf16(&collect_seq(zs)).unwrap();
+    let s = String::from_utf16(&collect_seq(&zs)).unwrap();
     s
 }
 
 pub fn cps_to_string_rs(cps: &[CodePoint]) -> String {
     let zs = unsafe { cps_to_string(cps.as_ptr(), cps.len()) };
-    let s = String::from_utf16(&collect_seq(zs)).unwrap();
+    let s = String::from_utf16(&collect_seq(&zs)).unwrap();
     s
 }
 
@@ -127,7 +130,6 @@ pub fn parse_text_cps_rs(text: &[CodePoint], goal: u8) -> Vec<expr::Token> {
 }
 
 pub fn zs_to_js_string(zs: ZigString) -> JsString {
-    let s = String::from_utf16(&collect_seq(zs)).unwrap();
-    unsafe { free_string(zs) };
+    let s = String::from_utf16(&collect_seq(&zs)).unwrap();
     JsString(s.encode_utf16().collect())
 }

@@ -53,7 +53,7 @@ pub mod completion_record {
     // }
 
     #[derive(Debug)]
-    pub struct CompletionRecord<T: Debug, K: CRK = CRKNormal> {
+    pub struct CompletionRecord<T: Debug = UNUSED, K: CRK = CRKNormal> {
         pub kind: K,
         pub value: T,
         pub target: Option<String>,

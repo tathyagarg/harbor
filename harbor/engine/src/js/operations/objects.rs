@@ -102,6 +102,32 @@ pub fn create_data_property(
     ));
 }
 
+pub fn create_data_property_or_throw(
+    obj: &mut Object,
+    key: &PropertyKey,
+    value: &Value,
+) -> Result<CompletionRecord<UNUSED>, CompletionRecord<CompletionRecordError, CRKThrow>> {
+    let success = create_data_property(obj, key, value)?.value;
+    if !success {
+        return Err(CompletionRecordThrow(CompletionRecordError::TypeError));
+    }
+
+    return Ok(CompletionRecordNormal(()));
+}
+
+pub fn define_property_or_throw(
+    obj: &mut Object,
+    key: &PropertyKey,
+    desc: PropertyDescriptor,
+) -> Result<CompletionRecord<UNUSED>, CompletionRecord<CompletionRecordError, CRKThrow>> {
+    let success = obj.define_own_property(key, desc);
+    if !success {
+        return Err(CompletionRecordThrow(CompletionRecordError::TypeError));
+    }
+
+    return Ok(CompletionRecordNormal(()));
+}
+
 pub fn get_method(
     value: &Value,
     key: &PropertyKey,
@@ -119,6 +145,25 @@ pub fn get_method(
     let func_obj = func.unwrap_object();
 
     Ok(CompletionRecordNormal(func_obj))
+}
+
+pub fn has_property(
+    obj: &Object,
+    key: &PropertyKey,
+) -> Result<CompletionRecord<bool>, CompletionRecord<CompletionRecordError, CRKThrow>> {
+    Ok(CompletionRecordNormal(obj.has_property(key)))
+}
+
+pub fn has_own_property(
+    obj: &Object,
+    key: &PropertyKey,
+) -> Result<CompletionRecord<bool>, CompletionRecord<CompletionRecordError, CRKThrow>> {
+    let desc = obj.get_own_property(key);
+    if desc.is_none() {
+        return Ok(CompletionRecordNormal(false));
+    }
+
+    return Ok(CompletionRecordNormal(true));
 }
 
 pub fn call(

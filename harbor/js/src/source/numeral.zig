@@ -20,7 +20,6 @@ pub fn match_numeric_literal(text: CodePointSeq, i: *usize, cp: root.CodePoint) 
     }
 
     i.* = original_i;
-    std.debug.print("Failed to match numeric literal at index {d}\n", .{original_i});
     return null;
 }
 

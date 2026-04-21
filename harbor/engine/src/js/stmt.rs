@@ -1,6 +1,9 @@
 use std::fmt::{Debug, Display};
 
-use crate::js::expr::{AssignmentExpression, Expression, IdentifierNameTokenData};
+use crate::js::{
+    expr::{AssignmentExpression, Expression, IdentifierNameTokenData, Seq},
+    semantics::r#static::OwnedParseNode,
+};
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -139,10 +142,33 @@ pub struct SeqStatementOrDeclaration {
     pub len: usize,
 }
 
+impl Seq for SeqStatementOrDeclaration {
+    type Item = StatementOrDeclaration;
+
+    fn len(&self) -> usize {
+        self.len
+    }
+
+    fn data(&self) -> *const Self::Item {
+        self.items
+    }
+}
+
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Script {
     pub body: SeqStatementOrDeclaration,
+}
+
+impl Debug for Script {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let items = unsafe { std::slice::from_raw_parts(self.body.items, self.body.len) };
+        write!(f, "Script {{\n")?;
+        for item in items {
+            write!(f, "  {},\n", item)?;
+        }
+        write!(f, "}}")
+    }
 }
 
 #[repr(C)]
@@ -281,10 +307,35 @@ pub struct Declaration {
     pub data: DeclarationData,
 }
 
+impl Declaration {
+    pub fn declaration_part(&self) -> OwnedParseNode {
+        match self.tag {
+            DECLARATION_FUNCTION_DECLARATION => {
+                OwnedParseNode::HoistabeDeclaration(unsafe { *self.data.function })
+            }
+            DECLARATION_GENERATOR_DECLARATION => {
+                OwnedParseNode::HoistabeDeclaration(unsafe { *self.data.generator })
+            }
+            DECLARATION_ASYNC_FUNCTION_DECLARATION => {
+                OwnedParseNode::HoistabeDeclaration(unsafe { *self.data.async_function })
+            }
+            DECLARATION_ASYNC_GENERATOR_DECLARATION => {
+                OwnedParseNode::HoistabeDeclaration(unsafe { *self.data.async_generator })
+            }
+            DECLARATION_LEXICAL_DECLARATION => {
+                OwnedParseNode::LexicalDeclaration(unsafe { *self.data.lex_decl })
+            }
+            _ => panic!("Unknown declaration tag: {}", self.tag),
+        }
+    }
+}
+
 impl Display for Declaration {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.tag {
-            DECLARATION_FUNCTION_DECLARATION => write!(f, "FunctionDeclaration {{ }}"),
+            DECLARATION_FUNCTION_DECLARATION => write!(f, "FunctionDeclaration {{ {} }}", unsafe {
+                self.data.function.as_ref().unwrap()
+            },),
             DECLARATION_GENERATOR_DECLARATION => write!(f, "GeneratorDeclaration {{ }}"),
             DECLARATION_ASYNC_FUNCTION_DECLARATION => {
                 write!(f, "AsyncFunctionDeclaration {{ }}")
@@ -346,12 +397,37 @@ pub struct SeqFormalParameter {
     pub len: usize,
 }
 
+impl Seq for SeqFormalParameter {
+    type Item = FormalParameter;
+
+    fn len(&self) -> usize {
+        self.len
+    }
+
+    fn data(&self) -> *const Self::Item {
+        self.items
+    }
+}
+
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct HoistableDeclaration {
     pub name: *const MaybeIdentifier,
     pub params: SeqFormalParameter,
     pub body: *const BlockStatement,
+}
+
+impl Display for HoistableDeclaration {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let params = unsafe { std::slice::from_raw_parts(self.params.items, self.params.len) };
+        write!(f, "HoistableDeclaration {{ name: {}, params: [\n", unsafe {
+            self.name.as_ref().unwrap()
+        })?;
+        for param in params {
+            write!(f, "  {:?},\n", param)?;
+        }
+        write!(f, "], body: {} }}", unsafe { self.body.as_ref().unwrap() })
+    }
 }
 
 #[repr(C)]
@@ -385,6 +461,18 @@ pub struct SeqLexicalBinding {
     pub len: usize,
 }
 
+impl Seq for SeqLexicalBinding {
+    type Item = LexicalBinding;
+
+    fn len(&self) -> usize {
+        self.len
+    }
+
+    fn data(&self) -> *const Self::Item {
+        self.items
+    }
+}
+
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct LexicalDeclaration {
@@ -399,8 +487,8 @@ impl Display for LexicalDeclaration {
 
         write!(
             f,
-            "LexicalDeclaration {{ is_const: {}, bindings: [\n",
-            self.is_const
+            "LexicalDeclaration {{ is_const: {}, len: {}, bindings: [\n",
+            self.is_const, self.bindings.len
         )?;
         for binding in bindings {
             write!(f, "  {},\n", binding)?;
@@ -426,6 +514,12 @@ impl Display for BlockStatement {
     }
 }
 
+impl Debug for BlockStatement {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(self, f)
+    }
+}
+
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct SeqLexicalDeclaration {
@@ -433,21 +527,38 @@ pub struct SeqLexicalDeclaration {
     pub len: usize,
 }
 
+impl Seq for SeqLexicalDeclaration {
+    type Item = LexicalDeclaration;
+
+    fn len(&self) -> usize {
+        self.len
+    }
+
+    fn data(&self) -> *const Self::Item {
+        self.items
+    }
+}
+
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct VariableStatement {
-    pub declarations: SeqLexicalDeclaration,
+    pub bindings: SeqLexicalBinding,
 }
 
 impl Display for VariableStatement {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let decls =
-            unsafe { std::slice::from_raw_parts(self.declarations.items, self.declarations.len) };
-        write!(f, "VariableStatement {{\n")?;
-        for decl in decls {
-            write!(f, "  {},\n", decl)?;
+        let bindings =
+            unsafe { std::slice::from_raw_parts(self.bindings.items, self.bindings.len) };
+
+        write!(
+            f,
+            "VariableStatement {{ len: {}, bindings: [\n",
+            self.bindings.len
+        )?;
+        for binding in bindings {
+            write!(f, "  {},\n", binding)?;
         }
-        write!(f, "}}")
+        write!(f, "]}}")
     }
 }
 

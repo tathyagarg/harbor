@@ -2378,6 +2378,11 @@ pub struct Parser<'a> {
 
     flag_scripting: bool,
     flag_frameset_ok: bool,
+
+    script_nesting_level: usize,
+    _parser_pause_flag: bool,
+
+    insertion_point: Option<usize>,
 }
 
 impl _Document {

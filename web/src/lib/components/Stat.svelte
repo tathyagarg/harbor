@@ -10,7 +10,9 @@
   let duration = 2000;
 </script>
 
-<div class="flex flex-col items-center gap-1">
+<div
+  class="flex flex-col border-1 border-emphasis-1 p-8 backdrop-blur-sm items-center gap-1 rounded-lg"
+>
   <span class="text-5xl font-bold text-emphasis-2 font-heading">
     <Countup {value} {duration} />{#if suffix}<span class="text-3xl"
         >{suffix}</span

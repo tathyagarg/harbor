@@ -125,7 +125,7 @@ pub const BlockStatement = extern struct {
 };
 
 pub const VarStatement = extern struct {
-    declarations: Seq(LexicalDeclaration),
+    bindings: Seq(LexicalBinding),
 };
 
 pub const IfStatement = extern struct {
