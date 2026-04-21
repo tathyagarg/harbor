@@ -87,6 +87,7 @@
         "docs/devlogs/059/59.md": 21,
         "docs/devlogs/060/60.md": 25,
         "docs/devlogs/061/61.md": 15,
+        "docs/devlogs/062/62.md": 17,
         "docs/devlogs/template.md": 17,
         "harbor/engine/Cargo.toml": 23,
         "harbor/engine/build.rs": 72,
@@ -253,9 +254,9 @@
         "assets": 402,
         "assets/html": 381,
         "assets/html/demos": 131,
-        "docs": 958,
+        "docs": 975,
         "docs/devlogs/001": 10,
-        "docs/devlogs": 944,
+        "docs/devlogs": 961,
         "docs/devlogs/002": 15,
         "docs/devlogs/003": 9,
         "docs/devlogs/004": 10,
@@ -316,6 +317,7 @@
         "docs/devlogs/059": 21,
         "docs/devlogs/060": 25,
         "docs/devlogs/061": 15,
+        "docs/devlogs/062": 17,
         "harbor/engine": 39640,
         "harbor": 46045,
         "harbor/engine/src/css/box": 1334,
@@ -361,7 +363,7 @@
         "web/src/routes": 652,
         "web/src/routes/version": 7,
         "web/static": 3,
-        "total": 49697,
+        "total": 49714,
         "ALIASES": {
             "css": 7476,
             "js": 16712,
@@ -371,5 +373,5 @@
             "render": 2757
         }
     },
-    "file_count": 247
+    "file_count": 248
 }
