@@ -3,6 +3,7 @@ use crate::{
         parser::{parse_stylesheet, preprocess},
         tokenize::tokenize,
     },
+    globals::ENABLE_JS,
     html5::{
         self,
         dom::*,
@@ -1246,8 +1247,6 @@ impl InsertMode {
             }
             Token::EndTag(ref tag) if tag.name.as_str() == "script" => {
                 let script_raw = parser.open_elements_stack.pop().unwrap();
-                let mut script =
-                    ScriptElement::new(script_raw, Some(parser.document.document.clone()));
 
                 parser.insertion_mode = parser.original_insertion_mode.clone().unwrap();
 
@@ -1256,7 +1255,10 @@ impl InsertMode {
 
                 parser.script_nesting_level += 1;
 
-                script.prepare();
+                if ENABLE_JS {
+                    ScriptElement::new(script_raw, Some(parser.document.document.clone()))
+                        .prepare();
+                }
 
                 parser.script_nesting_level -= 1;
                 parser.insertion_point = old_insertion_point;

@@ -63,6 +63,26 @@ impl OrdinaryWrapper for Generator {
     }
 }
 
+// pub fn next(value: &Value) -> Value {
+//     return
+// }
+
+pub fn generator_resume(generator: &mut Generator, value: Option<Value>) -> Value {
+    if generator.generator_state == GeneratorState::Completed {
+        return Value::Object(create_iterator_result_object(Value::Undefined, true));
+    }
+
+    let gen_ctx = generator
+        .generator_context
+        .upgrade()
+        .expect("Generator context has been dropped");
+
+    generator.generator_state = GeneratorState::Executing;
+    push_execution_context(gen_ctx.clone());
+
+    todo!()
+}
+
 pub fn generator_start(generator: &mut Generator, genbody: Box<dyn Fn() -> Option<Value>>) {
     let ctx = running_execution_context().unwrap();
 

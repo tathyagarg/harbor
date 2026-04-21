@@ -1,8 +1,8 @@
-use std::{cell::RefCell, fmt::Debug, rc::Rc};
+use std::{cell::RefCell, fmt::Debug, os::unix::thread, rc::Rc, sync::LazyLock};
 
 use crate::js::{
     r#abstract::{Generator, ITEREATOR_PROTOTYPE, create_iterator_from_closure},
-    behaviours::ordinary_object_create,
+    behaviours::{builtin_functions::BuiltinFunction, ordinary_object_create},
     executable::{context::resolve_binding, environment::EnvironmentRecord},
     operations::{call, create_data_property_or_throw, get, get_method, to_boolean},
     semantics::{
@@ -188,6 +188,17 @@ pub fn create_iterator_result_object(value: Value, done: bool) -> Object {
     return obj;
 }
 
+pub const GENERATOR_NEXT: LazyLock<BuiltinFunction> = LazyLock::new(|| BuiltinFunction {
+    prototype: Rc::new(RefCell::new(Some(Object::Ordinary(
+        OrdinaryObject::prototype(),
+    )))),
+    extensible: true,
+    realm: None,
+    initial_name: "Generator.prototype.next".to_string(),
+    is_async: false,
+    internal_closure: |_this, _args| Value::Undefined,
+});
+
 pub fn create_list_iterator_record(list: Vec<Value>) -> Iterator<Object> {
     let closure: Box<(dyn Fn() -> Option<Value>)> = Box::new(move || -> Option<Value> {
         for item in &list {
@@ -201,7 +212,7 @@ pub fn create_list_iterator_record(list: Vec<Value>) -> Iterator<Object> {
 
     return Iterator {
         iterator: Object::Generator(iterator),
-        next_method: Value::Undefined,
+        next_method: Value::Object(Object::BuiltinFunction(GENERATOR_NEXT.clone())),
         done: false,
     };
 }
@@ -223,9 +234,14 @@ pub fn iterator_binding_initialization(
             };
 
             let binding_id = string_value(name);
-            let mut lhs = resolve_binding(binding_id, environment.clone())
+            let mut lhs = resolve_binding(binding_id.clone(), environment.clone())
                 .unwrap()
                 .value;
+
+            println!(
+                "Initializing binding {:?}\nRecord: {:#?}",
+                binding_id, iterator_record
+            );
 
             let val = if !iterator_record.done {
                 let next = iterator_step_value(iterator_record).unwrap().value;

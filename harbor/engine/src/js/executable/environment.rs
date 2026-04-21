@@ -239,10 +239,6 @@ impl EnvRecordTrait for EnvironmentRecord {
                     return;
                 }
 
-                println!(
-                    "Binding {:?} created in environment record with kind {:?}",
-                    name, self.kind
-                );
                 self.bindings.insert(
                     name.clone(),
                     Binding {
@@ -317,11 +313,6 @@ impl EnvRecordTrait for EnvironmentRecord {
                 binding.value = value.clone();
                 binding.initialized = true;
 
-                println!(
-                    "Initialized binding {:?} in environment record with kind {:?}",
-                    name, self.kind
-                );
-
                 return;
             }
             EnvironmentRecordKind::Global {
@@ -330,10 +321,6 @@ impl EnvRecordTrait for EnvironmentRecord {
                 ..
             } => {
                 let has_binding = declarative_record.borrow().has_binding(name);
-                println!(
-                    "Initializing binding {:?} in global environment record. Has binding in declarative record? {}",
-                    name, has_binding
-                );
                 if has_binding {
                     return declarative_record
                         .borrow_mut()

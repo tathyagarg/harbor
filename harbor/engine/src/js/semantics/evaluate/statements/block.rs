@@ -12,12 +12,10 @@ use crate::js::{
 };
 
 pub fn statement_list_evaluate(stmt_list: &SeqStatementOrDeclaration) -> ReferenceOrValue {
-    println!("Evaluating statement list");
     let mut res: Option<ReferenceOrValue> = None;
 
     for stmt_or_decl in collect_seq(stmt_list) {
         res = Some(super::statement_or_declaration_evaluate(&stmt_or_decl));
-        println!("Statement or declaration evaluated to: {:?}", res);
     }
 
     res.unwrap_or(ReferenceOrValue::Value(Value::Undefined))

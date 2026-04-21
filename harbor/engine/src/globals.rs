@@ -25,6 +25,8 @@ macro_rules! page_path {
     };
 }
 
+pub const ENABLE_JS: bool = false;
+
 pub const UA_CSS_PATH: ResPath = || RES_PATH().join("css").join("ua.css");
 
 pub const DEFAULT_FONT_FAMILY: &str = "sans-serif";
@@ -41,9 +43,7 @@ pub const MINIMUM_WINDOW_HEIGHT: u32 = 300;
 
 pub const NEW_TAB_URL: &str = "harbor:new-tab";
 pub const NEW_TAB: &str = "new-tab";
-// pub const NEW_TAB_PAGE_PATH: ResPath = || page_path!("tab.html");
-pub const NEW_TAB_PAGE_PATH: ResPath =
-    || PathBuf::from("/Users/tathyagarg/programming/harbor/assets/html/custom008.html");
+pub const NEW_TAB_PAGE_PATH: ResPath = || page_path!("tab.html");
 
 pub const NO_CONNECTION_URL: &str = "harbor:no-connection";
 pub const NO_CONNECTION: &str = "no-connection";

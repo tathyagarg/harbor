@@ -18,14 +18,14 @@ use crate::js::{
 
 #[derive(Debug, Clone)]
 pub struct BuiltinFunction {
-    prototype: Rc<RefCell<Option<Object>>>,
-    extensible: bool,
+    pub prototype: Rc<RefCell<Option<Object>>>,
+    pub extensible: bool,
 
-    realm: Option<Rc<RefCell<Realm>>>,
-    initial_name: String,
-    is_async: bool,
+    pub realm: Option<Rc<RefCell<Realm>>>,
+    pub initial_name: String,
+    pub is_async: bool,
 
-    internal_closure: fn(this: &Value, args: Vec<Value>) -> Value,
+    pub internal_closure: fn(this: &Value, args: Vec<Value>) -> Value,
 }
 
 pub const FUNCTION_PROTOTYPE: LazyLock<Object> = LazyLock::new(|| {

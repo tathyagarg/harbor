@@ -36,7 +36,6 @@ pub fn _ordinary_from_misc(misc: &MiscObject) -> OrdinaryObject {
 
     let ordinary_value = Value::Object(Object::Ordinary(ordinary.clone()));
 
-    println!("Misc: {:#?}", misc);
     ordinary.prototype = Rc::new(RefCell::new(
         misc.get(&PropertyKey::from(SLOT_PROTOTYPE), &ordinary_value)
             .unwrap_or(Value::Null)

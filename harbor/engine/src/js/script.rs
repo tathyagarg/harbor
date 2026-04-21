@@ -50,7 +50,6 @@ pub fn parse_script(
     };
 
     let script = unsafe { crate::js::parse_script(zs) };
-    println!("Script: {:?}", script);
 
     ScriptRecord {
         realm,
@@ -88,7 +87,6 @@ pub fn script_evaluation(script_rec: Rc<ScriptRecord>) -> CompletionRecord<Refer
 }
 
 pub fn global_declaration_instantiation(script: &Script, env: Rc<RefCell<EnvironmentRecord>>) {
-    println!("Global declaration instantiation for script");
     let script_node = ParseNode::Script(script);
 
     let var_decls = script_node.var_scoped_declarations();
@@ -98,7 +96,6 @@ pub fn global_declaration_instantiation(script: &Script, env: Rc<RefCell<Environ
     for decl in &var_decls {
         if matches!(decl, OwnedParseNode::HoistabeDeclaration(_)) {
             let fn_name = decl.bound_names().first().unwrap().clone();
-            println!("Found function declaration: {:?}", fn_name);
             if !declared_func_names.contains(&fn_name) {
                 declared_func_names.push(fn_name.clone());
                 funcs_to_init.insert(0, decl);
@@ -118,11 +115,9 @@ pub fn global_declaration_instantiation(script: &Script, env: Rc<RefCell<Environ
     }
 
     let lex_decls = script_node.lexically_scoped_declarations();
-    println!("Lexically scoped declarations: {:?}", lex_decls);
 
     for decl in lex_decls {
         for name in decl.bound_names() {
-            println!("Processing lexical declaration: {:?}", name,);
             if decl.is_constant_decl() {
                 env.borrow_mut().create_immutable_binding(&name, true);
             } else {
