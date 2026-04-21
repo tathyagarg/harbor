@@ -206,6 +206,13 @@ impl MatchesElement for CompoundSelector {
                             return false;
                         }
                     }
+                    SubclassSelector::PseudoClassSelector(PseudoClassSelector::Raw(name))
+                        if name == "hover" =>
+                    {
+                        if !element._element_state.is_hovered {
+                            return false;
+                        }
+                    }
                     _ => {
                         todo!(
                             "Implement matching for other SubclassSelectors: {:?}",

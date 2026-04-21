@@ -169,11 +169,20 @@ The CSS parser processes the CSS stylesheets associated with the webpage. It par
   <em><a href="assets/html/demos/font.html">Demo showcasing <code>font-size</code>, <code>font-family</code>, <code>font-weight</code>, and <code>font-style</code> properties</a></em>
 </div>
 
+- `cursor`
+
+<div align="center">
+  <img src="https://raw.githubusercontent.com/tathyagarg/harbor/main/.github/assets/screenshots/demos/cursor.gif" alt="Cursor Demo" width="80%">
+  <br/>
+  <em><a href="assets/html/demos/cursor.html">Demo showcasing <code>cursor</code> property</a></em>
+</div>
+
+
 ### TTF Parser
 The TTF (TrueType Font) parser is responsible for parsing font files to extract glyph information. This allows the browser to render text using the correct fonts specified in the CSS. This enables me to render text manually from glyphs, which is a fun challenge.
 
 ### JavaScript Engine
-The JavaScript engine executes JavaScript code embedded in web pages. Currently it can evaluate simple expressions and some statements.
+The JavaScript engine executes JavaScript code embedded in web pages. Currently it can evaluate simple expressions and some statements. It doesn't know how underpowered it is and thus crashes every time it encounters a feature it doesn't support (which is most of them). So, for safety, JavaScript is disabled by default and can be enabled by passing `--enable-js` flag when running the browser.
 
 ### Renderer
 The renderer takes the structured data from the HTML and CSS parsers and renders it onto the screen. It uses the `wgpu` library for GPU-accelerated rendering and `winit` for window management. The renderer is responsible for drawing all visual elements of the webpage. The renderer uses ear clipping to render glyphs from contours into filled triangles[^2]
