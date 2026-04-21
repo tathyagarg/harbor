@@ -1,8 +1,6 @@
 <!-- svelte-ignore state_referenced_locally -->
 
 <script lang="ts">
-  import { GITHUB_URL } from "$lib";
-  import HeroTag from "$lib/components/HeroTag.svelte";
   import Stat from "$lib/components/Stat.svelte";
   import { animate, createTimeline, onScroll, stagger } from "animejs";
   import { onMount } from "svelte";
@@ -12,6 +10,8 @@
   import HTTP from "$lib/components/Steps/02_HTTP/Step.svelte";
   import HTML from "$lib/components/Steps/03_HTML/Step.svelte";
   import Link from "$lib/components/Steps/04_Link/Step.svelte";
+  import CSS from "$lib/components/Steps/05_CSS/Step.svelte";
+  import Test from "$lib/components/Steps/99_Test/Step.svelte";
 
   let { data }: PageProps = $props();
 
@@ -101,6 +101,23 @@
         container: document.getElementsByName("html")[0],
       }),
     });
+
+    animate("#architecture", {
+      opacity: 0,
+      translateY: 50,
+      duration: 0,
+    });
+
+    animate("#architecture", {
+      opacity: [0, 1],
+      translateY: [50, 0],
+      delay: 500,
+      duration: 500,
+      ease: "inOutQuad",
+      autoplay: onScroll({
+        container: document.getElementsByName("html")[0],
+      }),
+    });
   });
 
   const steps = [
@@ -134,7 +151,13 @@
       longDesc:
         "The Link Resolver is responsible for resolving links between resources. It takes care of resolving relative URLs, handling redirects, and managing the relationships between different resources on a webpage.",
     },
-    { short: "CSS", title: "CSS Parser" },
+    {
+      short: "CSS",
+      title: "CSS Parser",
+      description: "Parses CSS stylesheets and constructs the CSSOM tree.",
+      longDesc:
+        "The CSS Parser processes CSS stylesheets and constructs a CSS Object Model (CSSOM) tree. It handles the syntax of CSS, including selectors, properties, and values.",
+    },
     { short: "Cascade", title: "Cascade & Inheritance" },
     { short: "Layout", title: "Layout Engine" },
     { short: "Rasterize", title: "Rasterizer" },
@@ -143,7 +166,7 @@
 
   const radius = 25;
 
-  let selected_step = $state(0);
+  let selected_step = $state(4);
 
   async function switchTo(n: number) {
     if (n === selected_step) return;
@@ -409,6 +432,10 @@
                 <HTML />
               {:else if selected_step === 3}
                 <Link />
+              {:else if selected_step === 4}
+                <CSS />
+              {:else if selected_step === 5}
+                <Test />
               {/if}
             </div>
           </div>
@@ -417,7 +444,7 @@
         <div id="step-content">
           {#if steps[selected_step].longDesc}
             <div
-              class="mt-4 p-4 border-t-1 border-emphasis-1/25 rounded-b-lg text-sm max-h-16 overflow-y-scroll"
+              class="mt-4 px-4 py-2 border-t-1 border-emphasis-1/25 rounded-b-lg text-sm max-h-16 overflow-y-scroll"
             >
               <p class="text-subtext">
                 {@html steps[selected_step].longDesc}
