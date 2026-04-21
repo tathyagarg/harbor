@@ -14,6 +14,7 @@ use wgpu::{self};
 use crate::css::r#box::Box as CssBox;
 use crate::css::colors::UsedColor;
 use crate::css::layout::Layout;
+use crate::css::properties::Resolvable;
 use crate::globals::{
     ADDRESS_BAR_ADDRESS_OFFSET, ADDRESS_BAR_OFFSET, INITIAL_WINDOW_HEIGHT, INITIAL_WINDOW_WIDTH,
     MINIMUM_WINDOW_HEIGHT, MINIMUM_WINDOW_WIDTH, NEW_TAB_URL, TAB_WIDTH, TABS_BAR_OFFSET,
@@ -209,6 +210,10 @@ impl ApplicationHandler<AppEvent> for App {
                         let mut child_borrow = child.borrow_mut();
                         if !child_borrow._element_state.is_hovered {
                             child_borrow.trigger_hover(&elems[..i], viewport_size);
+
+                            state
+                                .window
+                                .set_cursor(child_borrow.style().cursor.resolved());
                         }
                     }
 

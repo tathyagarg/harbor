@@ -12,8 +12,8 @@ use crate::{
         colors::{Color, is_color},
         parser::{AtRule, ComponentValue, parse_css_declaration_block},
         properties::{
-            Background, Bottom, Display, Font, Left, Margin, Position, Resolvable, Right, Top,
-            WidthValue,
+            Background, Bottom, Cursor, Display, Font, Left, Margin, Position, Resolvable, Right,
+            Top, WidthValue,
         },
         selectors::SelectorList,
         tokenize::{CSSToken, Dimension, NumberType},
@@ -915,6 +915,8 @@ pub struct ComputedStyle {
     pub right: Right,
     pub bottom: Bottom,
     pub left: Left,
+
+    pub cursor: Cursor,
 }
 
 impl ComputedStyle {

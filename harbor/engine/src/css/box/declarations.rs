@@ -5,8 +5,8 @@ use crate::{
         colors::Color,
         cssom::{CSSDeclaration, ComputedStyle},
         properties::{
-            Background, Bottom, CSSParseable, Display, Font, FontFamily, FontSize, FontStyle,
-            FontWeight, Image, Left, LineHeight, Margin, MarginValue, Origin, Position,
+            Background, Bottom, CSSParseable, Cursor, Display, Font, FontFamily, FontSize,
+            FontStyle, FontWeight, Image, Left, LineHeight, Margin, MarginValue, Origin, Position,
             PositionValue, RepeatStyle, Resolvable, Right, Top, WidthValue,
         },
     },
@@ -253,6 +253,9 @@ pub fn handle_declaration(
             let mut bottom = Bottom::from_cv(&mut stream).unwrap_or_default();
             bottom.resolve_with_curr(parents.unwrap_or(&vec![]), style, viewport_size);
             style.bottom = bottom;
+        }
+        "cursor" => {
+            style.cursor = Cursor::from_cv(&mut stream).unwrap_or_default();
         }
         _ => {
             // todo!(

@@ -34,6 +34,7 @@ macro_rules! prop_imports {
 pub(super) use prop_imports;
 
 pub mod background;
+pub mod cursor;
 pub mod font;
 pub mod image;
 pub mod length_percentage;
@@ -42,6 +43,7 @@ pub mod position;
 pub mod width;
 
 pub use background::*;
+pub use cursor::*;
 pub use font::*;
 pub use image::*;
 pub use length_percentage::*;
