@@ -97,7 +97,14 @@
         "harbor/engine/src/css/layout.rs": 116,
         "harbor/engine/src/css/mod.rs": 9,
         "harbor/engine/src/css/parser.rs": 449,
-        "harbor/engine/src/css/properties.rs": 2352,
+        "harbor/engine/src/css/properties/background.rs": 199,
+        "harbor/engine/src/css/properties/font.rs": 1034,
+        "harbor/engine/src/css/properties/image.rs": 61,
+        "harbor/engine/src/css/properties/length_percentage.rs": 80,
+        "harbor/engine/src/css/properties/margin.rs": 325,
+        "harbor/engine/src/css/properties/mod.rs": 254,
+        "harbor/engine/src/css/properties/position.rs": 343,
+        "harbor/engine/src/css/properties/width.rs": 126,
         "harbor/engine/src/css/selectors.rs": 879,
         "harbor/engine/src/css/tokenize.rs": 613,
         "harbor/engine/src/css/values.rs": 59,
@@ -308,11 +315,12 @@
         "docs/devlogs/059": 21,
         "docs/devlogs/060": 25,
         "docs/devlogs/061": 15,
-        "harbor/engine": 39443,
-        "harbor": 45844,
+        "harbor/engine": 39513,
+        "harbor": 45914,
         "harbor/engine/src/css/box": 1331,
-        "harbor/engine/src/css": 7298,
-        "harbor/engine/src": 38971,
+        "harbor/engine/src/css": 7368,
+        "harbor/engine/src": 39041,
+        "harbor/engine/src/css/properties": 2422,
         "harbor/engine/src/font": 5492,
         "harbor/engine/src/font/tables": 3973,
         "harbor/engine/src/html5": 9378,
@@ -352,9 +360,9 @@
         "web/src/routes": 652,
         "web/src/routes/version": 7,
         "web/static": 3,
-        "total": 49496,
+        "total": 49566,
         "ALIASES": {
-            "css": 7298,
+            "css": 7368,
             "js": 16712,
             "html": 9378,
             "http": 2734,
@@ -362,5 +370,5 @@
             "render": 2745
         }
     },
-    "file_count": 239
+    "file_count": 246
 }
