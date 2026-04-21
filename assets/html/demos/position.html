@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>position property demo</title>
   <style>
-    .relative-box {
-      position: relative;
+    .static-box {
+      position: static;
       background-color: blue;
       color: white;
     }
@@ -18,14 +18,20 @@
       background-color: green;
       color: white;
     }
+
+    .container {
+      position: relative;
+    }
   </style>
 </head>
 <body>
+    <div class="container">
   <div class="absolute-box">
     <h1>This box has <code>position: absolute</code>.</h1>
   </div>
-  <div class="relative-box">
-      <h1>This box has <code>position: relative</code>.</h1>
+  <div class="static-box">
+      <h1>This box has <code>position: static</code>.</h1>
   </div>
+</div>
 </body>
 </html>
