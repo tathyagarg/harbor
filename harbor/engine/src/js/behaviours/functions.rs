@@ -141,6 +141,11 @@ pub fn function_declaration_instantiation(
     };
 
     let iter_rec = create_list_iterator_record(args);
+    let used_env = if has_duplicates {
+        None
+    } else {
+        Some(env.clone())
+    };
 
     let var_env = if !has_parameter_expressions {
         let mut instantiated_var_names = param_bindings.clone();

@@ -1,11 +1,13 @@
-use std::{cell::RefCell, fmt::Debug, ops::Deref, rc::Rc};
+use std::{cell::RefCell, fmt::Debug, rc::Rc};
 
 use crate::js::{
     r#abstract::{Generator, ITEREATOR_PROTOTYPE, create_iterator_from_closure},
     behaviours::ordinary_object_create,
+    executable::{context::resolve_binding, environment::EnvironmentRecord},
     operations::{call, create_data_property_or_throw, get, get_method, to_boolean},
+    semantics::r#static::{ParseNode, string_value},
     types::completion_record::{
-        CRKThrow, CompletionRecord, CompletionRecordError, CompletionRecordNormal,
+        CRKAbrupt, CRKThrow, CompletionRecord, CompletionRecordError, CompletionRecordNormal,
     },
     values::{
         Value,
@@ -198,4 +200,34 @@ pub fn create_list_iterator_record(list: Vec<Value>) -> Iterator<Rc<RefCell<Gene
         next_method: Value::Undefined,
         done: false,
     };
+}
+
+pub fn iterator_binding_initialization(
+    formals: &ParseNode,
+    iterator_record: &mut Iterator<Rc<RefCell<Generator>>>,
+    environment: Option<Rc<RefCell<EnvironmentRecord>>>,
+) -> Result<CompletionRecord, CompletionRecord<CompletionRecordError, CRKAbrupt>> {
+    if let ParseNode::FormalParameters(formals) = formals {
+        for param in formals.iter() {
+            let name = unsafe { *param.name };
+            let raw_initializer = unsafe { *param.initializer };
+
+            let initializer = if raw_initializer.has_value {
+                Some(unsafe { raw_initializer.value.value })
+            } else {
+                None
+            };
+
+            let binding_id = string_value(name);
+            let lhs = resolve_binding(binding_id, environment.clone())
+                .unwrap()
+                .value;
+
+            if !iterator_record.done {
+                // let next = iterator_step_value()
+            }
+        }
+    }
+
+    todo!()
 }

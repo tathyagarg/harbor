@@ -9,12 +9,7 @@ mod var_scoped_declarations;
 
 use std::fmt::Debug;
 
-// pub use bound_names::bound_names;
-// pub use lexically_declared_names::lexically_declared_names;
-// pub use lexically_scoped_declarations::lexically_scoped_declarations;
 pub use string_value::string_value;
-// pub use var_declared_names::var_declared_names;
-// pub use var_scoped_declarations::var_scoped_declarations;
 
 use crate::js::{
     stmt::{
