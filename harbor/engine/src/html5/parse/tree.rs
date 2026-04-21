@@ -1255,7 +1255,7 @@ impl InsertMode {
 
                 parser.script_nesting_level += 1;
 
-                if ENABLE_JS {
+                if unsafe { ENABLE_JS } {
                     ScriptElement::new(script_raw, Some(parser.document.document.clone()))
                         .prepare();
                 }

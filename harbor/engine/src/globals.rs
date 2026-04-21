@@ -25,7 +25,7 @@ macro_rules! page_path {
     };
 }
 
-pub const ENABLE_JS: bool = false;
+pub static mut ENABLE_JS: bool = false;
 
 pub const UA_CSS_PATH: ResPath = || RES_PATH().join("css").join("ua.css");
 
