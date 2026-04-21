@@ -8,7 +8,7 @@ use crate::js::{
         agent::running_execution_context,
         environment::{EnvRecordTrait, new_declarative_environment},
     },
-    operations::create_list_iterator_record,
+    operations::{create_list_iterator_record, iterator_binding_initialization},
     semantics::r#static::{
         OwnedParseNode, ParseNode, StaticSemantics, contains_expression, is_simple_parameter_list,
     },
@@ -112,7 +112,7 @@ pub fn function_declaration_instantiation(
         } else {
             Object::Arguments(create_mapped_arguments_object(
                 &Object::Function(func.clone()),
-                formals,
+                &formals,
                 &args,
                 env.clone(),
             ))
@@ -146,6 +146,8 @@ pub fn function_declaration_instantiation(
     } else {
         Some(env.clone())
     };
+
+    iterator_binding_initialization(&formals, &mut iter_rec.clone(), used_env.clone()).unwrap();
 
     let var_env = if !has_parameter_expressions {
         let mut instantiated_var_names = param_bindings.clone();

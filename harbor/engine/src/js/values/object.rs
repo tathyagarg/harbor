@@ -9,6 +9,7 @@ use std::{
 
 use crate::js::{
     SLOT_PROTOTYPE,
+    r#abstract::Generator,
     behaviours::{
         builtin_functions::BuiltinFunction, exotics::arguments::ArgumentsObject,
         ordinary_define_own_property, ordinary_delete, ordinary_get, ordinary_get_own_property,
@@ -934,6 +935,7 @@ pub enum Object {
     Misc(MiscObject),
     Arguments(ArgumentsObject),
     BuiltinFunction(BuiltinFunction),
+    Generator(Generator),
 }
 
 pub trait OrdinaryWrapper {
@@ -1053,6 +1055,7 @@ impl ObjectTrait for Object {
             Object::Function(func) => func.get_prototype_of(),
             Object::Arguments(args) => args.get_prototype_of(),
             Object::BuiltinFunction(func) => func.get_prototype_of(),
+            Object::Generator(gener) => gener.get_prototype_of(),
         }
     }
 
@@ -1064,6 +1067,7 @@ impl ObjectTrait for Object {
             Object::Function(func) => func.set_prototype_of(prototype),
             Object::Arguments(args) => args.set_prototype_of(prototype),
             Object::BuiltinFunction(func) => func.set_prototype_of(prototype),
+            Object::Generator(gener) => gener.set_prototype_of(prototype),
         }
     }
 
@@ -1075,6 +1079,7 @@ impl ObjectTrait for Object {
             Object::Function(func) => func.has_property(key),
             Object::Arguments(args) => args.has_property(key),
             Object::BuiltinFunction(func) => func.has_property(key),
+            Object::Generator(gener) => gener.has_property(key),
         }
     }
 
@@ -1086,6 +1091,7 @@ impl ObjectTrait for Object {
             Object::Function(func) => func.get(key, receiver),
             Object::Arguments(args) => args.get(key, receiver),
             Object::BuiltinFunction(func) => func.get(key, receiver),
+            Object::Generator(gener) => gener.get(key, receiver),
         }
     }
 
@@ -1108,6 +1114,7 @@ impl ObjectTrait for Object {
             Object::Function(func) => func.get_own_property(key),
             Object::Arguments(args) => args.get_own_property(key),
             Object::BuiltinFunction(func) => func.get_own_property(key),
+            Object::Generator(gener) => gener.get_own_property(key),
         }
     }
 
@@ -1119,6 +1126,7 @@ impl ObjectTrait for Object {
             Object::Function(func) => func.define_own_property(key, desc),
             Object::Arguments(args) => args.define_own_property(key, desc),
             Object::BuiltinFunction(func) => func.define_own_property(key, desc),
+            Object::Generator(gener) => gener.define_own_property(key, desc),
         }
     }
 
@@ -1139,6 +1147,7 @@ impl ObjectTrait for Object {
             Object::Function(func) => func.set(key, value, receiver),
             Object::Arguments(args) => args.set(key, value, receiver),
             Object::BuiltinFunction(func) => func.set(key, value, receiver),
+            Object::Generator(gener) => gener.set(key, value, receiver),
         }
     }
 
@@ -1150,6 +1159,7 @@ impl ObjectTrait for Object {
             Object::Function(func) => func.delete(key),
             Object::Arguments(args) => args.delete(key),
             Object::BuiltinFunction(func) => func.delete(key),
+            Object::Generator(gener) => gener.delete(key),
         }
     }
 
@@ -1161,6 +1171,7 @@ impl ObjectTrait for Object {
             Object::Function(func) => func.call(this, args),
             Object::Arguments(args_obj) => args_obj.call(this, args),
             Object::BuiltinFunction(func) => func.call(this, args),
+            Object::Generator(gener) => gener.call(this, args),
         }
     }
 
@@ -1172,6 +1183,7 @@ impl ObjectTrait for Object {
             Object::Function(func) => func.construct(args, new_target),
             Object::Arguments(args_obj) => args_obj.construct(args, new_target),
             Object::BuiltinFunction(func) => func.construct(args, new_target),
+            Object::Generator(gener) => gener.construct(args, new_target),
         }
     }
 }

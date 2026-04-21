@@ -12,7 +12,7 @@ use crate::js::{
         Value,
         object::{
             ArrayObject, FunctionObject, MiscObject, Object, ObjectTrait, OrdinaryObject,
-            PropertyDescriptor, PropertyKey, SlotValue,
+            OrdinaryWrapper, PropertyDescriptor, PropertyKey, SlotValue,
         },
     },
 };
@@ -192,6 +192,7 @@ pub fn ordinary_is_extensible(object: &Object) -> bool {
         },
         Object::Arguments(args) => ordinary_is_extensible(&Object::Ordinary(args.ordinary.clone())),
         Object::BuiltinFunction(_) => true,
+        Object::Generator(gener) => gener.ordinary().extensible,
     }
 }
 
@@ -229,6 +230,9 @@ pub fn ordinary_prevent_extensions(object: &mut Object) -> bool {
         Object::BuiltinFunction(_) => {
             // Builtin functions are always extensible, so this should never be called
             false
+        }
+        Object::Generator(gener) => {
+            panic!("Idk how to implement this");
         }
     }
 }

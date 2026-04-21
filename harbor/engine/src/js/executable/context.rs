@@ -51,7 +51,7 @@ impl ExecutionContext {
 #[derive(Clone, Debug)]
 pub struct GenericExecutionContext {
     pub function: Option<FunctionObject>,
-    pub generator: Option<Rc<RefCell<Generator>>>,
+    pub generator: Option<Generator>,
     pub realm: Rc<RefCell<Realm>>,
 
     pub script_or_module: Option<ScriptOrModule>,

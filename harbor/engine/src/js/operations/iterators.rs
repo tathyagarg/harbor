@@ -5,13 +5,17 @@ use crate::js::{
     behaviours::ordinary_object_create,
     executable::{context::resolve_binding, environment::EnvironmentRecord},
     operations::{call, create_data_property_or_throw, get, get_method, to_boolean},
-    semantics::r#static::{ParseNode, string_value},
+    semantics::{
+        evaluate::expressions::{EvaluateExpressionTag, expression_evaluate},
+        r#static::{ParseNode, string_value},
+    },
     types::completion_record::{
         CRKAbrupt, CRKThrow, CompletionRecord, CompletionRecordError, CompletionRecordNormal,
     },
     values::{
-        Value,
+        ReferenceOrValue, Value,
         object::{Object, ObjectTrait, OrdinaryObject, PropertyKey},
+        reference::{initialize_referenced_binding, put_value},
         symbol::SYMBOL_ITERATOR,
     },
 };
@@ -184,7 +188,7 @@ pub fn create_iterator_result_object(value: Value, done: bool) -> Object {
     return obj;
 }
 
-pub fn create_list_iterator_record(list: Vec<Value>) -> Iterator<Rc<RefCell<Generator>>> {
+pub fn create_list_iterator_record(list: Vec<Value>) -> Iterator<Object> {
     let closure: Box<(dyn Fn() -> Option<Value>)> = Box::new(move || -> Option<Value> {
         for item in &list {
             todo!("GeneratorYield(CreateIteratorResultObject(E, false))");
@@ -196,7 +200,7 @@ pub fn create_list_iterator_record(list: Vec<Value>) -> Iterator<Rc<RefCell<Gene
     let iterator = create_iterator_from_closure(closure, None, ITEREATOR_PROTOTYPE.clone());
 
     return Iterator {
-        iterator,
+        iterator: Object::Generator(iterator),
         next_method: Value::Undefined,
         done: false,
     };
@@ -204,7 +208,7 @@ pub fn create_list_iterator_record(list: Vec<Value>) -> Iterator<Rc<RefCell<Gene
 
 pub fn iterator_binding_initialization(
     formals: &ParseNode,
-    iterator_record: &mut Iterator<Rc<RefCell<Generator>>>,
+    iterator_record: &mut Iterator<Object>,
     environment: Option<Rc<RefCell<EnvironmentRecord>>>,
 ) -> Result<CompletionRecord, CompletionRecord<CompletionRecordError, CRKAbrupt>> {
     if let ParseNode::FormalParameters(formals) = formals {
@@ -219,15 +223,41 @@ pub fn iterator_binding_initialization(
             };
 
             let binding_id = string_value(name);
-            let lhs = resolve_binding(binding_id, environment.clone())
+            let mut lhs = resolve_binding(binding_id, environment.clone())
                 .unwrap()
                 .value;
 
-            if !iterator_record.done {
-                // let next = iterator_step_value()
+            let val = if !iterator_record.done {
+                let next = iterator_step_value(iterator_record).unwrap().value;
+                if next.is_some() {
+                    next.unwrap()
+                } else {
+                    Value::Undefined
+                }
+            } else if initializer.is_some() {
+                let default = expression_evaluate(&EvaluateExpressionTag::AssignmentExpression(
+                    initializer.unwrap(),
+                ));
+
+                default.get_value().unwrap().value
+            } else {
+                Value::Undefined
+            };
+
+            if environment.is_none() {
+                let mut lhs_ref = ReferenceOrValue::Reference(lhs.clone());
+                put_value(&mut lhs_ref, &val).unwrap();
+
+                lhs = if let ReferenceOrValue::Reference(r) = lhs_ref {
+                    r
+                } else {
+                    unreachable!()
+                };
             }
+
+            initialize_referenced_binding(&mut lhs, &val).unwrap();
         }
     }
 
-    todo!()
+    return Ok(CompletionRecordNormal(()));
 }

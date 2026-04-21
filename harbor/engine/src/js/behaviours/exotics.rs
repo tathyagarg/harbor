@@ -492,7 +492,7 @@ pub mod arguments {
 
     pub fn create_mapped_arguments_object(
         func: &Object,
-        formals: ParseNode,
+        formals: &ParseNode,
         args_list: &Vec<Value>,
         _env: Rc<RefCell<EnvironmentRecord>>,
     ) -> ArgumentsObject {

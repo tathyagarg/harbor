@@ -63,10 +63,7 @@ impl OrdinaryWrapper for Generator {
     }
 }
 
-pub fn generator_start(
-    generator: &Rc<RefCell<Generator>>,
-    genbody: Box<dyn Fn() -> Option<Value>>,
-) {
+pub fn generator_start(generator: &mut Generator, genbody: Box<dyn Fn() -> Option<Value>>) {
     let ctx = running_execution_context().unwrap();
 
     match ctx.borrow_mut().deref_mut() {
@@ -85,38 +82,46 @@ pub fn generator_start(
 
     let closure = || {
         let ac_gen_ctx = running_execution_context().unwrap();
-        let ac_generator = match ac_gen_ctx.borrow().deref() {
-            ExecutionContext::Generic(GenericExecutionContext { generator, .. }) => {
-                generator.clone().unwrap()
-            }
-            ExecutionContext::Code(CodeExecutionContext {
-                execution_context, ..
-            }) => execution_context.generator.clone().unwrap(),
-        };
 
         let result = genbody();
         pop_execution_context();
 
-        ac_generator.borrow_mut().generator_state = GeneratorState::Completed;
+        match *ac_gen_ctx.borrow_mut() {
+            ExecutionContext::Generic(GenericExecutionContext {
+                ref mut generator, ..
+            }) => {
+                generator.as_mut().unwrap().generator_state = GeneratorState::Completed;
+            }
+            ExecutionContext::Code(CodeExecutionContext {
+                ref mut execution_context,
+                ..
+            }) => {
+                execution_context
+                    .generator
+                    .as_mut()
+                    .unwrap()
+                    .generator_state = GeneratorState::Completed;
+            }
+        };
 
         let result_value = result.unwrap_or(Value::Undefined);
         return create_iterator_result_object(result_value, true);
     };
 
-    generator.borrow_mut().generator_context = Rc::downgrade(&ctx);
+    generator.generator_context = Rc::downgrade(&ctx);
 }
 
 pub fn create_iterator_from_closure(
     closure: Box<dyn Fn() -> Option<Value>>,
     brand: Option<String>,
     prototype: Object,
-) -> Rc<RefCell<Generator>> {
-    let generator = Rc::new(RefCell::new(Generator {
+) -> Generator {
+    let mut generator = Generator {
         parent: ordinary_object_create(Some(prototype), vec![]),
         generator_state: GeneratorState::SuspendedStart,
         generator_context: Weak::new(),
         generator_brand: brand,
-    }));
+    };
 
     let callee_ctx = Rc::new(RefCell::new(ExecutionContext::Generic(
         GenericExecutionContext {
@@ -128,7 +133,7 @@ pub fn create_iterator_from_closure(
     )));
 
     push_execution_context(callee_ctx.clone());
-    generator_start(&generator, closure);
+    generator_start(&mut generator, closure);
     pop_execution_context();
 
     generator
