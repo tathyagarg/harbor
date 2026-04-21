@@ -1,6 +1,6 @@
 <script lang="ts">
   import Icon from "@iconify/svelte";
-  import { animate } from "animejs";
+  import { animate, onScroll } from "animejs";
   import { onMount } from "svelte";
 
   const cssLines = [
@@ -86,6 +86,15 @@
       translateY: 20,
       duration: 0,
     });
+
+    await animate(".node", {
+      autoplay: onScroll({
+        target: "#pipeline",
+        container: document.getElementsByName("html")[0],
+      }),
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 1000));
 
     const lineInterval = setInterval(async () => {
       if (lineIndex >= cssLines.length) {
