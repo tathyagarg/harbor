@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { animate, stagger } from "animejs";
+  import { animate, onScroll, stagger } from "animejs";
   import { onMount } from "svelte";
   import Window from "../05_CSS/Window.svelte";
   import ExtractedUrl from "../05_CSS/ExtractedUrl.svelte";
@@ -37,11 +37,25 @@
       duration: 0,
     });
 
+    animate(".line", {
+      opacity: 0,
+      duration: 0,
+    });
+
+    await animate("#scanner", {
+      autoplay: onScroll({
+        target: "#pipeline",
+        container: document.getElementsByName("html")[0],
+      }),
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
     await animate(".line", {
       translateX: [-20, 0],
       opacity: [0, 1],
       duration: 200,
-      delay: stagger(50),
+      delay: stagger(50, { start: 500 }),
       ease: "linear",
     })
       .then(async () => {
@@ -81,7 +95,7 @@
       });
 
     await animate(".emph", {
-      scale: [1, 2, 1],
+      translateX: [0, 100, 0],
       duration: 250,
       delay: 250,
     });

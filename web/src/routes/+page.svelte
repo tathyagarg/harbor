@@ -12,6 +12,7 @@
   import Link from "$lib/components/Steps/04_Link/Step.svelte";
   import CSS from "$lib/components/Steps/05_CSS/Step.svelte";
   import Test from "$lib/components/Steps/99_Test/Step.svelte";
+  import Icon from "@iconify/svelte";
 
   let { data }: PageProps = $props();
 
@@ -280,43 +281,6 @@
 </div>
 
 <div class="w-[50%] mx-auto" id="page">
-  <!--
-  <div class="h-screen flex items-center justify-center flex-col">
-    <h1 class="text-8xl anim">Welcome to</h1>
-    <h1 class="text-8xl text-emphasis-2 anim">Harbor Browser</h1>
-    <div class="flex mb-6">
-      <HeroTag
-        href={GITHUB_URL}
-        icon="mdi:github"
-        color="var(--color-gh-green)"
-        text="View Source"
-      />
-
-      <HeroTag
-        href=""
-        icon="mdi:hammer"
-        color="var(--color-scratch-red)"
-        text="Built from Scratch"
-      />
-    </div>
-
-    <p class="text-subtext text-center anim">
-      Harbor Browser is a custom web browser engine built from scratch with Rust
-      and Zig. <span class="text-text"
-        >Every core system - from networking to parsing to layouts to rendering,
-        and more - was implemented manually without relying on existing browser
-        engines or frameworks</span
-      >
-    </p>
-
-    <div class="grid grid-cols-4 gap-12 mt-12 anim-2">
-      {#each stats as stat}
-        <Stat {...stat} />
-      {/each}
-    </div>
-  </div>
-  -->
-
   <div class="h-screen" id="pipeline">
     <div class="h-full py-[5%] flex flex-col">
       <div class="flex gap-4 items-baseline my-2">
@@ -471,6 +435,24 @@
               </p>
             </div>
           {/if}
+        </div>
+
+        <div class="flex items-center justify-center gap-4 my-4">
+          <button
+            class="cursor-pointer p-2 rounded-md bg-emphasis-1/25 disabled:cursor-not-allowed disabled:opacity-50 hover:bg-emphasis-1/50 transition-colors duration-300"
+            onclick={() => switchTo(selected_step - 1)}
+            disabled={selected_step === 0}
+          >
+            <Icon icon="mdi:arrow-left" width="20" height="20" />
+          </button>
+          <span>{selected_step + 1}/{steps.length}</span>
+          <button
+            class="cursor-pointer p-2 rounded-md bg-emphasis-1/25 disabled:cursor-not-allowed disabled:opacity-50 hover:bg-emphasis-1/50 transition-colors duration-300"
+            onclick={() => switchTo(selected_step + 1)}
+            disabled={selected_step === steps.length - 1}
+          >
+            <Icon icon="mdi:arrow-right" width="20" height="20" />
+          </button>
         </div>
       </div>
     </div>
