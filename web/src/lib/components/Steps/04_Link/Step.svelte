@@ -32,12 +32,12 @@
   let extractedUrls: { url: string; state: string }[] = $state([]);
 
   onMount(async () => {
-    animate("#scanner", {
+    await animate("#scanner", {
       opacity: 0,
       duration: 0,
     });
 
-    animate(".line", {
+    await animate(".line", {
       opacity: 0,
       duration: 0,
     });
