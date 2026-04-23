@@ -114,8 +114,7 @@
     </span>
     <div
       class="flex-1 rounded border-1 border-emphasis-1/25 overflow-hidden font-mono lowercase
-      bg-bg text-xs
-      "
+      bg-bg text-xs"
     >
       <div
         class="w-full h-full bg-emphasis-2/5 border-2 border-emphasis-2 rounded

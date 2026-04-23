@@ -13,6 +13,7 @@
   import CSS from "$lib/components/Steps/05_CSS/Step.svelte";
   import Cascade from "$lib/components/Steps/06_Cascade/Step.svelte";
   import Layout from "$lib/components/Steps/07_Layout/Step.svelte";
+  import Rasterize from "$lib/components/Steps/08_Rasterize/Step.svelte";
 
   import Test from "$lib/components/Steps/99_Test/Step.svelte";
 
@@ -422,10 +423,10 @@
               "Description coming soon..."}
           </p>
           <div
-            class="flex-1 w-full mt-2 border-1 border-emphasis-1/25 rounded-lg"
+            class="flex-1 w-full mt-2 border-1 border-emphasis-1/25 rounded-lg overflow-hidden min-h-0"
             id="step-container"
           >
-            <div id="inner-step" class="w-full h-full">
+            <div id="inner-step" class="w-full h-full overflow-hidden">
               {#if selected_step === 0}
                 <Font />
               {:else if selected_step === 1}
@@ -441,6 +442,8 @@
               {:else if selected_step === 6}
                 <Layout />
               {:else if selected_step === 7}
+                <Rasterize />
+              {:else if selected_step === 8}
                 <Test />
               {/if}
             </div>
