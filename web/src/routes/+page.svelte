@@ -168,7 +168,14 @@
       longDesc:
         "The Cascade & Inheritance module applies the CSS cascade and inheritance rules to determine the final computed styles for each element. It takes into account the specificity of selectors, the order of stylesheets, and the inheritance of properties from parent elements.",
     },
-    { short: "Layout", title: "Layout Engine" },
+    {
+      short: "Layout",
+      title: "Layout Engine",
+      description:
+        "Calculates the layout of elements on the page based on their styles and the CSS box model.",
+      longDesc:
+        "The Layout Engine calculates the position and size of each element on the page based on their computed styles and the CSS box model. It handles various layout algorithms such as block layout, inline layout, flexbox, and grid.",
+    },
     { short: "Rasterize", title: "Rasterizer" },
     { short: "Paint", title: "Paint Engine" },
   ];
