@@ -171,7 +171,7 @@
     <svg
       bind:this={nodesParent}
       class="w-full h-[70%] bg-emphasis-3/5 rounded-lg p-2 border-1 border-emphasis-1/25"
-      viewBox="-10 50 370 150"
+      viewBox="-10 20 370 200"
       preserveAspectRatio="xMidYMid meet"
     >
       <defs>

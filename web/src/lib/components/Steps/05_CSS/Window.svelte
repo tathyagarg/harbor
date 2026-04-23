@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Heading from "$lib/components/Heading.svelte";
+
   let { title, hasDots = false, children } = $props();
 </script>
 
@@ -13,8 +15,8 @@
       <div class="w-[8px] h-[8px] rounded-full bg-[#f0c040]"></div>
       <div class="w-[8px] h-[8px] rounded-full bg-gh-green"></div>
     {/if}
-    <span class="text-[12px] text-emphasis-1/75 font-mono uppercase">
-      {title}
+    <span class="text-[12px]">
+      <Heading text={title} />
     </span>
   </div>
   <div class="h-full bg-black/20 p-2 relative">

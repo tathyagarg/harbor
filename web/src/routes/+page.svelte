@@ -11,7 +11,10 @@
   import HTML from "$lib/components/Steps/03_HTML/Step.svelte";
   import Link from "$lib/components/Steps/04_Link/Step.svelte";
   import CSS from "$lib/components/Steps/05_CSS/Step.svelte";
+  import Cascade from "$lib/components/Steps/06_Cascade/Step.svelte";
+
   import Test from "$lib/components/Steps/99_Test/Step.svelte";
+
   import Icon from "@iconify/svelte";
 
   let { data }: PageProps = $props();
@@ -419,6 +422,8 @@
               {:else if selected_step === 4}
                 <CSS />
               {:else if selected_step === 5}
+                <Cascade />
+              {:else if selected_step === 6}
                 <Test />
               {/if}
             </div>
