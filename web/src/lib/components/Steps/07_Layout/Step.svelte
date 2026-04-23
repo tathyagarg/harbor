@@ -14,6 +14,8 @@
   ];
 
   onMount(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
     for (const comp of htmlComps) {
       comp.classList.add("rounded");
       comp.classList.add("px-2");
@@ -112,7 +114,7 @@
     </span>
     <div
       class="flex-1 rounded border-1 border-emphasis-1/25 overflow-hidden font-mono lowercase
-      bg-bg
+      bg-bg text-xs
       "
     >
       <div

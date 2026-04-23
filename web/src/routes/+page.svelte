@@ -422,7 +422,7 @@
               "Description coming soon..."}
           </p>
           <div
-            class="flex-1 w-full mt-4 border-1 border-emphasis-1/25 rounded-lg"
+            class="flex-1 w-full mt-2 border-1 border-emphasis-1/25 rounded-lg"
             id="step-container"
           >
             <div id="inner-step" class="w-full h-full">
@@ -450,7 +450,7 @@
         <div id="step-content">
           {#if steps[selected_step].longDesc}
             <div
-              class="mt-4 px-4 py-2 border-y-1 border-emphasis-1/25 text-sm max-h-16 overflow-y-scroll"
+              class="px-4 py-2 border-y-1 border-emphasis-1/25 text-sm max-h-16 overflow-y-scroll"
             >
               <p class="text-subtext">
                 {@html steps[selected_step].longDesc}
