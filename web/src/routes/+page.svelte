@@ -450,7 +450,7 @@
         <div id="step-content">
           {#if steps[selected_step].longDesc}
             <div
-              class="mt-4 px-4 py-2 border-t-1 border-emphasis-1/25 rounded-b-lg text-sm max-h-16 overflow-y-scroll"
+              class="mt-4 px-4 py-2 border-y-1 border-emphasis-1/25 text-sm max-h-16 overflow-y-scroll"
             >
               <p class="text-subtext">
                 {@html steps[selected_step].longDesc}
