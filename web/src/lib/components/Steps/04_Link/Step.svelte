@@ -32,12 +32,12 @@
   let extractedUrls: { url: string; state: string }[] = $state([]);
 
   onMount(async () => {
-    await animate("#scanner", {
+    animate("#scanner", {
       opacity: 0,
       duration: 0,
     });
 
-    await animate(".line", {
+    animate(".line", {
       opacity: 0,
       duration: 0,
     });
@@ -60,9 +60,8 @@
     })
       .then(async () => {
         await animate("#scanner", {
-          opacity: 1,
-          duration: 500,
-          delay: 500,
+          opacity: [0, 1],
+          duration: 0,
         });
       })
       .then(async () => {
@@ -70,10 +69,12 @@
           opacity: 1,
           translateY: [0, htmlLines.clientHeight],
           duration: 1000,
+          delay: 1000,
         }).then(async () => {
           await animate("#scanner", {
             opacity: 0,
-            duration: 500,
+            duration: 50,
+            delay: 500,
           });
         });
       })
