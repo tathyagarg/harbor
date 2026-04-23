@@ -12,6 +12,7 @@
   import Link from "$lib/components/Steps/04_Link/Step.svelte";
   import CSS from "$lib/components/Steps/05_CSS/Step.svelte";
   import Cascade from "$lib/components/Steps/06_Cascade/Step.svelte";
+  import Layout from "$lib/components/Steps/07_Layout/Step.svelte";
 
   import Test from "$lib/components/Steps/99_Test/Step.svelte";
 
@@ -159,7 +160,14 @@
       longDesc:
         "The CSS Parser processes CSS stylesheets and constructs a CSS Object Model (CSSOM) tree. It handles the syntax of CSS, including selectors, properties, and values.",
     },
-    { short: "Cascade", title: "Cascade & Inheritance" },
+    {
+      short: "Cascade",
+      title: "Cascade & Inheritance",
+      description:
+        "Determines the final styles for each element based on the cascade and inheritance rules.",
+      longDesc:
+        "The Cascade & Inheritance module applies the CSS cascade and inheritance rules to determine the final computed styles for each element. It takes into account the specificity of selectors, the order of stylesheets, and the inheritance of properties from parent elements.",
+    },
     { short: "Layout", title: "Layout Engine" },
     { short: "Rasterize", title: "Rasterizer" },
     { short: "Paint", title: "Paint Engine" },
@@ -424,6 +432,8 @@
               {:else if selected_step === 5}
                 <Cascade />
               {:else if selected_step === 6}
+                <Layout />
+              {:else if selected_step === 7}
                 <Test />
               {/if}
             </div>
