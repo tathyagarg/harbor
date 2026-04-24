@@ -31,6 +31,8 @@ Harbor Browser
 <summary> <h2>Table of Contents</h2> </summary>
 
 - [Install](#install)
+  - [Linux and MacOS](#linux-and-macos)
+  - [Windows](#windows)
 - [Screenshots](#screenshots)
   - [New Tab page](#new-tab-page)
   - [Flavorless](#flavorless)
