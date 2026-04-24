@@ -20,7 +20,7 @@
   import Treemap from "$lib/components/Treemap.svelte";
   import Footer from "$lib/components/Footer.svelte";
   import ComponentCard from "$lib/components/ComponentCard.svelte";
-  import { CORE_DATA, STEP_NAMES } from "$lib";
+  import { CORE_DATA } from "$lib";
 
   let { data }: PageProps = $props();
 

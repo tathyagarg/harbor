@@ -66,6 +66,17 @@ cd harbor/harbor/engine
 cargo run --release
 ```
 
+### Windows
+Unfortunately, no install script exists for Windows yet. Please follow these steps:
+1. Download the Windows binary from the latest release.
+2. Download the `res.tar.gz` file from the latest release and extract it in the same directory.
+3. File structure should look like this:
+```
+.
+├── harbor.exe
+└── res\
+```
+
 ## Screenshots
 
 ### New Tab page

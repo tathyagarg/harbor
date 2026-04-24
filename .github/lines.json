@@ -10,7 +10,7 @@
         },
         ".gitignore": 16,
         "LICENSE": 7,
-        "README.md": 198,
+        "README.md": 209,
         "TODO.md": 12,
         "assets": {
             "css": {
@@ -348,7 +348,7 @@
                     "__total__": 2225
                 },
                 "routes": {
-                    "+layout.svelte": 45,
+                    "+layout.svelte": 50,
                     "+page.svelte": 536,
                     "+page.ts": 10,
                     "core": {
@@ -359,14 +359,14 @@
                         },
                         "__total__": 37
                     },
-                    "layout.css": 72,
+                    "layout.css": 83,
                     "version": {
-                        "+server.ts": 7,
-                        "__total__": 7
+                        "+server.ts": 8,
+                        "__total__": 8
                     },
-                    "__total__": 707
+                    "__total__": 724
                 },
-                "__total__": 2957
+                "__total__": 2974
             },
             "static": {
                 "robots.txt": 3,
@@ -375,9 +375,9 @@
             "svelte.config.js": 24,
             "tsconfig.json": 20,
             "vite.config.ts": 5,
-            "__total__": 3119
+            "__total__": 3136
         },
-        "__total__": 49983
+        "__total__": 50011
     },
     "file_count": 200
 }

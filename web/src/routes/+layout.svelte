@@ -6,6 +6,10 @@
 
   let { children } = $props();
 
+  const OPACITY = 10;
+  const PROBABILITY = 0.5;
+  const SHADING_FACTOR = 0.75;
+
   onMount(() => {
     const canvas = document.createElement("canvas");
     const size = 400;
@@ -18,12 +22,13 @@
 
     for (let i = 0; i < data.length; i += 4) {
       const shade_range = Math.random();
-      const shade = (shade_range > 0.5 ? 255 : 0) * Math.random() * 0.75;
+      const shade =
+        (shade_range > PROBABILITY ? 255 : 0) * Math.random() * SHADING_FACTOR;
 
       data[i] = shade;
       data[i + 1] = shade;
       data[i + 2] = shade;
-      data[i + 3] = 10;
+      data[i + 3] = OPACITY;
     }
 
     ctx?.putImageData(imageData, 0, 0);
