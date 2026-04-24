@@ -17,6 +17,9 @@ Harbor Browser
 
 ---
 
+> [!WARNING]
+> A lot of webpages won't render properly (or at all) on Harbor, and that's expected! The web is a complex place and there are a lot of features that mainstream browsers support that Harbor doesn't (yet). If you want to see a webpage render properly, try it out on a simple website like [Flavorless](https://flavorless.hackclub.com) or [sans.style](https://sans.style). Make sure to write `https://` in the URL bar, otherwise the browser will panic!
+
 ⭐ Star us on GitHub — it motivates us a lot!
 
 [Harbor](https://harbor.arson.dev) is a web browser built using Rust and Zig, made to teach me the ins and outs of browser development. It's not meant to be a competitor to mainstream browsers, but rather a personal project to explore the complexities of web technologies and browser architecture.
