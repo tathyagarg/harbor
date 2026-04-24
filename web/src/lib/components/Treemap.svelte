@@ -3,6 +3,7 @@
 
   import * as d3 from "d3";
   import { onMount } from "svelte";
+  import Heading from "./Heading.svelte";
 
   let { lines } = $props();
 
@@ -31,6 +32,8 @@
 
   const width = 1800;
   const height = 1000;
+
+  let dataMap = $state({});
 
   onMount(async () => {
     const data = makeTreeFromLineData(lines);
@@ -67,6 +70,11 @@
       .attr("height", (d) => d.y1 - d.y0)
       .attr("fill", (d) => {
         while (d.depth > 4) d = d.parent;
+
+        dataMap[d.data.name] = {
+          color: color(d.data.name),
+          size: d.value,
+        };
         return color(d.data.name);
       });
 
@@ -90,9 +98,38 @@
       .attr("y", (_, i) => 15 + i * 15)
       .attr("fill-opacity", (_, i, nodes) => (i === nodes.length - 1 ? 0.7 : 1))
       .text((d) => d);
+
+    dataMap = Object.entries(dataMap)
+      .sort((a, b) => b[1].size - a[1].size)
+      .slice(0, 8);
   });
 </script>
 
 <div class="w-full h-full relative">
-  <svg bind:this={svg} class="absolute top-0 left-0 w-full h-full"></svg>
+  <svg bind:this={svg} class="w-full h-1/2"></svg>
+
+  <div class="w-full h-1/2 flex flex-col items-start justify-start gap-4 p-4">
+    <div class="border-b-1 border-emphasis-1/25 w-full">
+      <Heading text="Color Map (Legend)" />
+    </div>
+
+    <div class="flex-1 grid grid-cols-2 gap-8">
+      {#each dataMap as [name, { color, size }], i}
+        {@const colStart = Math.floor(i / 5) + 1}
+        {@const rowStart = (i % 5) + 1}
+
+        <div
+          class="flex items-center gap-2"
+          style="grid-row: {rowStart}; grid-column: {colStart};"
+        >
+          <span>{i + 1}.</span>
+          <div
+            class="w-4 h-4 rounded-sm"
+            style="background-color: {color};"
+          ></div>
+          <span class="font-mono">{name} ({size} lines)</span>
+        </div>
+      {/each}
+    </div>
+  </div>
 </div>

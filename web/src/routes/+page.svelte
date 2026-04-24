@@ -505,7 +505,7 @@
         <div class="w-full bg-emphasis-1 h-0.5"></div>
       </div>
       <h1 class="text-emphasis-2 text-6xl my-4">Architecture</h1>
-      <p class="text-subtext">Explore what's inside Harbor Browser.</p>
+      <p class="text-subtext">Explore file structure of Harbor Browser.</p>
     </div>
     <div class="w-full min-h-0 flex-1 flex items-center justify-center">
       <Treemap lines={data.lines} />
