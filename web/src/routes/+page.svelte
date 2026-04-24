@@ -19,6 +19,7 @@
   import Test from "$lib/components/Steps/99_Test/Step.svelte";
 
   import Icon from "@iconify/svelte";
+  import Treemap from "$lib/components/Treemap.svelte";
 
   let { data }: PageProps = $props();
 
@@ -497,14 +498,17 @@
     </div>
   </div>
 
-  <div class="h-screen" id="architecture">
-    <div class="h-full py-[5%] flex flex-col">
+  <div class="h-screen flex flex-col" id="architecture">
+    <div class="py-[5%] flex flex-col">
       <div class="flex gap-4 items-baseline my-2">
         <span class="text-emphasis-1">02</span>
         <div class="w-full bg-emphasis-1 h-0.5"></div>
       </div>
       <h1 class="text-emphasis-2 text-6xl my-4">Architecture</h1>
       <p class="text-subtext">Explore what's inside Harbor Browser.</p>
+    </div>
+    <div class="w-full min-h-0 flex-1 flex items-center justify-center">
+      <Treemap />
     </div>
   </div>
 </div>

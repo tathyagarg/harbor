@@ -87,7 +87,6 @@ def parse_wc_output(text: str) -> tuple[dict[str, Any], int]:
             file_count += 1
 
     complete_result = complete_sum_loc(result)
-    complete_result[TOTAL_SYMBOL] = total_loc
 
     return (complete_result, file_count)
 

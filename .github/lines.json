@@ -268,8 +268,8 @@
         },
         "scripts": {
             "install.sh": 31,
-            "loc.py": 103,
-            "__total__": 134
+            "loc.py": 102,
+            "__total__": 133
         },
         "web": {
             ".gitignore": 23,
@@ -338,10 +338,11 @@
                             },
                             "__total__": 1829
                         },
-                        "__total__": 1888
+                        "Treemap.svelte": 105,
+                        "__total__": 1993
                     },
                     "index.ts": 3,
-                    "__total__": 1891
+                    "__total__": 1996
                 },
                 "routes": {
                     "+layout.svelte": 45,
@@ -354,7 +355,7 @@
                     },
                     "__total__": 703
                 },
-                "__total__": 2619
+                "__total__": 2724
             },
             "static": {
                 "robots.txt": 3,
@@ -363,9 +364,9 @@
             "svelte.config.js": 24,
             "tsconfig.json": 20,
             "vite.config.ts": 5,
-            "__total__": 2780
+            "__total__": 2885
         },
-        "__total__": 49641
+        "__total__": 49745
     },
-    "file_count": 194
+    "file_count": 195
 }
