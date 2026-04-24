@@ -349,7 +349,7 @@
                 },
                 "routes": {
                     "+layout.svelte": 50,
-                    "+page.svelte": 536,
+                    "+page.svelte": 552,
                     "+page.ts": 10,
                     "core": {
                         "[name]": {
@@ -364,9 +364,9 @@
                         "+server.ts": 8,
                         "__total__": 8
                     },
-                    "__total__": 724
+                    "__total__": 740
                 },
-                "__total__": 2974
+                "__total__": 2990
             },
             "static": {
                 "robots.txt": 3,
@@ -375,9 +375,9 @@
             "svelte.config.js": 24,
             "tsconfig.json": 20,
             "vite.config.ts": 5,
-            "__total__": 3136
+            "__total__": 3152
         },
-        "__total__": 50013
+        "__total__": 50029
     },
     "file_count": 200
 }

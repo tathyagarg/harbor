@@ -307,13 +307,29 @@
     >
   </p>
 
-  <div class="grid grid-cols-4 gap-12 mt-12">
+  <div class="grid grid-cols-4 gap-12 my-12">
     {#each stats as stat}
       <div class="anim-2">
         <Stat {...stat} />
       </div>
     {/each}
   </div>
+
+  <button
+    class="anim-3 bg-emphasis-1/10 text-emphasis-1 border-1 border-emphasis-1/25 rounded w-fit py-4 px-8 cursor-pointer hover:bg-emphasis-1/50 transition-colors duration-300"
+    onclick={() =>
+      (window.location.href = "https://github.com/tathyagarg/harbor/releases")}
+  >
+    <h1>Download</h1>
+  </button>
+
+  <button
+    class="anim-3 bg-emphasis-1/10 text-emphasis-1 border-1 border-emphasis-1/25 rounded w-fit py-4 px-8 cursor-pointer hover:bg-emphasis-1/50 transition-colors duration-300"
+    onclick={() =>
+      (window.location.href = "https://github.com/tathyagarg/harbor")}
+  >
+    <h1>Source Code</h1>
+  </button>
 </div>
 
 <div class="w-[50%] mx-auto" id="page">
