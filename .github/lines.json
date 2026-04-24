@@ -286,9 +286,11 @@
                 "app.html": 12,
                 "lib": {
                     "components": {
+                        "Footer.svelte": 54,
                         "Heading.svelte": 12,
                         "HeroTag.svelte": 25,
                         "Stat.svelte": 22,
+                        "StepContainer.svelte": 37,
                         "Steps": {
                             "01_Font": {
                                 "Line.svelte": 8,
@@ -339,23 +341,32 @@
                             "__total__": 1829
                         },
                         "Treemap.svelte": 135,
-                        "__total__": 2023
+                        "__total__": 2114
                     },
-                    "index.ts": 3,
-                    "__total__": 2026
+                    "index.ts": 39,
+                    "__total__": 2153
                 },
                 "routes": {
                     "+layout.svelte": 45,
-                    "+page.svelte": 569,
+                    "+page.svelte": 517,
                     "+page.ts": 10,
+                    "core": {
+                        "+page.svelte": 14,
+                        "[name]": {
+                            "+page.svelte": 26,
+                            "+page.ts": 11,
+                            "__total__": 37
+                        },
+                        "__total__": 51
+                    },
                     "layout.css": 72,
                     "version": {
                         "+server.ts": 7,
                         "__total__": 7
                     },
-                    "__total__": 703
+                    "__total__": 702
                 },
-                "__total__": 2754
+                "__total__": 2880
             },
             "static": {
                 "robots.txt": 3,
@@ -364,9 +375,9 @@
             "svelte.config.js": 24,
             "tsconfig.json": 20,
             "vite.config.ts": 5,
-            "__total__": 2916
+            "__total__": 3042
         },
-        "__total__": 49780
+        "__total__": 49906
     },
-    "file_count": 195
+    "file_count": 200
 }
