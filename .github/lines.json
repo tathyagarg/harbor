@@ -6,7 +6,7 @@
                 "release.yml": 62,
                 "__total__": 62
             },
-            "__total__": 124
+            "__total__": 62
         },
         ".gitignore": 16,
         "LICENSE": 7,
@@ -38,9 +38,9 @@
                     "__total__": 158
                 },
                 "position-demo.html": 47,
-                "__total__": 566
+                "__total__": 408
             },
-            "__total__": 1174
+            "__total__": 429
         },
         "harbor": {
             "engine": {
@@ -73,7 +73,7 @@
                         "selectors.rs": 886,
                         "tokenize.rs": 613,
                         "values.rs": 59,
-                        "__total__": 11338
+                        "__total__": 7481
                     },
                     "font": {
                         "mod.rs": 122,
@@ -96,7 +96,7 @@
                         },
                         "ttc.rs": 330,
                         "ttf.rs": 1067,
-                        "__total__": 9465
+                        "__total__": 5492
                     },
                     "globals.rs": 188,
                     "html5": {
@@ -118,7 +118,7 @@
                             "tree.rs": 1594,
                             "__total__": 6859
                         },
-                        "__total__": 16729
+                        "__total__": 9368
                     },
                     "http": {
                         "client.rs": 911,
@@ -176,7 +176,7 @@
                                     "mod.rs": 142,
                                     "__total__": 272
                                 },
-                                "__total__": 2440
+                                "__total__": 1221
                             },
                             "mod.rs": 40,
                             "static": {
@@ -191,7 +191,7 @@
                                 "var_scoped_declarations.rs": 128,
                                 "__total__": 955
                             },
-                            "__total__": 6830
+                            "__total__": 2216
                         },
                         "stmt.rs": 712,
                         "types.rs": 85,
@@ -202,7 +202,7 @@
                             "reference.rs": 313,
                             "__total__": 1921
                         },
-                        "__total__": 27208
+                        "__total__": 10471
                     },
                     "lib.rs": 10,
                     "main.rs": 65,
@@ -215,7 +215,7 @@
                     },
                     "shader.wgsl": 70,
                     "user_agent.rs": 242,
-                    "__total__": 141294
+                    "__total__": 39130
                 },
                 "tests": {
                     "common.rs": 124,
@@ -223,7 +223,7 @@
                     "tree_test.rs": 183,
                     "__total__": 377
                 },
-                "__total__": 283437
+                "__total__": 39602
             },
             "js": {
                 "build.zig": 71,
@@ -243,12 +243,12 @@
                         },
                         "text.zig": 1118,
                         "unicode.zig": 175,
-                        "__total__": 9788
+                        "__total__": 5800
                     },
                     "testing.zig": 161,
-                    "__total__": 19865
+                    "__total__": 6089
                 },
-                "__total__": 39882
+                "__total__": 6241
             },
             "res": {
                 "css": {
@@ -262,14 +262,14 @@
                     "tab.html": 13,
                     "__total__": 39
                 },
-                "__total__": 328
+                "__total__": 164
             },
-            "__total__": 647294
+            "__total__": 46007
         },
         "scripts": {
             "install.sh": 31,
-            "loc.py": 103,
-            "__total__": 134
+            "loc.py": 102,
+            "__total__": 133
         },
         "web": {
             ".gitignore": 23,
@@ -336,12 +336,13 @@
                                 "Step.svelte": 0,
                                 "__total__": 0
                             },
-                            "__total__": 3658
+                            "__total__": 1829
                         },
-                        "__total__": 7375
+                        "Treemap.svelte": 105,
+                        "__total__": 1993
                     },
                     "index.ts": 3,
-                    "__total__": 14753
+                    "__total__": 1996
                 },
                 "routes": {
                     "+layout.svelte": 45,
@@ -352,9 +353,9 @@
                         "+server.ts": 7,
                         "__total__": 7
                     },
-                    "__total__": 710
+                    "__total__": 703
                 },
-                "__total__": 30951
+                "__total__": 2724
             },
             "static": {
                 "robots.txt": 3,
@@ -363,9 +364,9 @@
             "svelte.config.js": 24,
             "tsconfig.json": 20,
             "vite.config.ts": 5,
-            "__total__": 62077
+            "__total__": 2885
         },
-        "__total__": 49641
+        "__total__": 49745
     },
-    "file_count": 194
+    "file_count": 195
 }

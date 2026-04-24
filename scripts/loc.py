@@ -35,7 +35,7 @@ def sum_loc(data: dict[str, Any]) -> int:
     total = 0
 
     for key, value in data.items():
-        if key == 'total':
+        if key == TOTAL_SYMBOL:
             continue
         elif isinstance(value, dict):
             total += sum_loc(value)
@@ -52,10 +52,10 @@ def complete_sum_loc(data: dict[str, Any]) -> dict[str, Any]:
             continue
         elif isinstance(value, dict):
             result[key] = complete_sum_loc(value)
-            result[key][TOTAL_SYMBOL] = sum_loc(result[key])
         elif isinstance(value, int):
             result[key] = value
 
+    result[TOTAL_SYMBOL] = sum_loc(result)
     return result
 
 def parse_wc_output(text: str) -> tuple[dict[str, Any], int]:
@@ -87,7 +87,6 @@ def parse_wc_output(text: str) -> tuple[dict[str, Any], int]:
             file_count += 1
 
     complete_result = complete_sum_loc(result)
-    complete_result[TOTAL_SYMBOL] = total_loc
 
     return (complete_result, file_count)
 
