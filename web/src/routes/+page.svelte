@@ -25,7 +25,7 @@
 
   let stats = [
     {
-      value: Math.floor(data.lines.total / 1000),
+      value: Math.floor(data.lines.__total__ / 1000),
       title: "Lines of Code",
       suffix: "K+",
     },
@@ -508,7 +508,7 @@
       <p class="text-subtext">Explore what's inside Harbor Browser.</p>
     </div>
     <div class="w-full min-h-0 flex-1 flex items-center justify-center">
-      <Treemap />
+      <Treemap lines={data.lines} />
     </div>
   </div>
 </div>

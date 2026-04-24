@@ -4,6 +4,8 @@
   import * as d3 from "d3";
   import { onMount } from "svelte";
 
+  let { lines } = $props();
+
   let svg: SVGElement;
 
   function makeTreeFromLineData(data: any, dirName: string = "root"): any {
@@ -31,16 +33,7 @@
   const height = 1000;
 
   onMount(async () => {
-    const lineCount = await fetch(
-      "https://raw.githubusercontent.com/tathyagarg/harbor/refs/heads/main/.github/lines.json",
-    )
-      .then((response) => response.json())
-      .then((data) => data.lines);
-
-    console.log(JSON.stringify(lineCount, null, 2));
-    console.log(makeTreeFromLineData(lineCount));
-
-    const data = makeTreeFromLineData(lineCount);
+    const data = makeTreeFromLineData(lines);
     const color = d3.scaleOrdinal(
       data.children.map((d) => d.name),
       d3.schemeTableau10,
