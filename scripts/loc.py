@@ -27,54 +27,73 @@ import json
 from typing import Any
 
 EXCLUDED = ['.ttc', '.ttf', '.png', '.gif', '.jpg', '.jpeg', '.bmp', '.ico', '.svg', '.webp', '.avif', '.mp4', '.avi', '.mkv', '.mp3', '.wav', '.flac', 'package-lock.json', '.lock']
+IGNORE_DIRS = ['docs']
+
+TOTAL_SYMBOL = "__total__"
+
+def sum_loc(data: dict[str, Any]) -> int:
+    total = 0
+
+    for key, value in data.items():
+        if key == 'total':
+            continue
+        elif isinstance(value, dict):
+            total += sum_loc(value)
+        elif isinstance(value, int):
+            total += value
+
+    return total
+
+def complete_sum_loc(data: dict[str, Any]) -> dict[str, Any]:
+    result = {}
+
+    for key, value in data.items():
+        if key == TOTAL_SYMBOL:
+            continue
+        elif isinstance(value, dict):
+            result[key] = complete_sum_loc(value)
+            result[key][TOTAL_SYMBOL] = sum_loc(result[key])
+        elif isinstance(value, int):
+            result[key] = value
+
+    return result
 
 def parse_wc_output(text: str) -> tuple[dict[str, Any], int]:
     result = {}
-    total = 0
-
+    total_loc = 0
     file_count = 0
 
-    for line in text.splitlines():
-        parts = line.split()
-        loc, file = int(parts[0]), parts[1]
+    for fdata in text.splitlines():
+        parts = fdata.split()
+        loc, fname = int(parts[0]), parts[1]
 
-        if any(file.endswith(ext) for ext in EXCLUDED):
+        if any(fname.endswith(ext) for ext in EXCLUDED):
             continue
 
-        result[file] = loc
-        total += loc
+        place_location = result
+        place = True
 
-        file_count += 1
+        while '/' in fname:
+            dir_name, fname = fname.split('/', 1)
+            if dir_name in IGNORE_DIRS:
+                place = False
+                break
 
-    files = result.copy()
+            place_location = place_location.setdefault(dir_name, {TOTAL_SYMBOL: 0})
 
-    for file, loc in files.items():
-        dir_path = file.rsplit('/', 1)[0] if '/' in file else ''
+        if place:
+            place_location[fname] = loc
+            total_loc += loc
+            file_count += 1
 
-        while dir_path:
-            result[dir_path] = result.get(dir_path, 0) + loc
-            dir_path = dir_path.rsplit('/', 1)[0] if '/' in dir_path else ''
+    complete_result = complete_sum_loc(result)
+    complete_result[TOTAL_SYMBOL] = total_loc
 
-    result['total'] = total
-
-    return (result, file_count)
+    return (complete_result, file_count)
 
 if __name__ == "__main__":
-    aliases = json.loads(sys.argv[2])
-
     data = sys.stdin.read().strip()
     result, fc = parse_wc_output(data.rsplit('\n', 1)[0])
-
-    result["ALIASES"] = {}
-
-    for alias, path in aliases.items():
-        if isinstance(path, str):
-            if path in result:
-                result["ALIASES"][alias] = result[path]
-        elif isinstance(path, list):
-            for p in path:
-                if p in result:
-                    result["ALIASES"][alias] = result["ALIASES"].get(alias, 0) + result[p]
 
     data = {
         'lines': result,

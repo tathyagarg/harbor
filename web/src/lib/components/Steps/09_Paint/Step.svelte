@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
   import Heading from "$lib/components/Heading.svelte";
   import Icon from "@iconify/svelte";
   import { animate } from "animejs";
