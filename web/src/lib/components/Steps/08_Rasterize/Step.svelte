@@ -48,20 +48,20 @@
 
 <div class="w-full h-full grid grid-cols-3 p-2 gap-2 overflow-hidden">
   <div
-    class="overflow-auto border-1 border-emphasis-1/25 rounded font-mono wrap-break-word min-w-0 min-h-0 text-sm text-center relative flex flex-col"
+    class="overflow-auto border-1 border-emphasis-1/25 rounded font-mono wrap-break-word min-w-0 min-h-0 text-sm text-center flex flex-col"
   >
-    <div
-      id="scanner"
-      class="absolute top-0 left-0 w-full h-2 bg-pretty-blue/25"
-    ></div>
-
     <div
       class="p-2 text-sm text-emphasis-1/75 border-b-1 border-emphasis-1/25 w-full text-left bg-emphasis-1/10"
     >
       <Heading text="Input (Font Data)" />
     </div>
 
-    <div class="p-2 bg-bg w-full flex-1 text-center">
+    <div class="p-2 bg-bg w-full flex-1 text-center relative">
+      <div
+        id="scanner"
+        class="absolute top-0 left-0 w-full h-2 bg-pretty-blue/25"
+      ></div>
+
       {#each hexBytes.split("") as byte, index}
         {byte}{index % 2 === 1 ? " " : ""}
       {/each}
