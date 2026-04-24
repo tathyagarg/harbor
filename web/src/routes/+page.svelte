@@ -16,11 +16,11 @@
   import Rasterize from "$lib/components/Steps/08_Rasterize/Step.svelte";
   import Paint from "$lib/components/Steps/09_Paint/Step.svelte";
 
-  import Test from "$lib/components/Steps/99_Test/Step.svelte";
-
   import Icon from "@iconify/svelte";
   import Treemap from "$lib/components/Treemap.svelte";
   import Footer from "$lib/components/Footer.svelte";
+  import ComponentCard from "$lib/components/ComponentCard.svelte";
+  import { CORE_DATA, STEP_NAMES } from "$lib";
 
   let { data }: PageProps = $props();
 
@@ -242,6 +242,7 @@
   let items = [
     { label: "The Pipeline", href: "#pipeline" },
     { label: "Architecture", href: "#architecture" },
+    { label: "Core Components", href: "#core-comps" },
   ];
 
   function expand() {
@@ -510,6 +511,24 @@
     </div>
     <div class="w-full min-h-0 flex-1 flex items-center justify-center">
       <Treemap lines={data.lines} />
+    </div>
+  </div>
+
+  <div class="h-screen flex flex-col" id="core-comps">
+    <div class="py-[5%] flex flex-col">
+      <div class="flex gap-4 items-baseline my-2">
+        <span class="text-emphasis-1">03</span>
+        <div class="w-full bg-emphasis-1 h-0.5"></div>
+      </div>
+      <h1 class="text-emphasis-2 text-6xl my-4">Core Components</h1>
+      <p class="text-subtext">
+        The core components that make Harbor Browser possible.
+      </p>
+    </div>
+    <div class="w-full min-h-0 grid grid-cols-3 grid-rows-2 gap-4">
+      {#each Object.keys(CORE_DATA) as name}
+        <ComponentCard {name} />
+      {/each}
     </div>
   </div>
 </div>

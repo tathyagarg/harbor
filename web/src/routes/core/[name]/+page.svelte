@@ -4,7 +4,7 @@
   import StepContainer from "$lib/components/StepContainer.svelte";
 
   let { data } = $props();
-  let { title, description, steps } = data;
+  let { title, description, steps } = $derived(data);
 </script>
 
 <div class="w-1/2 min-h-screen mx-auto py-8">
