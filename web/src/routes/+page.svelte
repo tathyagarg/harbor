@@ -14,6 +14,7 @@
   import Cascade from "$lib/components/Steps/06_Cascade/Step.svelte";
   import Layout from "$lib/components/Steps/07_Layout/Step.svelte";
   import Rasterize from "$lib/components/Steps/08_Rasterize/Step.svelte";
+  import Paint from "$lib/components/Steps/09_Paint/Step.svelte";
 
   import Test from "$lib/components/Steps/99_Test/Step.svelte";
 
@@ -177,8 +178,21 @@
       longDesc:
         "The Layout Engine calculates the position and size of each element on the page based on their computed styles and the CSS box model. It handles various layout algorithms such as block layout, inline layout, flexbox, and grid.",
     },
-    { short: "Rasterize", title: "Rasterizer" },
-    { short: "Paint", title: "Paint Engine" },
+    {
+      short: "Rasterize",
+      title: "Rasterizer",
+      description:
+        "Rasterizes vector graphics and text into pixels for display.",
+      longDesc:
+        "The Rasterizer takes vector graphics and text and converts them into pixels for display on the screen. It handles the rasterization of text using the font data parsed by the Font Reader, as well as the rasterization of other vector graphics such as borders and backgrounds.",
+    },
+    {
+      short: "Paint",
+      title: "Paint Engine",
+      description: "Paints the rasterized elements onto the screen.",
+      longDesc:
+        "The Paint Engine takes the rasterized elements from the Rasterizer and paints them onto the screen. It manages layers, handles compositing, and ensures that the final rendered output is displayed correctly.",
+    },
   ];
 
   const radius = 25;
@@ -444,7 +458,7 @@
               {:else if selected_step === 7}
                 <Rasterize />
               {:else if selected_step === 8}
-                <Test />
+                <Paint />
               {/if}
             </div>
           </div>

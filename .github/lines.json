@@ -249,10 +249,11 @@
         "web/src/lib/components/Steps/06_Cascade/Step.svelte": 152,
         "web/src/lib/components/Steps/07_Layout/Step.svelte": 183,
         "web/src/lib/components/Steps/08_Rasterize/Step.svelte": 102,
+        "web/src/lib/components/Steps/09_Paint/Step.svelte": 51,
         "web/src/lib/components/Steps/99_Test/Step.svelte": 0,
         "web/src/lib/index.ts": 3,
         "web/src/routes/+layout.svelte": 45,
-        "web/src/routes/+page.svelte": 551,
+        "web/src/routes/+page.svelte": 565,
         "web/src/routes/+page.ts": 10,
         "web/src/routes/layout.css": 72,
         "web/src/routes/version/+server.ts": 7,
@@ -363,13 +364,13 @@
         "harbor/res": 164,
         "harbor/res/pages": 39,
         "scripts": 115,
-        "web": 2711,
+        "web": 2776,
         "web/.vscode": 11,
-        "web/src": 2550,
-        "web/src/lib/components": 1837,
-        "web/src/lib": 1840,
+        "web/src": 2615,
+        "web/src/lib/components": 1888,
+        "web/src/lib": 1891,
         "web/src/lib/components/Steps/01_Font": 318,
-        "web/src/lib/components/Steps": 1778,
+        "web/src/lib/components/Steps": 1829,
         "web/src/lib/components/Steps/02_HTTP": 196,
         "web/src/lib/components/Steps/03_HTML": 304,
         "web/src/lib/components/Steps/04_Link": 174,
@@ -377,11 +378,12 @@
         "web/src/lib/components/Steps/06_Cascade": 165,
         "web/src/lib/components/Steps/07_Layout": 183,
         "web/src/lib/components/Steps/08_Rasterize": 102,
+        "web/src/lib/components/Steps/09_Paint": 51,
         "web/src/lib/components/Steps/99_Test": 0,
-        "web/src/routes": 685,
+        "web/src/routes": 699,
         "web/src/routes/version": 7,
         "web/static": 3,
-        "total": 50539,
+        "total": 50604,
         "ALIASES": {
             "css": 7481,
             "js": 16712,
@@ -391,5 +393,5 @@
             "render": 2757
         }
     },
-    "file_count": 260
+    "file_count": 261
 }
