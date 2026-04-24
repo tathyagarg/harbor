@@ -10,7 +10,7 @@
         },
         ".gitignore": 16,
         "LICENSE": 7,
-        "README.md": 194,
+        "README.md": 198,
         "TODO.md": 12,
         "assets": {
             "css": {
@@ -366,7 +366,7 @@
             "vite.config.ts": 5,
             "__total__": 2879
         },
-        "__total__": 49739
+        "__total__": 49743
     },
     "file_count": 195
 }

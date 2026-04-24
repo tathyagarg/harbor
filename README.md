@@ -10,7 +10,7 @@ Harbor Browser
 ![Language Badge](https://shields.arson.dev/badge/Language-Rust%2C%20Zig-red?color=EF4444)
 ![Hackatime Badge](https://hackatime-badge.hackclub.com/U082L0UTJ66/harbor?color=EFBF04)
 ![License Badge](https://shields.arson.dev/github/license/tathyagarg/harbor?color=10B981)
-![Lines Badge](https://shields.arson.dev/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Ftathyagarg%2Fharbor%2Frefs%2Fheads%2Fmain%2F.github%2Flines.json&query=%24.lines.total&label=Lines&color=3B82F6)
+![Lines Badge](https://shields.arson.dev/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Ftathyagarg%2Fharbor%2Frefs%2Fheads%2Fmain%2F.github%2Flines.json&query=%24.lines.__total__&label=Lines&color=3B82F6)
 ![GitHub Repo stars](https://shields.arson.dev/github/stars/tathyagarg/harbor?style=flat&color=8B5CF6)
 
 </div>
@@ -98,12 +98,16 @@ cargo run --release
 - CSS parser with support for a decent amount of properties (listed below)
 - TTF parser to extract glyph information from font files
 - GPU rendering using `wgpu` and `winit`
-- JavaScript engine (WIP)
+- JavaScript engine*
 - Shipped with basic resources (new tab page, fonts, stylesheets, etc.) installed with browser.
 - Opening multiple tabs
 - Going back and forward in history
 - Reloading pages
 - Changing URL of tab
+- Vertical tab bar*
+
+> [!WARNING]
+> `*`: These features are still in development and may not work as expected. Use with caution.
 
 > [!TIP]
 > Most of these features seem basic but are actually the result of hundreds, if not thousands, of lines of code.
