@@ -4,6 +4,8 @@
   import { animate } from "animejs";
   import { onMount } from "svelte";
 
+  let hidden = $state(true);
+
   onMount(async () => {
     animate("#demo-ss", {
       opacity: 0,
@@ -24,7 +26,9 @@
       delay: 2000,
     });
 
-    animate("#demo-ss", {
+    hidden = false;
+
+    await animate("#demo-ss", {
       opacity: 1,
       translateX: 0,
       duration: 1000,
@@ -32,17 +36,12 @@
   });
 </script>
 
-<div class="w-full h-full p-2 relative">
-  <Icon
-    icon="mdi:settings"
-    class="w-64 h-64 text-emphasis-1 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
-    id="gear"
-  />
+<div class="w-full h-full p-2 relative flex items-center justify-center">
+  <div class:hidden={!hidden}>
+    <Icon icon="mdi:settings" class="w-64 h-64 text-emphasis-1" id="gear" />
+  </div>
 
-  <div
-    id="demo-ss"
-    class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
-  >
+  <div id="demo-ss" class:hidden>
     <div class="text-emphasis-1/25 border-b-1 border-emphasis-1/25 mb-4">
       <Heading text="Final Result" />
     </div>

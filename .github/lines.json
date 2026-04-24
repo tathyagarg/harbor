@@ -331,20 +331,20 @@
                                 "__total__": 102
                             },
                             "09_Paint": {
-                                "Step.svelte": 51,
-                                "__total__": 51
+                                "Step.svelte": 50,
+                                "__total__": 50
                             },
                             "99_Test": {
                                 "Step.svelte": 0,
                                 "__total__": 0
                             },
-                            "__total__": 1829
+                            "__total__": 1828
                         },
                         "Treemap.svelte": 135,
-                        "__total__": 2114
+                        "__total__": 2113
                     },
-                    "index.ts": 39,
-                    "__total__": 2153
+                    "index.ts": 96,
+                    "__total__": 2209
                 },
                 "routes": {
                     "+layout.svelte": 45,
@@ -366,7 +366,7 @@
                     },
                     "__total__": 702
                 },
-                "__total__": 2880
+                "__total__": 2936
             },
             "static": {
                 "robots.txt": 3,
@@ -375,9 +375,9 @@
             "svelte.config.js": 24,
             "tsconfig.json": 20,
             "vite.config.ts": 5,
-            "__total__": 3042
+            "__total__": 3098
         },
-        "__total__": 49906
+        "__total__": 49962
     },
     "file_count": 200
 }
