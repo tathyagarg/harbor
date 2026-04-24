@@ -280,7 +280,7 @@
                 "__total__": 11
             },
             "README.md": 42,
-            "package.json": 32,
+            "package.json": 33,
             "src": {
                 "app.d.ts": 13,
                 "app.html": 12,
@@ -364,9 +364,9 @@
             "svelte.config.js": 24,
             "tsconfig.json": 20,
             "vite.config.ts": 5,
-            "__total__": 2878
+            "__total__": 2879
         },
-        "__total__": 49738
+        "__total__": 49739
     },
     "file_count": 195
 }
