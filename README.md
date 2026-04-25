@@ -48,6 +48,7 @@ Harbor Browser
   - [TTF Parser](#ttf-parser)
   - [JavaScript Engine](#javascript-engine)
   - [Renderer](#renderer)
+- [Unimplemented and In progress features](#unimplemented-and-in-progress-features)
 - [License](#license)
 
 </details>
@@ -206,6 +207,13 @@ The JavaScript engine executes JavaScript code embedded in web pages. Currently 
 
 ### Renderer
 The renderer takes the structured data from the HTML and CSS parsers and renders it onto the screen. It uses the `wgpu` library for GPU-accelerated rendering and `winit` for window management. The renderer is responsible for drawing all visual elements of the webpage. The renderer uses ear clipping to render glyphs from contours into filled triangles[^2]
+
+## Unimplemented and In progress features
+- JavaScript engine is very basic and can only evaluate simple expressions and some statements. It is highly unstable and will likely crash on most webpages. Disabled by default and can be enabled with `--enable-js` flag.
+- Vertical tab bar is still in development and may not work as expected.
+- CSS selectors and properties are very limited, and many common ones are not supported yet - e.g. `:root`, `>`, `+`, etc. Only the properties listed in the [CSS Parser](#css-parser) section are supported. Only the `:hover` pseudo-class is supported.
+- No support for images, videos, or other media types yet.
+- Only basic HTML tags are supported - `div>`, `<span>`, `<p>`, `<a>`, etc. No support for forms, tables, or other complex HTML structures yet.
 
 ## License
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for more details.
