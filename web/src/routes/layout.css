@@ -1,9 +1,14 @@
-@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@300..700&family=Merriweather:ital,opsz,wght@0,18..144,300..900;1,18..144,300..900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@300..700');
 @import 'tailwindcss';
 
 @font-face {
   font-family: 'Space Grotesk';
   src: url('/SpaceGrotesk.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'Merriweather';
+  src: url('/Merriweather.ttf') format('truetype');
 }
 
 @theme {

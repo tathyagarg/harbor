@@ -359,14 +359,14 @@
                         },
                         "__total__": 37
                     },
-                    "layout.css": 83,
+                    "layout.css": 88,
                     "version": {
                         "+server.ts": 8,
                         "__total__": 8
                     },
-                    "__total__": 740
+                    "__total__": 745
                 },
-                "__total__": 2990
+                "__total__": 2995
             },
             "static": {
                 "robots.txt": 3,
@@ -375,9 +375,9 @@
             "svelte.config.js": 24,
             "tsconfig.json": 20,
             "vite.config.ts": 5,
-            "__total__": 3152
+            "__total__": 3157
         },
-        "__total__": 50040
+        "__total__": 50045
     },
     "file_count": 200
 }
